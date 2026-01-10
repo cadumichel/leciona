@@ -666,9 +666,9 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                    
                    return (
                      <div key={idx} className="flex items-center gap-3 p-2.5 md:p-3 bg-slate-50 dark:bg-slate-800/40 rounded-[20px] md:rounded-[24px] border border-slate-100 dark:border-slate-800" style={{ borderColor: color + '30', backgroundColor: color + '05' }}>
-                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl flex flex-col items-center justify-center shrink-0 border-b-2" style={{ backgroundColor: color + '15', color: color, borderColor: color + '30' }}>
-                           <span className="text-[7px] md:text-[8px] font-black uppercase">{getShortWeekDay(event.date)}</span>
-                           <span className="text-xs md:text-sm font-black">{getDayMonth(event.date)}</span>
+                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center shrink-0 border-b-2" style={{ backgroundColor: color + '15', color: color, borderColor: color + '30' }}>
+                           <span className="text-[7px] md:text-[8px] font-black uppercase leading-none mb-0.5">{getShortWeekDay(event.date)}</span>
+                           <span className="text-[10px] md:text-xs font-black leading-none">{getDayMonth(event.date)}</span>
                         </div>
                         <div className="flex-1 overflow-hidden">
                            <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
@@ -694,9 +694,9 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
                    return (
                      <div key={idx} className="flex items-center gap-3 p-2.5 md:p-3 bg-slate-50 dark:bg-slate-800/40 rounded-[20px] md:rounded-[24px] border border-slate-100 dark:border-slate-800" style={{ borderColor: color + '30', backgroundColor: color + '05' }}>
-                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl flex flex-col items-center justify-center shrink-0 border-b-2" style={{ backgroundColor: color + '15', color: color, borderColor: color + '30' }}>
-                           <span className="text-[7px] md:text-[8px] font-black uppercase">{getShortWeekDay(event.date)}</span>
-                           <span className="text-xs md:text-sm font-black">{getDayMonth(event.date)}</span>
+                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl flex flex-col items-center justify-center shrink-0 border-b-2" style={{ backgroundColor: color + '15', color: color, borderColor: color + '30' }}>
+                           <span className="text-[7px] md:text-[8px] font-black uppercase leading-none mb-0.5">{getShortWeekDay(event.date)}</span>
+                           <span className="text-[10px] md:text-xs font-black leading-none">{getDayMonth(event.date)}</span>
                         </div>
                         <div className="flex-1 overflow-hidden">
                            <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>

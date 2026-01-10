@@ -289,8 +289,12 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   <div className="space-y-1.5">
                      <div className="flex items-center gap-2 text-[9px] md:text-[10px] font-bold text-slate-500">
                         <Calendar size={12} className="text-slate-300" />
-                        {/* Display date without timezone shift issue */}
-                        <span>{new Date(event.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
+                        {/* Display date with full weekday name */}
+                        <span>
+                            {new Date(event.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            {' - '}
+                            {new Date(event.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' })}
+                        </span>
                      </div>
                      <div className="flex items-center gap-2 text-[9px] md:text-[10px] font-bold text-slate-500">
                         <SchoolIcon size={12} className="text-slate-300" />

@@ -146,7 +146,12 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
               <div className="flex-1">
                 <h4 className="font-black text-slate-800 uppercase text-sm mb-1 line-clamp-1">{r.title}</h4>
                 <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-2">
-                  {new Date(r.date + 'T00:00:00').toLocaleDateString('pt-BR')} • {cat.label}
+                  {/* Display Date + Full Weekday Name */}
+                  {new Date(r.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  {' - '}
+                  {new Date(r.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' })}
+                  {' • '}
+                  {cat.label}
                 </p>
                 {hasAlarm && (
                   <p className="text-[9px] font-black text-amber-600 uppercase mb-3 flex items-center gap-1">

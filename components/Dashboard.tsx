@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { AppData, DayOfWeek, SchoolEvent, LessonLog, Reminder } from '../types';
-import { getCurrentTimeInMinutes, parseTimeToMinutes, isHoliday, getHolidayName } from '../utils';
+import { getCurrentTimeInMinutes, parseTimeToMinutes, isHoliday, getHolidayName, getShortWeekDay, getDayMonth } from '../utils';
 import { 
   Clock, 
   ArrowRight, 
@@ -661,15 +661,14 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
               <h3 className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 md:mb-4 flex items-center gap-2"><FileCheck className="text-primary w-3 h-3 md:w-[14px] md:h-[14px]" /> Avaliações (15d)</h3>
               <div className="space-y-2 md:space-y-3 flex-1">
                  {upcomingAssessments.length > 0 ? upcomingAssessments.map((event, idx) => {
-                   const eventDate = new Date(event.date); 
                    const school = data.schools.find(s => s.id === event.schoolId);
                    const color = school?.color || '#3b82f6';
                    
                    return (
                      <div key={idx} className="flex items-center gap-3 p-2.5 md:p-3 bg-slate-50 dark:bg-slate-800/40 rounded-[20px] md:rounded-[24px] border border-slate-100 dark:border-slate-800" style={{ borderColor: color + '30', backgroundColor: color + '05' }}>
                         <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl flex flex-col items-center justify-center shrink-0 border-b-2" style={{ backgroundColor: color + '15', color: color, borderColor: color + '30' }}>
-                           <span className="text-[7px] md:text-[8px] font-black uppercase">{eventDate.toLocaleDateString('pt-BR', {month:'short'})}</span>
-                           <span className="text-xs md:text-sm font-black">{eventDate.getDate()}</span>
+                           <span className="text-[7px] md:text-[8px] font-black uppercase">{getShortWeekDay(event.date)}</span>
+                           <span className="text-xs md:text-sm font-black">{getDayMonth(event.date)}</span>
                         </div>
                         <div className="flex-1 overflow-hidden">
                            <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
@@ -690,15 +689,14 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
               <h3 className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 md:mb-4 flex items-center gap-2"><Calendar className="text-orange-500 w-3 h-3 md:w-[14px] md:h-[14px]" /> Eventos (15d)</h3>
               <div className="space-y-2 md:space-y-3 flex-1">
                  {upcomingEvents.length > 0 ? upcomingEvents.map((event, idx) => {
-                   const eventDate = new Date(event.date); 
                    const school = data.schools.find(s => s.id === event.schoolId);
                    const color = school?.color || '#f97316';
 
                    return (
                      <div key={idx} className="flex items-center gap-3 p-2.5 md:p-3 bg-slate-50 dark:bg-slate-800/40 rounded-[20px] md:rounded-[24px] border border-slate-100 dark:border-slate-800" style={{ borderColor: color + '30', backgroundColor: color + '05' }}>
                         <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl flex flex-col items-center justify-center shrink-0 border-b-2" style={{ backgroundColor: color + '15', color: color, borderColor: color + '30' }}>
-                           <span className="text-[7px] md:text-[8px] font-black uppercase">{eventDate.toLocaleDateString('pt-BR', {month:'short'})}</span>
-                           <span className="text-xs md:text-sm font-black">{eventDate.getDate()}</span>
+                           <span className="text-[7px] md:text-[8px] font-black uppercase">{getShortWeekDay(event.date)}</span>
+                           <span className="text-xs md:text-sm font-black">{getDayMonth(event.date)}</span>
                         </div>
                         <div className="flex-1 overflow-hidden">
                            <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>

@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { AppData, SchoolEvent, EventType, DayOfWeek, LessonLog } from '../types';
 import { 
@@ -14,7 +13,7 @@ import {
   Users,
   Info
 } from 'lucide-react';
-import { getDayOfWeekFromDate } from '../utils';
+import { getDayOfWeekFromDate, getShortWeekDay, getDayMonth } from '../utils';
 
 interface AgendaManagementProps {
   data: AppData;
@@ -255,8 +254,8 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
                 return (
                   <div key={event.id} className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-[20px] md:rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-sm transition-all flex items-center gap-3 md:gap-4 hover:shadow-md" style={{ borderColor: `${eventColor}40` }}>
                       <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex flex-col items-center justify-center shrink-0" style={{ backgroundColor: `${eventColor}20`, color: eventColor }}>
-                        <span className="text-[9px] md:text-[10px] font-black">{new Date(event.date).toLocaleDateString('pt-BR', {day:'2-digit', timeZone: 'UTC'})}</span>
-                        <span className="text-[7px] md:text-[8px] font-black uppercase">{new Date(event.date).toLocaleDateString('pt-BR', {month:'short', timeZone: 'UTC'})}</span>
+                        <span className="text-[7px] md:text-[8px] font-black uppercase">{getShortWeekDay(event.date)}</span>
+                        <span className="text-xs md:text-sm font-black">{getDayMonth(event.date)}</span>
                       </div>
                       <div className="flex-1 overflow-hidden">
                         <h4 className="font-black text-slate-800 dark:text-white uppercase text-xs truncate mb-1">{event.title}</h4>

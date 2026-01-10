@@ -1,4 +1,3 @@
-
 import { BRAZIL_HOLIDAYS } from './constants';
 import { AcademicCalendar, Term, DayOfWeek } from './types';
 
@@ -76,6 +75,21 @@ export const getTermInfo = (dateStr: string, calendar?: AcademicCalendar) => {
     color: colors[termIdx % colors.length],
     index: termIdx
   };
+};
+
+// Formata para o quadrado: SEG (em cima)
+export const getShortWeekDay = (dateStr: string): string => {
+  const date = new Date(dateStr + 'T12:00:00');
+  const days = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+  return days[date.getDay()];
+};
+
+// Formata para o quadrado: 12/02 (embaixo)
+export const getDayMonth = (dateStr: string): string => {
+  const date = new Date(dateStr + 'T12:00:00');
+  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${d}/${m}`;
 };
 
 export const downloadCSV = (data: any[], filename: string) => {

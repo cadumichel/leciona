@@ -316,39 +316,85 @@ const App: React.FC = () => {
     setActiveTab('lessons');
   };
 
-  // Sistema de Alertas
+  // --- SISTEMA DE ALERTAS & NOTIFICAÇÕES ---
   useEffect(() => {
     const checkContentAlerts = () => {
-      if (!data.settings.alertAfterLesson && !data.settings.alertAfterShift) return;
       const nowMins = getCurrentTimeInMinutes();
       const today = new Date().getDay() as DayOfWeek;
       const todayStr = new Date().toLocaleDateString('en-CA');
       
-      data.schedules.forEach(s => {
-        if (Number(s.dayOfWeek) !== today || s.classId === 'window') return;
-        const school = data.schools.find(sc => sc.id === s.schoolId);
-        const shift = school?.shifts.find(sh => sh.id === s.shiftId);
-        const slot = shift?.slots.find(sl => sl.id === s.slotId);
-        if (!slot) return;
-        
-        const endMins = parseTimeToMinutes(slot.endTime);
-        const triggerMins = endMins - data.settings.alertBeforeMinutes;
-        
-        if (data.settings.alertAfterLesson && nowMins >= triggerMins && nowMins < endMins + 5) {
-          const slotKey = `${todayStr}-${s.slotId}`;
-          if (lastNotifiedSlot.current !== slotKey) {
-            const hasLog = data.logs.some(l => l.date.startsWith(todayStr) && l.slotId === s.slotId);
-            if (!hasLog) {
-              lastNotifiedSlot.current = slotKey;
-              if ("Notification" in window && Notification.permission === "granted") {
-                new Notification("Leciona: Registro de Aula", { body: `A aula de ${s.classId} (${school?.name}) está terminando. Registre o conteúdo!`, });
+      // 1. Verificação de Alertas de Aula (Fim de Aula / Fim de Turno)
+      if (data.settings.alertAfterLesson || data.settings.alertAfterShift) {
+          data.schedules.forEach(s => {
+            if (Number(s.dayOfWeek) !== today || s.classId === 'window') return;
+            
+            const school = data.schools.find(sc => sc.id === s.schoolId);
+            const shift = school?.shifts.find(sh => sh.id === s.shiftId);
+            const slot = shift?.slots.find(sl => sl.id === s.slotId);
+            if (!slot) return;
+            
+            // Verifica se é a última aula do turno para aplicar a lógica de "Alerta de Turno"
+            // Encontra todos os slots deste turno que têm aula agendada hoje
+            const shiftSlots = shift?.slots.filter(sl => sl.type === 'class') || [];
+            const lastSlotOfShift = shiftSlots.length > 0 ? shiftSlots[shiftSlots.length - 1] : null;
+            const isLastLesson = lastSlotOfShift?.id === s.slotId;
+
+            const endMins = parseTimeToMinutes(slot.endTime);
+            const triggerMins = endMins - data.settings.alertBeforeMinutes;
+            
+            // Lógica de Disparo:
+            // Se "Alerta por Aula" estiver ativo -> Dispara em todas.
+            // Se "Alerta por Aula" estiver OFF, mas "Alerta por Turno" estiver ON -> Dispara APENAS na última.
+            const shouldAlert = data.settings.alertAfterLesson || (data.settings.alertAfterShift && isLastLesson);
+
+            if (shouldAlert && nowMins >= triggerMins && nowMins < endMins + 5) {
+              const slotKey = `${todayStr}-${s.slotId}`;
+              if (lastNotifiedSlot.current !== slotKey) {
+                const hasLog = data.logs.some(l => l.date.startsWith(todayStr) && l.slotId === s.slotId);
+                if (!hasLog) {
+                  lastNotifiedSlot.current = slotKey;
+                  if ("Notification" in window && Notification.permission === "granted") {
+                    const msg = isLastLesson && data.settings.alertAfterShift 
+                        ? `O turno na ${school?.name} está acabando. Verifique seus registros!`
+                        : `A aula de ${s.classId} está terminando. Registre o conteúdo!`;
+                    new Notification("Leciona: Lembrete de Registro", { body: msg });
+                  }
+                }
               }
             }
+          });
+      }
+
+      // 2. Verificação de Alarmes de Lembretes
+      data.reminders.forEach(reminder => {
+          if (reminder.alarmTime && !reminder.alarmTriggered) {
+              const alarmDate = new Date(reminder.alarmTime);
+              // Verifica se está dentro do minuto do alarme
+              const diffMs = alarmDate.getTime() - new Date().getTime();
+              
+              // Se a diferença for pequena (ex: entre -1 min e +1 min) ou se já passou e não foi notificado
+              // Aqui vamos considerar: disparar se já passou da hora e ainda não disparou (mas não muito antigo, ex: 24h)
+              if (diffMs <= 0 && diffMs > -86400000) { 
+                  if ("Notification" in window && Notification.permission === "granted") {
+                      new Notification(`Lembrete: ${reminder.title}`, { body: reminder.content });
+                  }
+                  
+                  // Marca como disparado para não repetir
+                  updateData({
+                      reminders: data.reminders.map(r => r.id === reminder.id ? { ...r, alarmTriggered: true } : r)
+                  });
+              }
           }
-        }
       });
+
     };
-    const interval = setInterval(checkContentAlerts, 60000);
+
+    // Solicita permissão ao carregar se necessário
+    if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+    }
+
+    const interval = setInterval(checkContentAlerts, 30000); // Verifica a cada 30s
     return () => clearInterval(interval);
   }, [data]);
 

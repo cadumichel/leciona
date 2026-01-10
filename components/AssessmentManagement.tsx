@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { AppData, SchoolEvent, EventType, TimeSlot, DayOfWeek, LessonLog } from '../types';
 import { FileCheck, Calendar, Trash2, AlertTriangle, Plus, X, Layers, Clock, ArrowRight, ChevronRight, School as SchoolIcon } from 'lucide-react';
-import { isWeekend, isHoliday, getHolidayName, getDayOfWeekFromDate } from '../utils';
+import { isWeekend, isHoliday, getHolidayName, getDayOfWeekFromDate, getSafeDate } from '../utils';
 
 interface AssessmentManagementProps {
   data: AppData;
@@ -41,8 +41,8 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
 
   // Lógica de validação extraída para evitar dependência de estado stale
   const validateDateLogic = (dateStr: string, schoolId: string, classId: string) => {
-    // Usamos T12:00:00 para garantir que a verificação de feriado (que usa new Date) caia no dia correto
-    const date = new Date(dateStr + 'T12:00:00');
+    // Usamos getSafeDate para garantir data válida
+    const date = getSafeDate(dateStr);
     let warning = '';
     let invalid = false;
 
@@ -105,7 +105,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     if (!newEvent.title || !newEvent.classId || !newEvent.slotId || isInvalidDate) return;
     
     // ISO Safe
-    const safeDateISO = new Date(newEvent.date + 'T12:00:00').toISOString();
+    const safeDateISO = getSafeDate(newEvent.date!).toISOString();
 
     const eventId = crypto.randomUUID();
     const event: SchoolEvent = {
@@ -289,11 +289,11 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   <div className="space-y-1.5">
                      <div className="flex items-center gap-2 text-[9px] md:text-[10px] font-bold text-slate-500">
                         <Calendar size={12} className="text-slate-300" />
-                        {/* Display date with full weekday name */}
+                        {/* Exibe Data com Dia da Semana por Extenso - usando getSafeDate */}
                         <span>
-                            {new Date(event.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            {getSafeDate(event.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                             {' - '}
-                            {new Date(event.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' })}
+                            {getSafeDate(event.date).toLocaleDateString('pt-BR', { weekday: 'long' })}
                         </span>
                      </div>
                      <div className="flex items-center gap-2 text-[9px] md:text-[10px] font-bold text-slate-500">

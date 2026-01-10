@@ -10,12 +10,13 @@ import {
   AlertTriangle, 
   Lightbulb, 
   MessageSquare,
-  ChevronRight,
+  ChevronRight, 
   School as SchoolIcon,
   Users,
   Bell,
   Clock
 } from 'lucide-react';
+import { getSafeDate } from '../utils';
 
 interface ReminderManagementProps {
   data: AppData;
@@ -146,10 +147,10 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
               <div className="flex-1">
                 <h4 className="font-black text-slate-800 uppercase text-sm mb-1 line-clamp-1">{r.title}</h4>
                 <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-2">
-                  {/* Display Date + Full Weekday Name */}
-                  {new Date(r.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  {/* Display Date + Full Weekday Name using getSafeDate */}
+                  {getSafeDate(r.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   {' - '}
-                  {new Date(r.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' })}
+                  {getSafeDate(r.date).toLocaleDateString('pt-BR', { weekday: 'long' })}
                   {' • '}
                   {cat.label}
                 </p>

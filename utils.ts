@@ -6,13 +6,17 @@ export const isWeekend = (date: Date): boolean => {
   return day === 0 || day === 6;
 };
 
-// Helper seguro para pegar o dia da semana de uma string YYYY-MM-DD
-// Adiciona T12:00:00 para garantir que o fuso horário não mude o dia (Ex: GMT-3)
+// Helper seguro para criar objeto Date a partir de string
+export const getSafeDate = (dateStr: string): Date => {
+  if (!dateStr) return new Date();
+  // Se já tiver 'T' (ISO), usa como está. Se for YYYY-MM-DD, adiciona meio-dia para evitar problemas de fuso.
+  const cleanDateStr = dateStr.includes('T') ? dateStr : `${dateStr}T12:00:00`;
+  return new Date(cleanDateStr);
+};
+
 export const getDayOfWeekFromDate = (dateStr: string): DayOfWeek => {
   if (!dateStr) return 0;
-  // Se já vier com T... (ISO), usa como está, senão adiciona meio-dia
-  const safeDateStr = dateStr.includes('T') ? dateStr : `${dateStr}T12:00:00`;
-  const date = new Date(safeDateStr);
+  const date = getSafeDate(dateStr);
   return date.getDay() as DayOfWeek;
 };
 
@@ -59,11 +63,11 @@ export const getCurrentTimeInMinutes = (): number => {
 
 export const getTermInfo = (dateStr: string, calendar?: AcademicCalendar) => {
   if (!calendar) return null;
-  const date = new Date(dateStr + 'T00:00:00').getTime();
+  const date = getSafeDate(dateStr).getTime();
   const termIdx = calendar.terms.findIndex(t => {
     if (!t.start || !t.end) return false;
-    const s = new Date(t.start + 'T00:00:00').getTime();
-    const e = new Date(t.end + 'T00:00:00').getTime();
+    const s = getSafeDate(t.start).getTime();
+    const e = getSafeDate(t.end).getTime();
     return date >= s && date <= e;
   });
 
@@ -79,14 +83,16 @@ export const getTermInfo = (dateStr: string, calendar?: AcademicCalendar) => {
 
 // Formata para o quadrado: SEG (em cima)
 export const getShortWeekDay = (dateStr: string): string => {
-  const date = new Date(dateStr + 'T12:00:00');
+  const date = getSafeDate(dateStr);
+  if (isNaN(date.getTime())) return '---';
   const days = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
   return days[date.getDay()];
 };
 
 // Formata para o quadrado: 12/02 (embaixo)
 export const getDayMonth = (dateStr: string): string => {
-  const date = new Date(dateStr + 'T12:00:00');
+  const date = getSafeDate(dateStr);
+  if (isNaN(date.getTime())) return '--/--';
   const d = String(date.getDate()).padStart(2, '0');
   const m = String(date.getMonth() + 1).padStart(2, '0');
   return `${d}/${m}`;

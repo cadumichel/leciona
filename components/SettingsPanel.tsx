@@ -673,7 +673,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       {activeSubTab === 'calendar' && (
         <div className="animate-in fade-in slide-in-from-right-4">
           {/* Caixa de Seleção Harmonizada */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-[24px] flex flex-col md:flex-row items-center gap-6 shadow-sm relative overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 md:p-5 rounded-[24px] flex flex-col md:flex-row items-center gap-3 md:gap-6 shadow-sm relative overflow-hidden">
              <div className="absolute left-0 top-0 bottom-0 w-2 bg-indigo-500"></div>
              
              <div className="flex items-center gap-4 flex-1 w-full pl-2">
@@ -697,7 +697,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
              <button 
                 onClick={handleSaveCalendar} 
-                className={`w-full md:w-auto h-[48px] px-6 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg transition-all duration-300 ease-in-out flex items-center justify-center gap-2 shrink-0 ${
+                className={`w-full md:w-auto h-[40px] md:h-[48px] px-6 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg transition-all duration-300 ease-in-out flex items-center justify-center gap-2 shrink-0 ${
                   saveSuccess 
                     ? 'bg-green-600 text-white hover:bg-green-700 scale-105 shadow-green-200' 
                     : 'bg-indigo-600 text-white hover:bg-indigo-700'
@@ -709,37 +709,37 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
           </div>
 
           <div 
-            className="bg-white dark:bg-slate-900 rounded-[40px] p-5 md:p-8 shadow-sm border border-slate-100 dark:border-slate-800 space-y-8 mt-6 transition-colors"
+            className="bg-white dark:bg-slate-900 rounded-[24px] md:rounded-[40px] p-3 md:p-8 shadow-sm border border-slate-100 dark:border-slate-800 space-y-4 md:space-y-8 mt-4 md:mt-6 transition-colors"
             style={{ 
               backgroundColor: activeSchoolColorForCal ? activeSchoolColorForCal + '10' : undefined,
               borderColor: activeSchoolColorForCal ? activeSchoolColorForCal + '30' : undefined
             }}
           >
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                 <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Ano</label><input type="number" value={calForm.year} onChange={e => setCalForm({...calForm, year: parseInt(e.target.value)})} className="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl px-5 py-3 font-bold dark:text-white" /></div>
-                 <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Início das Aulas</label><input type="date" value={calForm.start} onChange={e => setCalForm({...calForm, start: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl px-5 py-3 font-bold dark:text-white" /></div>
-                 <div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Término do Ano</label><input type="date" value={calForm.end} onChange={e => setCalForm({...calForm, end: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl px-5 py-3 font-bold dark:text-white" /></div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
+                 <div><label className="block text-[8px] md:text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Ano</label><input type="number" value={calForm.year} onChange={e => setCalForm({...calForm, year: parseInt(e.target.value)})} className="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl px-3 py-2 md:px-5 md:py-3 font-bold text-sm md:text-base dark:text-white" /></div>
+                 <div><label className="block text-[8px] md:text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Início das Aulas</label><input type="date" value={calForm.start} onChange={e => setCalForm({...calForm, start: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl px-3 py-2 md:px-5 md:py-3 font-bold text-sm md:text-base dark:text-white" /></div>
+                 <div><label className="block text-[8px] md:text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Término do Ano</label><input type="date" value={calForm.end} onChange={e => setCalForm({...calForm, end: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl px-3 py-2 md:px-5 md:py-3 font-bold text-sm md:text-base dark:text-white" /></div>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl flex flex-col md:flex-row md:items-end gap-6">
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3 md:p-6 rounded-3xl flex flex-col md:flex-row md:items-end gap-3 md:gap-6">
                  <div className="flex-1">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Divisão Letiva</label>
-                    <div className="grid grid-cols-3 gap-2 p-1 bg-white dark:bg-slate-700 rounded-2xl">
-                       <button onClick={() => setCalForm({...calForm, division: 'bimestres'})} className={`py-3 rounded-xl font-black uppercase text-[10px] transition-all ${calForm.division === 'bimestres' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400'}`}>Bimestres</button>
-                       <button onClick={() => setCalForm({...calForm, division: 'trimestres'})} className={`py-3 rounded-xl font-black uppercase text-[10px] transition-all ${calForm.division === 'trimestres' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400'}`}>Trimestres</button>
-                       <button onClick={() => setCalForm({...calForm, division: 'personalizado'})} className={`py-3 rounded-xl font-black uppercase text-[10px] transition-all ${calForm.division === 'personalizado' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400'}`}>Personalizado</button>
+                    <label className="block text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 md:mb-3 ml-1">Divisão Letiva</label>
+                    <div className="grid grid-cols-3 gap-1 md:gap-2 p-1 bg-white dark:bg-slate-700 rounded-2xl">
+                       <button onClick={() => setCalForm({...calForm, division: 'bimestres'})} className={`py-2 md:py-3 rounded-xl font-black uppercase text-[9px] md:text-[10px] transition-all ${calForm.division === 'bimestres' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400'}`}>Bimestres</button>
+                       <button onClick={() => setCalForm({...calForm, division: 'trimestres'})} className={`py-2 md:py-3 rounded-xl font-black uppercase text-[9px] md:text-[10px] transition-all ${calForm.division === 'trimestres' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400'}`}>Trimestres</button>
+                       <button onClick={() => setCalForm({...calForm, division: 'personalizado'})} className={`py-2 md:py-3 rounded-xl font-black uppercase text-[9px] md:text-[10px] transition-all ${calForm.division === 'personalizado' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400'}`}>Personalizado</button>
                     </div>
                  </div>
-                 <button onClick={handleCreateTermsSuggestion} className="h-[52px] px-8 bg-blue-100 text-blue-600 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-blue-600 hover:text-white transition-all"><Wand2 size={16} /> Gerar Períodos</button>
+                 <button onClick={handleCreateTermsSuggestion} className="h-[40px] md:h-[52px] px-8 bg-blue-100 text-blue-600 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-blue-600 hover:text-white transition-all"><Wand2 size={16} /> Gerar Períodos</button>
               </div>
 
-              <div className="grid gap-3">
+              <div className="grid gap-2 md:gap-3">
                 {calForm.terms?.map((term, idx) => (
-                  <div key={idx} className="flex flex-col md:flex-row items-center gap-3 bg-slate-50 dark:bg-slate-800 p-3 md:p-4 rounded-3xl">
+                  <div key={idx} className="flex flex-col md:flex-row items-center gap-2 md:gap-3 bg-slate-50 dark:bg-slate-800 p-2 md:p-4 rounded-3xl">
                      <input type="text" value={term.name} onChange={e => { const newTerms = [...calForm.terms!]; newTerms[idx].name = e.target.value; setCalForm({...calForm, terms: newTerms}); }} className="w-full md:w-40 bg-white dark:bg-slate-700 rounded-xl px-4 py-2 font-black text-[10px] uppercase text-blue-600" />
                      <div className="flex gap-2 w-full">
-                        <input type="date" value={term.start} onChange={e => { const nt = [...calForm.terms!]; nt[idx].start = e.target.value; setCalForm({...calForm, terms: nt}); }} className="flex-1 bg-white dark:bg-slate-700 rounded-xl px-4 py-2 text-xs font-bold" />
-                        <input type="date" value={term.end} onChange={e => { const nt = [...calForm.terms!]; nt[idx].end = e.target.value; setCalForm({...calForm, terms: nt}); }} className="flex-1 bg-white dark:bg-slate-700 rounded-xl px-4 py-2 text-xs font-bold" />
+                        <input type="date" value={term.start} onChange={e => { const nt = [...calForm.terms!]; nt[idx].start = e.target.value; setCalForm({...calForm, terms: nt}); }} className="flex-1 bg-white dark:bg-slate-700 rounded-xl px-3 py-1.5 md:px-4 md:py-2 text-xs font-bold" />
+                        <input type="date" value={term.end} onChange={e => { const nt = [...calForm.terms!]; nt[idx].end = e.target.value; setCalForm({...calForm, terms: nt}); }} className="flex-1 bg-white dark:bg-slate-700 rounded-xl px-3 py-1.5 md:px-4 md:py-2 text-xs font-bold" />
                      </div>
                      {calForm.division === 'personalizado' && (
                         <button onClick={() => removeTerm(idx)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
@@ -750,30 +750,30 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                 ))}
                 
                 {calForm.division === 'personalizado' && (
-                   <button onClick={addTerm} className="flex items-center justify-center gap-2 w-full py-4 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all font-black uppercase text-[10px]">
+                   <button onClick={addTerm} className="flex items-center justify-center gap-2 w-full py-3 md:py-4 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all font-black uppercase text-[10px]">
                       <Plus size={14} /> Adicionar Período
                    </button>
                 )}
               </div>
 
-              <div className="bg-pink-50 dark:bg-pink-900/10 p-6 rounded-3xl border border-pink-100">
-                 <h4 className="text-[10px] font-black text-pink-600 uppercase mb-4 flex items-center gap-2"><Palmtree size={14}/> Recesso de Julho</h4>
-                 <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-[8px] font-black uppercase mb-1 ml-1">Início</label><input type="date" value={calForm.midYearBreak?.start} onChange={e => setCalForm({...calForm, midYearBreak: { ...calForm.midYearBreak!, start: e.target.value }})} className="w-full bg-white dark:bg-slate-800 rounded-xl px-4 py-2 text-xs font-bold dark:text-white" /></div>
-                    <div><label className="block text-[8px] font-black uppercase mb-1 ml-1">Fim</label><input type="date" value={calForm.midYearBreak?.end} onChange={e => setCalForm({...calForm, midYearBreak: { ...calForm.midYearBreak!, end: e.target.value }})} className="w-full bg-white dark:bg-slate-800 rounded-xl px-4 py-2 text-xs font-bold dark:text-white" /></div>
+              <div className="bg-pink-50 dark:bg-pink-900/10 p-3 md:p-6 rounded-3xl border border-pink-100">
+                 <h4 className="text-[9px] md:text-[10px] font-black text-pink-600 uppercase mb-2 md:mb-4 flex items-center gap-2"><Palmtree size={14}/> Recesso de Julho</h4>
+                 <div className="grid grid-cols-2 gap-2 md:gap-4">
+                    <div><label className="block text-[8px] font-black uppercase mb-1 ml-1">Início</label><input type="date" value={calForm.midYearBreak?.start} onChange={e => setCalForm({...calForm, midYearBreak: { ...calForm.midYearBreak!, start: e.target.value }})} className="w-full bg-white dark:bg-slate-800 rounded-xl px-3 py-1.5 md:px-4 md:py-2 text-xs font-bold dark:text-white" /></div>
+                    <div><label className="block text-[8px] font-black uppercase mb-1 ml-1">Fim</label><input type="date" value={calForm.midYearBreak?.end} onChange={e => setCalForm({...calForm, midYearBreak: { ...calForm.midYearBreak!, end: e.target.value }})} className="w-full bg-white dark:bg-slate-800 rounded-xl px-3 py-1.5 md:px-4 md:py-2 text-xs font-bold dark:text-white" /></div>
                  </div>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-800 p-6 rounded-3xl">
-                 <div className="flex justify-between items-center mb-4">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2"><CalendarRange size={14}/> Recessos Eventuais</h4>
-                    <button onClick={addExtraRecess} className="text-[10px] font-black text-blue-600 uppercase">+ Add Dia</button>
+              <div className="bg-slate-50 dark:bg-slate-800 p-3 md:p-6 rounded-3xl">
+                 <div className="flex justify-between items-center mb-2 md:mb-4">
+                    <h4 className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase flex items-center gap-2"><CalendarRange size={14}/> Recessos Eventuais</h4>
+                    <button onClick={addExtraRecess} className="text-[9px] md:text-[10px] font-black text-blue-600 uppercase">+ Add Dia</button>
                  </div>
-                 <div className="space-y-3">
+                 <div className="space-y-2 md:space-y-3">
                     {(calForm.extraRecesses || []).map(r => (
-                      <div key={r.id} className="flex gap-3 items-center">
-                         <input type="text" placeholder="Nome" value={r.name} onChange={e => { const u = calForm.extraRecesses?.map(x => x.id === r.id ? {...x, name: e.target.value} : x); setCalForm({...calForm, extraRecesses: u}); }} className="flex-1 bg-white dark:bg-slate-700 rounded-xl px-3 py-2 text-xs font-bold" />
-                         <input type="date" value={r.date} onChange={e => { const u = calForm.extraRecesses?.map(x => x.id === r.id ? {...x, date: e.target.value} : x); setCalForm({...calForm, extraRecesses: u}); }} className="bg-white dark:bg-slate-700 rounded-xl px-3 py-2 text-xs font-bold" />
+                      <div key={r.id} className="flex gap-2 md:gap-3 items-center">
+                         <input type="text" placeholder="Nome" value={r.name} onChange={e => { const u = calForm.extraRecesses?.map(x => x.id === r.id ? {...x, name: e.target.value} : x); setCalForm({...calForm, extraRecesses: u}); }} className="flex-1 bg-white dark:bg-slate-700 rounded-xl px-3 py-1.5 md:py-2 text-xs font-bold" />
+                         <input type="date" value={r.date} onChange={e => { const u = calForm.extraRecesses?.map(x => x.id === r.id ? {...x, date: e.target.value} : x); setCalForm({...calForm, extraRecesses: u}); }} className="bg-white dark:bg-slate-700 rounded-xl px-3 py-1.5 md:py-2 text-xs font-bold" />
                          <button onClick={() => setCalForm({...calForm, extraRecesses: calForm.extraRecesses?.filter(x => x.id !== r.id)})} className="text-slate-300 hover:text-red-500"><Trash2 size={16}/></button>
                       </div>
                     ))}

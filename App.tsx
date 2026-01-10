@@ -95,6 +95,24 @@ export const QuickStartGuide: React.FC<{ onDismiss: () => void; onNavigate: (tab
   </div>
 );
 
+// Função Auxiliar para Mesclar Arrays por ID
+const mergeArrays = <T extends { id: string }>(cloudArr: T[] = [], localArr: T[] = []): T[] => {
+  const map = new Map<string, T>();
+  
+  // Prioridade: Cloud (para atualizações) -> Local (para novos itens não sincronizados)
+  // 1. Adiciona itens da nuvem
+  cloudArr.forEach(item => map.set(item.id, item));
+  
+  // 2. Adiciona itens locais que NÃO estão na nuvem (preserva criações offline/recentes)
+  localArr.forEach(item => {
+    if (!map.has(item.id)) {
+      map.set(item.id, item);
+    }
+  });
+  
+  return Array.from(map.values());
+};
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [data, setData] = useState<AppData>(() => {
@@ -164,15 +182,28 @@ const App: React.FC = () => {
             const rawData = docSnap.data();
             const cloudData = sanitizeFirestoreData(rawData);
             
-            // Mesclagem cuidadosa: Cloud tem prioridade ao logar
-            setData({
+            // Mesclagem Inteligente: Cloud vs Local
+            // Evita que dados locais recém-criados (que ainda não subiram) sejam sobrescritos pelo Cloud antigo
+            const localData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') as Partial<AppData>;
+
+            const mergedData: AppData = {
                 ...cloudData,
+                // Mescla arrays críticos usando IDs
+                events: mergeArrays(cloudData.events, localData.events),
+                reminders: mergeArrays(cloudData.reminders, localData.reminders),
+                logs: mergeArrays(cloudData.logs, localData.logs),
+                schools: mergeArrays(cloudData.schools, localData.schools),
+                students: mergeArrays(cloudData.students, localData.students),
+                // Outros campos assumem preferência da Cloud (configurações, perfil, etc)
                 settings: {
                     ...cloudData.settings,
                     googleSyncEnabled: true
                 }
-            });
+            };
+            
+            setData(mergedData);
           } else {
+            // Primeiro login ou sem dados na nuvem: Salva o estado local na nuvem
             await setDoc(docRef, {
                 ...data,
                 settings: { ...data.settings, googleSyncEnabled: true }
@@ -208,6 +239,7 @@ const App: React.FC = () => {
     if (user) {
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         
+        // Reduzido para 1.5s para garantir salvamento mais rápido
         timeoutRef.current = setTimeout(async () => {
             setIsSyncing(true);
             try {
@@ -225,7 +257,7 @@ const App: React.FC = () => {
             } finally {
                 setIsSyncing(false);
             }
-        }, 3000);
+        }, 1500); 
     }
 
   }, [data, user]);
@@ -392,13 +424,22 @@ const App: React.FC = () => {
 
       <main className="flex-1 pb-24 md:pb-0 overflow-x-hidden">
         <header className="bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-4 py-3 md:px-6 md:py-4 flex justify-between items-center sticky top-0 z-40 transition-colors shadow-sm md:shadow-none">
-          <h2 className="text-lg md:text-xl font-black text-slate-800 dark:text-white truncate">{navItems.find(i => i.id === activeTab)?.label}</h2>
-          {user && (
-            <div className="flex items-center gap-2 text-[9px] md:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-              {isSyncing ? <span className="hidden md:inline">Salvando...</span> : <span className="hidden md:inline">{data.settings.lastSyncAt ? new Date(data.settings.lastSyncAt).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : 'Agora'}</span>}
-              <div className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-400 animate-pulse' : 'bg-green-500'}`} />
+          <h2 className="text-lg md:text-xl font-black text-slate-800 dark:text-white truncate max-w-[150px] md:max-w-none">{navItems.find(i => i.id === activeTab)?.label}</h2>
+          
+          <div className="flex items-center gap-3">
+            {/* Branding Mobile - Só aparece em telas pequenas */}
+            <div className="md:hidden flex items-center gap-1.5 opacity-100">
+               <BookOpen className="text-primary w-4 h-4" />
+               <span className="text-xs font-black text-slate-800 dark:text-white tracking-tighter">Leciona</span>
             </div>
-          )}
+
+            {user && (
+              <div className="flex items-center gap-2 text-[9px] md:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-3 border-l border-slate-200 dark:border-slate-700 md:border-none md:pl-0">
+                {isSyncing ? <span className="hidden md:inline">Salvando...</span> : <span className="hidden md:inline">{data.settings.lastSyncAt ? new Date(data.settings.lastSyncAt).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : 'Agora'}</span>}
+                <div className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-400 animate-pulse' : 'bg-green-500'}`} />
+              </div>
+            )}
+          </div>
         </header>
 
         <div className="p-3 md:p-8 max-w-6xl mx-auto">

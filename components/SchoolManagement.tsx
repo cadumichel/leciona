@@ -702,24 +702,74 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                   {deletingSchoolId === school.id ? (
                     <div className="flex flex-col items-end gap-1">
                       <span className="text-[9px] font-bold text-slate-600 uppercase">Confirmar exclusão?</span>
+                      <p className="text-[8px] text-amber-600 max-w-[200px] text-right mb-1">
+                        ⚠️ Isso também removerá todas as avaliações, horários, diários e listas de alunos vinculados a esta escola.
+                      </p>
                       <div className="flex items-center gap-1">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+
+                            // Coletar todos os IDs de assessments relacionados à escola
                             const schoolEventIds = data.events.filter(ev => ev.schoolId === school.id).map(ev => ev.id);
                             const schoolCustomAssessmentIds = data.customAssessments.filter(ca => ca.schoolId === school.id).map(ca => ca.id);
                             const allAssessmentIdsToRemove = new Set([...schoolEventIds, ...schoolCustomAssessmentIds]);
 
-                            // Soft Delete: Mark as deleted instead of removing
+                            // Calcular estatísticas para o usuário
+                            const relatedSchedules = data.schedules.filter(s => s.schoolId === school.id).length;
+                            const relatedLogs = data.logs.filter(l => l.schoolId === school.id).length;
+                            const relatedClassRecords = data.classRecords.filter(cr => cr.schoolId === school.id).length;
+                            const relatedEvents = schoolEventIds.length;
+                            const relatedCustomAssessments = schoolCustomAssessmentIds.length;
+                            const relatedGrades = data.grades.filter(g => allAssessmentIdsToRemove.has(g.assessmentId)).length;
+                            const relatedGradingConfigs = data.gradingConfigs.filter(gc => gc.schoolId === school.id).length;
+                            const relatedCalendars = data.calendars.filter(c => c.schoolId === school.id).length;
+
+                            const confirmMessage = `ATENÇÃO: Esta ação irá remover permanentemente:\n\n` +
+                              `📅 ${relatedSchedules} horário(s) de aula\n` +
+                              `📖 ${relatedLogs} registro(s) de diário\n` +
+                              `👥 ${relatedClassRecords} lista(s) de alunos\n` +
+                              `📝 ${relatedEvents + relatedCustomAssessments} avaliação(ões)\n` +
+                              `🎯 ${relatedGrades} nota(s) lançada(s)\n` +
+                              `⚙️ ${relatedGradingConfigs} configuração(ões) de média\n` +
+                              `📆 ${relatedCalendars} calendário(s) letivo(s)\n\n` +
+                              `Esta ação NÃO pode ser desfeita. Confirmar?`;
+
+                            if (!confirm(confirmMessage)) {
+                              setDeletingSchoolId(null);
+                              return;
+                            }
+
+                            // Soft Delete da escola
+                            const updatedSchools = data.schools.map(s =>
+                              s.id === school.id
+                                ? { ...s, deleted: true, deletedAt: new Date().toISOString() }
+                                : s
+                            );
+
+                            // Hard Delete de dados relacionados (não usam soft delete)
+                            const updatedSchedules = data.schedules.filter(s => s.schoolId !== school.id);
+                            const updatedLogs = data.logs.filter(l => l.schoolId !== school.id);
+                            const updatedClassRecords = data.classRecords.filter(cr => cr.schoolId !== school.id);
+                            const updatedEvents = data.events.filter(e => e.schoolId !== school.id);
+                            const updatedCustomAssessments = data.customAssessments.filter(ca => ca.schoolId !== school.id);
+                            const updatedGrades = data.grades.filter(g => !allAssessmentIdsToRemove.has(g.assessmentId));
+                            const updatedGradingConfigs = data.gradingConfigs.filter(gc => gc.schoolId !== school.id);
+                            const updatedCalendars = data.calendars.filter(c => c.schoolId !== school.id);
+
+                            // Aplicar todas as mudanças de uma vez
                             onUpdateData({
-                              schools: data.schools.map(s =>
-                                s.id === school.id
-                                  ? { ...s, deleted: true, deletedAt: new Date().toISOString() }
-                                  : s
-                              )
-                              // Note: We DO NOT delete related data physically anymore to prevent "Zombie Data" logic in sync.
-                              // Since the school is hidden (soft deleted), related data won't be accessible in UI anyway.
+                              schools: updatedSchools,
+                              schedules: updatedSchedules,
+                              logs: updatedLogs,
+                              classRecords: updatedClassRecords,
+                              events: updatedEvents,
+                              customAssessments: updatedCustomAssessments,
+                              grades: updatedGrades,
+                              gradingConfigs: updatedGradingConfigs,
+                              calendars: updatedCalendars
                             });
+
                             setDeletingSchoolId(null);
                           }}
                           className="bg-red-500 text-white px-2 py-1 rounded text-xs font-bold"

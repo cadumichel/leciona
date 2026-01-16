@@ -62,7 +62,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
    const activeSchoolColorForCal = useMemo(() => data.schools.find(s => s.id === activeSchoolIdForCal)?.color, [data.schools, activeSchoolIdForCal]);
 
    const [calForm, setCalForm] = useState<Partial<AcademicCalendar>>({
-      division: 'bimestres',
+      division: 'trimestres',  // Default to trimestres
       year: new Date().getFullYear(),
       start: `${new Date().getFullYear()}-02-01`,
       end: `${new Date().getFullYear()}-12-01`,
@@ -224,6 +224,45 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       onUpdateData({ classRecords: [...otherRecords, updatedRecord] });
    };
 
+   const handleDeleteAllClassStudents = () => {
+      if (!currentClassRecord) return;
+
+      const studentCount = currentClassRecord.students.length;
+
+      if (studentCount === 0) {
+         alert('Não há alunos nesta turma para excluir.');
+         return;
+      }
+
+      const confirmMessage = `ATENÇÃO: Você está prestes a EXCLUIR PERMANENTEMENTE toda a lista de alunos desta turma.\n\n` +
+         `Total de alunos: ${studentCount}\n` +
+         `- Alunos ativos: ${activeStudents.length}\n` +
+         `- Alunos arquivados: ${archivedStudents.length}\n\n` +
+         `Esta ação removerá:\n` +
+         `• Todos os nomes dos alunos desta turma\n` +
+         `• Histórico de presença (se houver)\n` +
+         `• Notas lançadas para estes alunos\n\n` +
+         `Esta ação NÃO pode ser desfeita!\n\n` +
+         `IMPORTANTE: Use esta opção APENAS se importou a lista errada.\n` +
+         `Se apenas quer arquivar alunos, use o botão "Arquivar" individual.\n\n` +
+         `Digite "EXCLUIR LISTA" para confirmar:`;
+
+      const userInput = prompt(confirmMessage);
+
+      if (userInput === 'EXCLUIR LISTA') {
+         // Hard Delete: Remove the entire ClassRecord
+         const updatedClassRecords = data.classRecords?.filter(r => r.id !== currentClassRecord.id) || [];
+         onUpdateData({ classRecords: updatedClassRecords });
+
+         // Reset seleção
+         setRosterClassId('');
+
+         alert(`Lista de ${studentCount} aluno(s) excluída com sucesso.`);
+      } else if (userInput !== null) {
+         alert('Texto de confirmação incorreto. Exclusão cancelada.');
+      }
+   };
+
    // --- IMPORTAÇÃO DE RECESSOS ---
    const handleParseHolidays = () => {
       if (!holidayImportText.trim()) {
@@ -264,6 +303,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       const targetSchool = data.schools.find(s => s.id === targetSchoolId);
       if (!targetSchool) return;
 
+      // BUGFIX: Use local state instead of Firestore data
+      // Find the recess in the CURRENT local state (calForm) to get the latest edited values
+      const currentRecess = calForm.extraRecesses?.find(r => r.id === copyingRecess.id);
+      if (!currentRecess) {
+         alert('Recesso não encontrado no formulário atual.');
+         setCopyingRecess(null);
+         return;
+      }
+
       // Encontrar calendário da escola alvo para o ano atual
       let targetCalendar = data.calendars.find(c => c.schoolId === targetSchoolId && c.year === (calForm.year || new Date().getFullYear()));
 
@@ -271,8 +319,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
       const newRecess: Recess = {
          id: crypto.randomUUID(),
-         date: copyingRecess.date,
-         name: copyingRecess.name
+         date: currentRecess.date,  // Use current state value, not saved value
+         name: currentRecess.name   // Use current state value, not saved value
       };
 
       if (targetCalendar) {
@@ -300,7 +348,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
       onUpdateData({ calendars: newCalendars });
       setCopyingRecess(null);
-      alert(`Recesso copiado para ${targetSchool.name} com sucesso!`);
+      alert(`Recesso "${currentRecess.name}" copiado para ${targetSchool.name} com sucesso!`);
    };
 
    // --- PROCESSAMENTO DE LISTA DE ALUNOS ---
@@ -709,6 +757,26 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       setTimeout(() => setSaveSuccess(false), 2500); // Tempo ligeiramente menor para feedback mais ágil
    };
 
+   // FIX: Auto-reset calendar school selection when the selected school is deleted
+   // This ensures the theme color updates correctly in the calendar tab
+   useEffect(() => {
+      const safeSchools = data.schools.filter(s => !s.deleted);
+
+      if (activeSchoolIdForCal) {
+         const schoolStillExists = safeSchools.find(s => s.id === activeSchoolIdForCal);
+
+         // If the selected school was deleted, automatically select the first available one
+         if (!schoolStillExists && safeSchools.length > 0) {
+            const newId = safeSchools[0].id;
+            console.log('🔄 Selected school for calendar was deleted. Auto-selecting first available:', newId);
+            setActiveSchoolIdForCal(newId);
+         }
+      } else if (safeSchools.length > 0) {
+         // If no school is selected but there are available ones, select the first
+         setActiveSchoolIdForCal(safeSchools[0].id);
+      }
+   }, [data.schools, activeSchoolIdForCal]);
+
    // Garante que o formulário seja populado corretamente ao trocar de aba
    useEffect(() => {
       if (activeSubTab === 'calendar') {
@@ -717,6 +785,46 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          }
       }
    }, [activeSubTab, data.schools, activeSchoolIdForCal]);
+
+   // AUTO-GENERATE periods when division changes (UX improvement)
+   useEffect(() => {
+      // Only trigger if we have start/end dates
+      if (!calForm.start || !calForm.end) return;
+
+      console.log('🔄 Division changed to:', calForm.division);
+
+      if (calForm.division === 'bimestres' || calForm.division === 'trimestres') {
+         // For bimestres/trimestres, always regenerate to match the selected division
+         // This ensures switching from Bimestres to Trimestres updates the fields
+         const s = new Date(calForm.start + 'T00:00:00');
+         const e = new Date(calForm.end + 'T00:00:00');
+         const totalDays = (e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24);
+         const count = calForm.division === 'bimestres' ? 4 : 3;
+         const daysPerTerm = totalDays / count;
+         const terms: Term[] = [];
+
+         for (let i = 0; i < count; i++) {
+            const termStart = new Date(s.getTime() + (i * daysPerTerm * 24 * 60 * 60 * 1000));
+            const termEnd = new Date(termStart.getTime() + ((daysPerTerm - 1) * 24 * 60 * 60 * 1000));
+            terms.push({
+               name: `${i + 1}º ${calForm.division === 'bimestres' ? 'Bimestre' : 'Trimestre'}`,
+               start: termStart.toISOString().split('T')[0],
+               end: termEnd.toISOString().split('T')[0]
+            });
+         }
+
+         setCalForm(prev => ({ ...prev, terms }));
+      } else if (calForm.division === 'personalizado') {
+         // Personalizado: ALWAYS reset to just 1 period when switching to personalizado
+         const initialTerm: Term = {
+            name: '1º Período',
+            start: calForm.start,
+            end: calForm.end
+         };
+
+         setCalForm(prev => ({ ...prev, terms: [initialTerm] }));
+      }
+   }, [calForm.division]); // Only trigger when division changes
 
    // Carregar dados ao selecionar escola na aba calendario
    useEffect(() => {
@@ -727,19 +835,42 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          if (existingCalendar) {
             setCalForm(existingCalendar);
          } else {
+            // No existing calendar - create new one with trimestres as default
             const currentYear = new Date().getFullYear();
-            setCalForm({
-               division: 'bimestres',
+            const newCalForm = {
+               division: 'trimestres' as const,  // Default to trimestres for new calendars
                year: currentYear,
                start: `${currentYear}-02-01`,
                end: `${currentYear}-12-01`,
-               terms: [],
+               terms: [] as Term[],
                midYearBreak: { start: `${currentYear}-07-01`, end: `${currentYear}-07-31` },
                extraRecesses: []
-            });
+            };
+
+            // Generate initial trimestres automatically
+            const s = new Date(newCalForm.start + 'T00:00:00');
+            const e = new Date(newCalForm.end + 'T00:00:00');
+            const totalDays = (e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24);
+            const count = 3; // Trimestres
+            const daysPerTerm = totalDays / count;
+            const terms: Term[] = [];
+
+            for (let i = 0; i < count; i++) {
+               const termStart = new Date(s.getTime() + (i * daysPerTerm * 24 * 60 * 60 * 1000));
+               const termEnd = new Date(termStart.getTime() + ((daysPerTerm - 1) * 24 * 60 * 60 * 1000));
+               terms.push({
+                  name: `${i + 1}º Trimestre`,
+                  start: termStart.toISOString().split('T')[0],
+                  end: termEnd.toISOString().split('T')[0]
+               });
+            }
+
+            newCalForm.terms = terms;
+            console.log('🎯 Generated initial trimestres:', terms.length);
+            setCalForm(newCalForm);
          }
       }
-   }, [activeSubTab, activeSchoolIdForCal, data.calendars, data.schools]);
+   }, [activeSubTab, activeSchoolIdForCal, data.schools]); // Removed data.calendars to prevent reload on copy
 
    const hasAdvancedModes = data.settings.advancedModes && Object.values(data.settings.advancedModes).some(v => v);
 
@@ -1251,16 +1382,28 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                         <div><label className="block text-[8px] md:text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1">Término do Ano</label><input type="date" value={calForm.end} onChange={e => setCalForm({ ...calForm, end: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-800 rounded-xl px-2 py-1.5 md:px-3 md:py-2 font-bold text-xs md:text-sm dark:text-white" /></div>
                      </div>
 
-                     <div className="bg-slate-50 dark:bg-slate-800/50 p-2 md:p-4 rounded-2xl flex flex-col md:flex-row md:items-end gap-2 md:gap-4">
-                        <div className="flex-1">
-                           <label className="block text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2 ml-1">Divisão Letiva</label>
-                           <div className="grid grid-cols-3 gap-1 md:gap-1.5 p-1 bg-white dark:bg-slate-700 rounded-xl">
-                              <button onClick={() => setCalForm({ ...calForm, division: 'bimestres' })} className={`py-1.5 md:py-2 rounded-lg font-black uppercase text-[8px] md:text-[9px] transition-all ${calForm.division === 'bimestres' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>Bimestres</button>
-                              <button onClick={() => setCalForm({ ...calForm, division: 'trimestres' })} className={`py-1.5 md:py-2 rounded-lg font-black uppercase text-[8px] md:text-[9px] transition-all ${calForm.division === 'trimestres' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>Trimestres</button>
-                              <button onClick={() => setCalForm({ ...calForm, division: 'personalizado' })} className={`py-1.5 md:py-2 rounded-lg font-black uppercase text-[8px] md:text-[9px] transition-all ${calForm.division === 'personalizado' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>Personalizado</button>
-                           </div>
+                     <div className="bg-slate-50 dark:bg-slate-800/50 p-2 md:p-4 rounded-2xl">
+                        <label className="block text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2 ml-1">Divisão Letiva</label>
+                        <div className="grid grid-cols-3 gap-1 md:gap-1.5 p-1 bg-white dark:bg-slate-700 rounded-xl">
+                           <button
+                              onClick={() => setCalForm({ ...calForm, division: 'trimestres' })}
+                              className={`py-1.5 md:py-2 rounded-lg font-black uppercase text-[8px] md:text-[9px] transition-all ${calForm.division === 'trimestres' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-blue-500'}`}
+                           >
+                              Trimestres
+                           </button>
+                           <button
+                              onClick={() => setCalForm({ ...calForm, division: 'bimestres' })}
+                              className={`py-1.5 md:py-2 rounded-lg font-black uppercase text-[8px] md:text-[9px] transition-all ${calForm.division === 'bimestres' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-blue-500'}`}
+                           >
+                              Bimestres
+                           </button>
+                           <button
+                              onClick={() => setCalForm({ ...calForm, division: 'personalizado' })}
+                              className={`py-1.5 md:py-2 rounded-lg font-black uppercase text-[8px] md:text-[9px] transition-all ${calForm.division === 'personalizado' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-blue-500'}`}
+                           >
+                              Personalizado
+                           </button>
                         </div>
-                        <button onClick={handleCreateTermsSuggestion} className="h-[32px] md:h-[40px] px-4 bg-blue-100 text-blue-600 rounded-xl font-black uppercase text-[9px] flex items-center justify-center gap-2 hover:bg-blue-600 hover:text-white transition-all"><Wand2 size={14} /> Gerar Períodos</button>
                      </div>
 
                      <div className="grid gap-1.5 md:gap-2">
@@ -1524,9 +1667,21 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                            </div>
 
                            <div className="space-y-3">
-                              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                 <Users size={14} /> Alunos Ativos ({activeStudents.length})
-                              </h4>
+                              <div className="flex items-center justify-between">
+                                 <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                    <Users size={14} /> Alunos Ativos ({activeStudents.length})
+                                 </h4>
+                                 {currentClassRecord && currentClassRecord.students.length > 0 && (
+                                    <button
+                                       onClick={handleDeleteAllClassStudents}
+                                       className="flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-black uppercase text-red-600 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 hover:border-red-300 transition-all"
+                                       title="Excluir toda a lista de alunos (Hard Delete)"
+                                    >
+                                       <Trash2 size={12} />
+                                       Excluir Lista Inteira
+                                    </button>
+                                 )}
+                              </div>
 
                               {activeStudents.length > 0 ? (
                                  <div className="bg-slate-50 dark:bg-slate-800 rounded-3xl p-2 border border-slate-100 dark:border-slate-700 max-h-64 overflow-y-auto custom-scrollbar">
@@ -1733,15 +1888,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          {
             copyingRecess && (
                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-in fade-in">
-                  <div className="bg-white dark:bg-slate-900 rounded-[24px] p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-800">
-                     <h3 className="text-sm font-black text-slate-800 dark:text-white mb-4 uppercase text-center flex items-center justify-center gap-2">
+                  <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
+                     <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 justify-center mb-4">
                         <Copy size={16} className="text-blue-600" />
                         Copiar Recesso
                      </h3>
 
                      <p className="text-[10px] text-center text-slate-500 font-medium mb-4 bg-slate-50 dark:bg-slate-800 p-2 rounded-xl">
                         Selecionar escola de destino para: <br />
-                        <strong className="text-slate-800 dark:text-white text-xs">{copyingRecess.name}</strong>
+                        <strong className="text-slate-800 dark:text-white text-xs">
+                           {calForm.extraRecesses?.find(r => r.id === copyingRecess.id)?.name || copyingRecess.name}
+                        </strong>
                      </p>
 
                      <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">

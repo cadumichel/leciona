@@ -535,7 +535,15 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   <span className="text-[7px] md:text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase shrink-0" style={{ backgroundColor: color + '20', color: color }}>
                     {event.type === 'test' ? 'Prova' : 'Trabalho'}
                   </span>
-                  {event.classId && <span className="text-[7px] md:text-[8px] font-black text-slate-400 uppercase tracking-widest shrink-0 border border-slate-100 dark:border-slate-700 px-1 rounded">Turma {event.classId}</span>}
+                  {event.classId && (() => {
+                    // Lookup class name from ID
+                    const schoolClass = school?.classes.find(c =>
+                      (typeof c === 'string' ? c : c.id) === event.classId ||
+                      (typeof c === 'string' ? c : c.name) === event.classId
+                    );
+                    const className = schoolClass ? (typeof schoolClass === 'string' ? schoolClass : schoolClass.name) : event.classId;
+                    return <span className="text-[7px] md:text-[8px] font-black text-slate-400 uppercase tracking-widest shrink-0 border border-slate-100 dark:border-slate-700 px-1 rounded">Turma {className}</span>;
+                  })()}
                 </div>
 
                 <div className="flex items-center gap-3 text-[9px] md:text-[10px] font-bold text-slate-500">

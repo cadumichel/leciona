@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { AppData, School, DayOfWeek, Shift, TimeSlot, ScheduleEntry, Student, PrivateSchedule } from '../types';
 import { DAYS_OF_WEEK_NAMES } from '../constants';
 import { Plus, Trash2, LayoutGrid, Calendar as CalendarIcon, Save, Info, AlertCircle, User, Clock, ShieldAlert } from 'lucide-react';
@@ -10,7 +10,7 @@ interface ScheduleManagementProps {
 }
 
 const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateData }) => {
-  const [selectedDay, setSelectedDay] = useState<DayOfWeek>(new Date().getDay() as DayOfWeek);
+  const [selectedDay, setSelectedDay] = useState<DayOfWeek>(1); // Monday por padrão
 
   // Safe initial ID selection
   const safeSchools = (data?.schools || []).filter(s => !s.deleted);
@@ -28,6 +28,28 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
     if (student) return { type: 'student' as const, data: student };
     return null;
   }, [data?.schools, data?.students, selectedInstitutionId]);
+
+  // FIX: Auto-reset selection when the selected institution is deleted or doesn't exist
+  // This ensures the theme color updates correctly when schools are deleted
+  useEffect(() => {
+    if (selectedInstitutionId) {
+      const schoolExists = safeSchools.find(s => s.id === selectedInstitutionId);
+      const studentExists = safeStudents.find(s => s.id === selectedInstitutionId);
+
+      // If the selected institution was deleted, automatically select the first available one
+      if (!schoolExists && !studentExists) {
+        const newId = safeSchools[0]?.id || safeStudents[0]?.id || '';
+        if (newId !== selectedInstitutionId) {
+          console.log('🔄 Selected institution was deleted. Auto-selecting first available:', newId);
+          setSelectedInstitutionId(newId);
+        }
+      }
+    } else if (safeSchools.length > 0 || safeStudents.length > 0) {
+      // If no institution is selected but there are available ones, select the first
+      const newId = safeSchools[0]?.id || safeStudents[0]?.id || '';
+      setSelectedInstitutionId(newId);
+    }
+  }, [data?.schools, data?.students, selectedInstitutionId, safeSchools, safeStudents]);
 
   // Horários particulares que conflitam com o dia selecionado
   const privateConflicts = useMemo(() => {

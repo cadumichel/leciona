@@ -177,13 +177,33 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     if (!activeLesson || activeLesson.type !== 'school') return [];
 
     // Verificação segura de classRecords
-    const record = data.classRecords?.find(r =>
-      r.schoolId === activeLesson.institution.id &&
-      r.classId === activeLesson.schedule.classId
-    );
+    // Nota: classId pode ser o ID da turma OU o nome da turma
+    const record = data.classRecords?.find(r => {
+      const schoolMatch = r.schoolId === activeLesson.institution.id;
+
+      // Tentar match por ID exato
+      if (schoolMatch && r.classId === activeLesson.schedule.classId) {
+        return true;
+      }
+
+      // Tentar match por nome da turma (fallback para compatibilidade)
+      // Buscar a turma na escola para verificar nome
+      const school = data.schools.find(s => s.id === activeLesson.institution.id);
+      if (school && schoolMatch) {
+        const schoolClass = school.classes.find(c =>
+          (typeof c === 'string' ? c : c.id) === r.classId ||
+          (typeof c === 'string' ? c : c.name) === activeLesson.schedule.classId
+        );
+        if (schoolClass) {
+          return true;
+        }
+      }
+
+      return false;
+    });
 
     return record ? record.students.filter(s => s.active !== false) : [];
-  }, [activeLesson, data.classRecords]);
+  }, [activeLesson, data.classRecords, data.schools]);
 
   // ... (Restante da lógica mantida igual) ...
   useEffect(() => {
@@ -1294,7 +1314,17 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
         <div className="flex items-center gap-4 md:gap-6 mb-6 md:mb-8">
           <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl flex items-center justify-center text-white font-black text-xl md:text-2xl shadow-lg" style={{ backgroundColor: activeLesson.institution.color }}>{activeLesson.institution.name[0]}</div>
           <div>
-            <h3 className="text-lg md:text-2xl font-black uppercase">{activeLesson.type === 'school' ? activeLesson.schedule.classId : activeLesson.institution.name}</h3>
+            <h3 className="text-lg md:text-2xl font-black uppercase">
+              {activeLesson.type === 'school' ? (() => {
+                // Lookup class name from ID
+                const school = activeLesson.institution as School;
+                const schoolClass = school.classes.find(c =>
+                  (typeof c === 'string' ? c : c.id) === activeLesson.schedule.classId ||
+                  (typeof c === 'string' ? c : c.name) === activeLesson.schedule.classId
+                );
+                return schoolClass ? (typeof schoolClass === 'string' ? schoolClass : schoolClass.name) : activeLesson.schedule.classId;
+              })() : activeLesson.institution.name}
+            </h3>
             <p className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase mt-1">
               {activeLesson.institution.name} • {activeLesson.slot.label} • {activeLesson.type === 'school' ? (activeLesson.institution as School).shifts.find(s => s.id === activeLesson.schedule.shiftId)?.name : 'Particular'} • {new Date(activeLesson.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}
             </p>
@@ -1341,8 +1371,11 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 <Copy size={12} /> Copiar para outra turma
               </button>
 
-              {data.settings.advancedModes?.attendance && classRoster.length > 0 && (
-                <button onClick={() => setIsAttendanceModalOpen(true)} className="flex items-center gap-1 text-[8px] md:text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-800/50 hover:brightness-95 transition-all">
+              {data.settings.advancedModes?.attendance && activeLesson.type === 'school' && (
+                <button
+                  onClick={() => setIsAttendanceModalOpen(true)}
+                  className="flex items-center gap-1 text-[8px] md:text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-800/50 hover:brightness-95 transition-all"
+                >
                   <ClipboardCheck size={12} /> Fazer Chamada
                 </button>
               )}
@@ -1396,7 +1429,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 </div>
 
                 {/* Seletor de Alunos para Ocorrência Individualizada */}
-                {data.settings.advancedModes?.individualOccurrence && classRoster.length > 0 && (
+                {classRoster.length > 0 && (
                   <div className="mb-3 bg-white dark:bg-slate-700/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-600/50">
                     <p className="text-[9px] font-black uppercase text-indigo-500 mb-2 flex items-center gap-1"><Users size={12} /> Alunos Envolvidos (Opcional):</p>
                     <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto custom-scrollbar">

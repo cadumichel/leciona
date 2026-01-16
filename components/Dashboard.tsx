@@ -683,7 +683,16 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                       <div className="flex-1 overflow-hidden">
                         <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
                         <div className="flex flex-col">
-                          <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter truncate">{event.type === 'test' ? 'Prova' : 'Trabalho'} • {event.classId}</p>
+                          <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter truncate">
+                            {event.type === 'test' ? 'Prova' : 'Trabalho'} • {(() => {
+                              // Lookup class name from ID
+                              const schoolClass = school?.classes.find(c =>
+                                (typeof c === 'string' ? c : c.id) === event.classId ||
+                                (typeof c === 'string' ? c : c.name) === event.classId
+                              );
+                              return schoolClass ? (typeof schoolClass === 'string' ? schoolClass : schoolClass.name) : event.classId;
+                            })()}
+                          </p>
                           <p className="text-[7px] font-black uppercase truncate mt-0.5" style={{ color: color }}>{school?.name}</p>
                         </div>
                       </div>
@@ -710,14 +719,9 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                       </div>
                       <div className="flex-1 overflow-hidden">
                         <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter truncate">{EVENT_TYPE_LABELS[event.type] || event.type}</span>
-                            <span className="text-[7px] font-black px-1.5 rounded uppercase" style={{ backgroundColor: color + '20', color: color }}>
-                              {getEventScope(event)}
-                            </span>
-                          </div>
-                          <p className="text-[7px] font-black uppercase truncate" style={{ color: color }}>{school?.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">{EVENT_TYPE_LABELS[event.type] || event.type}</span>
+                          <span className="text-[7px] font-black uppercase" style={{ color: color }}>• {school?.name}</span>
                         </div>
                       </div>
                     </div>

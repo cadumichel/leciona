@@ -228,12 +228,43 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                     checkTimeOverlap(slot.startTime, slot.endTime, pc.startTime, pc.endTime)
                   ) : null;
 
+                  // Verifica se este horário conflita com OUTRAS ESCOLAS
+                  const otherSchoolConflict = activeInstitution.type === 'school' ? (() => {
+                    // Busca horários de outras escolas no mesmo dia
+                    const conflictingSchedule = (data.schedules || []).find(s => {
+                      if (Number(s.dayOfWeek) !== Number(selectedDay)) return false;
+                      if (s.schoolId === selectedInstitutionId) return false; // Ignora a mesma escola
+
+                      const otherSchool = (data.schools || []).find(sc => sc.id === s.schoolId);
+                      if (!otherSchool || otherSchool.deleted) return false;
+
+                      const otherShift = otherSchool.shifts?.find(sh => sh.id === s.shiftId);
+                      const otherSlot = otherShift?.slots.find(sl => sl.id === s.slotId);
+
+                      if (!otherSlot) return false;
+
+                      return checkTimeOverlap(slot.startTime, slot.endTime, otherSlot.startTime, otherSlot.endTime);
+                    });
+
+                    if (conflictingSchedule) {
+                      const conflictSchool = (data.schools || []).find(s => s.id === conflictingSchedule.schoolId);
+                      return {
+                        schoolName: conflictSchool?.name || 'Outra escola',
+                        schoolColor: conflictSchool?.color || '#6366f1',
+                        className: conflictingSchedule.classId
+                      };
+                    }
+                    return null;
+                  })() : null;
+
+                  const hasConflict = studentConflict || otherSchoolConflict;
+
                   return (
                     <div key={slot.id} className={`flex items-center gap-2 p-1.5 md:p-2 rounded-xl border transition-all ${ // Compact padding p-1.5 mobile
                       slot.type === 'break'
                         ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 opacity-60'
-                        : studentConflict
-                          ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800'
+                        : hasConflict
+                          ? (studentConflict ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800' : 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-800')
                           : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'
                       }`}>
                       <div className="w-16 md:w-20 shrink-0"> {/* Width ainda menor no mobile */}
@@ -247,6 +278,16 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                           <div>
                             <p className="text-[9px] font-black text-amber-800 dark:text-amber-200 uppercase">Horário Ocupado</p>
                             <p className="text-[8px] text-amber-600 font-bold uppercase">Aula Particular: {studentConflict.studentName}</p>
+                          </div>
+                        </div>
+                      ) : otherSchoolConflict ? (
+                        <div className="flex-1 flex items-center gap-3 px-3 py-1.5 bg-white dark:bg-slate-900 rounded-lg border border-indigo-100">
+                          <ShieldAlert className="text-indigo-500" size={14} />
+                          <div>
+                            <p className="text-[9px] font-black text-indigo-800 dark:text-indigo-200 uppercase">Horário Ocupado</p>
+                            <p className="text-[8px] font-bold uppercase" style={{ color: otherSchoolConflict.schoolColor }}>
+                              {otherSchoolConflict.schoolName} • {otherSchoolConflict.className !== 'window' ? otherSchoolConflict.className : 'Janela'}
+                            </p>
                           </div>
                         </div>
                       ) : slot.type === 'class' ? (
@@ -279,11 +320,14 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                         </div>
                       )}
 
-                      {activeInstitution.type === 'school' && !studentConflict && (
+                      {activeInstitution.type === 'school' && !hasConflict && (
                         <div className="w-2 h-2 md:w-3 md:h-3 rounded-full shadow-inner shrink-0" style={{ backgroundColor: activeInstitution.data.color }} />
                       )}
                       {studentConflict && (
                         <div className="w-2 h-2 md:w-3 md:h-3 rounded-full shadow-inner shrink-0" style={{ backgroundColor: studentConflict.studentColor }} />
+                      )}
+                      {otherSchoolConflict && (
+                        <div className="w-2 h-2 md:w-3 md:h-3 rounded-full shadow-inner shrink-0" style={{ backgroundColor: otherSchoolConflict.schoolColor }} />
                       )}
                     </div>
                   );

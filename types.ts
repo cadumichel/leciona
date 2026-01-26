@@ -41,6 +41,23 @@ export interface PrivateSchedule {
   endTime: string;
 }
 
+export type PaymentModel = 'monthly' | 'per_class';
+
+export interface PaymentRecord {
+  id: string;
+  date: string;
+  amount: number;
+  referenceData?: string; // "YYYY-MM" for monthly
+  notes?: string;
+}
+
+export interface StudentPaymentConfig {
+  enabled: boolean;
+  model: PaymentModel;
+  value: number;
+  dueDay: number;
+}
+
 export interface Student {
   id: string;
   name: string;
@@ -48,6 +65,8 @@ export interface Student {
   color: string;
   startDate: string; // Data a partir da qual as aulas são contadas
   schedules: PrivateSchedule[];
+  paymentConfig?: StudentPaymentConfig;
+  payments?: PaymentRecord[];
 }
 
 // Novos Tipos para Modos Avançados

@@ -763,6 +763,7 @@ const App: React.FC = () => {
   const navItems = [
     { id: 'dashboard', label: 'Início', icon: LayoutDashboard },
     { id: 'lessons', label: 'Diário', icon: BookOpen },
+    ...(data.settings.isPrivateTeacher ? [{ id: 'private', label: 'Particulares', icon: Users }] : []),
     { id: 'assessments', label: 'Avaliações', icon: FileCheck },
     ...(data.settings.advancedModes?.grades ? [{ id: 'grades', label: 'Notas', icon: GraduationCap }] : []),
     { id: 'agenda', label: 'Agenda', icon: CalendarRange },
@@ -915,6 +916,13 @@ const App: React.FC = () => {
               onLogout={handleLogout}
               isOnboarding={isOnboarding}
               onFinishOnboarding={() => setActiveTab('dashboard')}
+            />
+          )}
+          {activeTab === 'private' && (
+            <StudentManagement
+              data={data}
+              onUpdateData={updateData}
+              onNavigateToLesson={(s, d) => { setPreSelectedLesson({ schedule: s, date: d }); setActiveTab('lessons'); }}
             />
           )}
         </div>

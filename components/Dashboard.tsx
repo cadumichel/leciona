@@ -22,7 +22,8 @@ import {
   BookOpen,
   Users,
   Layers,
-  School as SchoolIcon
+  School as SchoolIcon,
+  DollarSign
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -260,7 +261,48 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
       }
     }
     return count;
+    return count;
   }, [data.schedules, data.logs, data.schools, data.students, data.events, data.calendars, currentTime]);
+
+  const overduePayments = useMemo(() => {
+    if (!data.settings.isPrivateTeacher) return [];
+
+    const today = new Date();
+    const currentDay = today.getDate();
+    const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    const previousMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const previousMonthStr = `${previousMonthDate.getFullYear()}-${String(previousMonthDate.getMonth() + 1).padStart(2, '0')}`;
+
+    const overdueList: { studentName: string; month: string }[] = [];
+
+    data.students.forEach(student => {
+      if (!student.paymentConfig?.enabled || student.paymentConfig.model !== 'monthly') return;
+
+      const dueDay = student.paymentConfig.dueDay;
+
+      // Check Current Month if past due day
+      if (currentDay > dueDay) {
+        const hasPayment = student.payments?.some(p =>
+          p.date.startsWith(currentMonthStr) || p.referenceData?.includes(currentMonthStr)
+        );
+        if (!hasPayment) overdueList.push({ studentName: student.name, month: 'Mês Atual' });
+      }
+
+      // Check Previous Month (always checks if not paid)
+      const hasPrevPayment = student.payments?.some(p =>
+        p.date.startsWith(previousMonthStr) || p.referenceData?.includes(previousMonthStr)
+      );
+      if (!hasPrevPayment) {
+        // Only add if not already covered (simplified logic: show oldest pending or just list all?)
+        // Let's just list relevant ones. If current is overdue, maybe previous is too.
+        // To avoid duplicates in count, we can just count students or debts.
+        // Let's list specific debts.
+        overdueList.push({ studentName: student.name, month: 'Mês Anterior' });
+      }
+    });
+
+    return overdueList;
+  }, [data.students, data.settings.isPrivateTeacher, todayDateStr]);
 
   const sortedTodaySchedules = useMemo(() => {
     const schoolSchedules = data.schedules.filter(s => Number(s.dayOfWeek) === today).map(s => {
@@ -534,12 +576,30 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         </button>
       )}
 
+      {overduePayments.length > 0 && (
+        <div className="w-full flex items-center justify-between p-3 md:p-4 rounded-[20px] md:rounded-[24px] bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4 cursor-pointer">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center bg-white/20">
+              <DollarSign size={18} className="md:w-[20px] md:h-[20px]" />
+            </div>
+            <div className="text-left">
+              <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/80">Financeiro</span>
+              <p className="text-[10px] md:text-xs font-black uppercase text-white">
+                {overduePayments.length} pagamentos em atraso ({overduePayments[0].studentName}...)
+              </p>
+            </div>
+          </div>
+          <ChevronRight size={18} className="md:w-[20px] md:h-[20px]" />
+        </div>
+      )}
+
       {data.settings.showDailyQuote && (
         <div className="bg-primary/5 dark:bg-primary/10 border-2 border-dashed border-primary/20 p-4 md:p-5 rounded-[24px] md:rounded-[32px] relative overflow-hidden">
           <div className="absolute -top-4 -left-4 md:-top-6 md:-left-6 opacity-5 pointer-events-none"><QuoteIcon size={60} className="md:w-[80px] md:h-[80px]" /></div>
           <p className="text-xs md:text-base font-bold text-primary dark:text-primary-light italic leading-relaxed relative z-10">"{dailyQuote}"</p>
         </div>
-      )}
+      )
+      }
 
       <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
         <div className="lg:col-span-2 space-y-4 md:space-y-6">
@@ -773,7 +833,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

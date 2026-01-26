@@ -1,17 +1,26 @@
 import React, { useState } from 'react';
 import { AppData, Student, PrivateSchedule, DayOfWeek } from '../types';
 import { COLORS, DAYS_OF_WEEK_NAMES } from '../constants';
-import { Plus, Trash2, Edit3, Save, X, Clock, User, GraduationCap, ChevronRight, Calendar } from 'lucide-react';
+import { checkTimeOverlap } from '../utils';
+import { Plus, Trash2, Edit3, Save, X, Clock, User, GraduationCap, ChevronRight, Calendar, DollarSign, Download, CreditCard, FileText, BookText, History } from 'lucide-react';
 
 interface StudentManagementProps {
   data: AppData;
   onUpdateData: (newData: Partial<AppData>) => void;
+  onNavigateToLesson: (schedule: any, date: string) => void;
 }
 
-export default function StudentManagement({ data, onUpdateData }: StudentManagementProps) {
+export default function StudentManagement({ data, onUpdateData, onNavigateToLesson }: StudentManagementProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [deletingStudentId, setDeletingStudentId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'general' | 'financial'>('general');
+  // New state for inline payment registration
+  const [paymentForm, setPaymentForm] = useState({
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    reference: ''
+  });
   const [newStudent, setNewStudent] = useState<Partial<Student>>({
     name: '',
     subject: '',
@@ -22,6 +31,7 @@ export default function StudentManagement({ data, onUpdateData }: StudentManagem
 
   const openAddModal = () => {
     setEditingStudentId(null);
+    setActiveTab('general');
     setNewStudent({
       name: '',
       subject: '',
@@ -41,7 +51,7 @@ export default function StudentManagement({ data, onUpdateData }: StudentManagem
     return Array.from(uniqueMap.values());
   }, [data?.students]);
 
-  const openEditModal = (student: Student) => {
+  const openEditModal = (student: Student, initialTab: 'general' | 'financial' = 'general') => {
     try {
       console.log('Opening edit modal for student:', student);
       setEditingStudentId(student.id);
@@ -60,11 +70,26 @@ export default function StudentManagement({ data, onUpdateData }: StudentManagem
             startTime: s.startTime || '14:00',
             endTime: s.endTime || '15:00'
           }))
-          : []
+          : [],
+        paymentConfig: student.paymentConfig || {
+          enabled: false,
+          model: 'monthly',
+          value: 0,
+          dueDay: 5
+        },
+        payments: student.payments || []
       };
 
       console.log('Safe student data:', safeStudent);
+      console.log('Safe student data:', safeStudent);
       setNewStudent(safeStudent);
+      // Reset payment form
+      setPaymentForm({
+        amount: '',
+        date: new Date().toISOString().split('T')[0],
+        reference: ''
+      });
+      setActiveTab(initialTab);
       setIsModalOpen(true);
     } catch (error) {
       console.error('Error opening edit modal:', error);
@@ -76,6 +101,47 @@ export default function StudentManagement({ data, onUpdateData }: StudentManagem
     if (!newStudent.name || !newStudent.subject) {
       alert('Nome e Disciplina são obrigatórios.');
       return;
+    }
+
+    // Check for conflicts
+    const schedulesToCheck = newStudent.schedules || [];
+    for (const schedule of schedulesToCheck) {
+      const day = Number(schedule.dayOfWeek);
+
+      // 1. Check against other Private Students
+      const privateConflict = data.students.find(s => {
+        if (s.id === editingStudentId) return false; // Skip self
+        return (s.schedules || []).some(otherSched => {
+          if (Number(otherSched.dayOfWeek) !== day) return false;
+          return checkTimeOverlap(schedule.startTime, schedule.endTime, otherSched.startTime, otherSched.endTime);
+        });
+      });
+
+      if (privateConflict) {
+        alert(`Conflito de horário detectado!\n\nO horário de ${DAYS_OF_WEEK_NAMES[day]} das ${schedule.startTime} às ${schedule.endTime} choca com uma aula de ${privateConflict.name}.`);
+        return;
+      }
+
+      // 2. Check against Schools
+      const schoolConflict = (data.schedules || []).find(schoolSched => {
+        if (Number(schoolSched.dayOfWeek) !== day) return false;
+
+        const school = data.schools.find(s => s.id === schoolSched.schoolId);
+        if (!school || school.deleted) return false;
+
+        const shift = school.shifts?.find(sh => sh.id === schoolSched.shiftId);
+        const slot = shift?.slots?.find(sl => sl.id === schoolSched.slotId);
+
+        if (!slot) return false;
+
+        return checkTimeOverlap(schedule.startTime, schedule.endTime, slot.startTime, slot.endTime);
+      });
+
+      if (schoolConflict) {
+        const school = data.schools.find(s => s.id === schoolConflict.schoolId);
+        alert(`Conflito de horário detectado!\n\nO horário de ${DAYS_OF_WEEK_NAMES[day]} das ${schedule.startTime} às ${schedule.endTime} choca com uma aula na escola ${school?.name} (Turma: ${schoolConflict.classId}).`);
+        return;
+      }
     }
 
     if (editingStudentId) {
@@ -93,6 +159,76 @@ export default function StudentManagement({ data, onUpdateData }: StudentManagem
       onUpdateData({ students: [...data.students, studentToAdd] });
     }
     setIsModalOpen(false);
+  };
+
+  const handleExportPayments = () => {
+    if (!newStudent.payments || newStudent.payments.length === 0) {
+      alert("Não há pagamentos registrados para exportar.");
+      return;
+    }
+
+    const csvContent = [
+      ["Data", "Valor", "Referência", "Observações"],
+      ...newStudent.payments.map(p => [
+        p.date,
+        p.amount.toString().replace('.', ','),
+        p.referenceData || '',
+        p.notes || ''
+      ])
+    ]
+      .map(e => e.join(";"))
+      .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `pagamentos_${newStudent.name}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const addPayment = () => {
+    const amount = parseFloat(paymentForm.amount.replace(',', '.'));
+    if (!amount || isNaN(amount) || amount <= 0) {
+      alert("Por favor, insira um valor válido.");
+      return;
+    }
+
+    if (!paymentForm.date) {
+      alert("Por favor, selecione uma data.");
+      return;
+    }
+
+    const newPayment = {
+      id: crypto.randomUUID(),
+      date: paymentForm.date,
+      amount,
+      referenceData: paymentForm.reference || '',
+      notes: ''
+    };
+
+    setNewStudent({
+      ...newStudent,
+      payments: [...(newStudent.payments || []), newPayment]
+    });
+
+    // Reset form but keep date for convenience
+    setPaymentForm(prev => ({
+      amount: '',
+      date: prev.date,
+      reference: ''
+    }));
+  };
+
+  const removePayment = (id: string) => {
+    if (confirm("Remover este registro de pagamento?")) {
+      setNewStudent({
+        ...newStudent,
+        payments: (newStudent.payments || []).filter(p => p.id !== id)
+      });
+    }
   };
 
   const addSchedule = () => {
@@ -200,9 +336,47 @@ export default function StudentManagement({ data, onUpdateData }: StudentManagem
                 {(student.schedules?.length || 0) > 3 && <p className="text-[9px] text-slate-400 font-bold uppercase ml-2">+ {(student.schedules?.length || 0) - 3} outros horários</p>}
               </div>
             </div>
-            <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-indigo-600">
-              <span>Ver Detalhes</span>
-              <ChevronRight size={14} />
+            <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 grid grid-cols-2 gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Find next class logic reuse or simple navigation
+                  // Default to today or next schedule
+                  // Logic: Find next schedule for this student
+                  // Simple approach: Navigate to today. LessonLogger will handle 'next' if we pass context? 
+                  // onNavigateToLesson expects a schedule. Let's find the first schedule of the student.
+                  if (student.schedules && student.schedules.length > 0) {
+                    const sched = student.schedules[0];
+                    const today = new Date().toISOString().split('T')[0];
+                    // We need to pass a valid schedule object structure that LessonLogger accepts
+                    // LessonLogger expects a unified ScheduleEntry structure for 'school' types mostly,
+                    // but for private it handles differently.
+                    // Let's pass a constructed object.
+                    const targetSchedule = {
+                      dayOfWeek: sched.dayOfWeek,
+                      schoolId: student.id,
+                      shiftId: 'private',
+                      slotId: sched.id,
+                      classId: student.name
+                    };
+                    onNavigateToLesson(targetSchedule, today);
+                  } else {
+                    alert("Este aluno não possui horários cadastrados.");
+                  }
+                }}
+                className="flex items-center justify-center gap-2 py-2 rounded-xl bg-indigo-50 text-indigo-700 font-black uppercase text-[10px] tracking-wide hover:bg-indigo-100 transition"
+              >
+                <BookText size={14} /> Diário
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openEditModal(student, 'financial');
+                }}
+                className="flex items-center justify-center gap-2 py-2 rounded-xl bg-green-50 text-green-700 font-black uppercase text-[10px] tracking-wide hover:bg-green-100 transition"
+              >
+                <DollarSign size={14} /> Pagamentos
+              </button>
             </div>
           </div>
         ))}
@@ -225,99 +399,308 @@ export default function StudentManagement({ data, onUpdateData }: StudentManagem
                 <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
               </div>
 
-              <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nome do Aluno</label>
-                    <input
-                      type="text"
-                      value={newStudent?.name || ''}
-                      onChange={e => setNewStudent({ ...newStudent, name: e.target.value })}
-                      className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                      placeholder="Nome completo"
-                    />
-                  </div>
+              <div className="flex border-b border-slate-100">
+                <button
+                  onClick={() => setActiveTab('general')}
+                  className={`flex-1 py-3 text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'general' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/10' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  Dados Gerais
+                </button>
+                <button
+                  onClick={() => setActiveTab('financial')}
+                  className={`flex-1 py-3 text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'financial' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/10' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  Financeiro
+                </button>
+              </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+              <div className="p-8 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                {activeTab === 'general' ? (
+                  <div className="space-y-4">
                     <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Matéria / Assunto</label>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nome do Aluno</label>
                       <input
                         type="text"
-                        value={newStudent?.subject || ''}
-                        onChange={e => setNewStudent({ ...newStudent, subject: e.target.value })}
+                        value={newStudent?.name || ''}
+                        onChange={e => setNewStudent({ ...newStudent, name: e.target.value })}
                         className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                        placeholder="Ex: Matemática"
+                        placeholder="Nome completo"
                       />
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Início das Aulas</label>
-                      <input
-                        type="date"
-                        value={newStudent?.startDate || new Date().toISOString().split('T')[0]}
-                        onChange={e => setNewStudent({ ...newStudent, startDate: e.target.value })}
-                        className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                      />
-                    </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Cor de Identificação</label>
-                    <div className="flex flex-wrap gap-2">
-                      {COLORS.map(c => (
-                        <button
-                          key={c}
-                          onClick={() => setNewStudent({ ...newStudent, color: c })}
-                          className={`w-8 h-8 rounded-full transition-transform hover:scale-110 ${(newStudent?.color || COLORS[6]) === c ? 'ring-2 ring-offset-2 ring-indigo-500 scale-110' : ''}`}
-                          style={{ backgroundColor: c }}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Matéria / Assunto</label>
+                        <input
+                          type="text"
+                          value={newStudent?.subject || ''}
+                          onChange={e => setNewStudent({ ...newStudent, subject: e.target.value })}
+                          className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          placeholder="Ex: Matemática"
                         />
-                      ))}
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Início das Aulas</label>
+                        <input
+                          type="date"
+                          value={newStudent?.startDate || new Date().toISOString().split('T')[0]}
+                          onChange={e => setNewStudent({ ...newStudent, startDate: e.target.value })}
+                          className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="pt-4 border-t border-slate-100">
-                    <div className="flex justify-between items-center mb-4">
-                      <h4 className="text-xs font-black text-slate-500 uppercase flex items-center gap-2"><Clock size={14} /> Horários de Aula</h4>
-                      <button onClick={addSchedule} className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition flex items-center gap-1">
-                        <Plus size={12} /> Adicionar
-                      </button>
-                    </div>
-
-                    <div className="space-y-2">
-                      {(newStudent?.schedules || []).map((schedule, idx) => (
-                        <div key={schedule.id} className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-100 group">
-                          <select
-                            value={schedule.dayOfWeek}
-                            onChange={e => updateSchedule(schedule.id, 'dayOfWeek', parseInt(e.target.value))}
-                            className="bg-white border-none rounded-lg text-xs font-bold text-slate-600 py-1.5 pl-2 pr-6 outline-none cursor-pointer"
-                          >
-                            {Object.entries(DAYS_OF_WEEK_NAMES).map(([key, value]) => (
-                              <option key={key} value={key}>{value}</option>
-                            ))}
-                          </select>
-                          <input
-                            type="time"
-                            value={schedule.startTime}
-                            onChange={e => updateSchedule(schedule.id, 'startTime', e.target.value)}
-                            className="bg-white border-none rounded-lg text-xs font-bold text-slate-600 py-1.5 px-2 outline-none w-24 text-center"
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Cor de Identificação</label>
+                      <div className="flex flex-wrap gap-2 items-center">
+                        {COLORS.map(c => (
+                          <button
+                            key={c}
+                            onClick={() => setNewStudent({ ...newStudent, color: c })}
+                            className={`w-8 h-8 rounded-full transition-transform hover:scale-110 ${(newStudent?.color || COLORS[6]) === c ? 'ring-2 ring-offset-2 ring-indigo-500 scale-110' : ''}`}
+                            style={{ backgroundColor: c }}
                           />
-                          <span className="text-slate-300 font-bold text-xs">às</span>
+                        ))}
+                        <div className="relative w-8 h-8 rounded-full overflow-hidden transition-transform hover:scale-110 border border-slate-200 ml-1">
                           <input
-                            type="time"
-                            value={schedule.endTime}
-                            onChange={e => updateSchedule(schedule.id, 'endTime', e.target.value)}
-                            className="bg-white border-none rounded-lg text-xs font-bold text-slate-600 py-1.5 px-2 outline-none w-24 text-center"
+                            type="color"
+                            value={newStudent.color || COLORS[6]}
+                            onChange={(e) => setNewStudent({ ...newStudent, color: e.target.value })}
+                            className="absolute -top-[50%] -left-[50%] w-[200%] h-[200%] p-0 m-0 border-none cursor-pointer"
                           />
-                          <button onClick={() => removeSchedule(schedule.id)} className="ml-auto text-slate-300 hover:text-red-500 p-1.5"><Trash2 size={14} /></button>
                         </div>
-                      ))}
-                      {(!newStudent.schedules || newStudent.schedules.length === 0) && (
-                        <div className="text-center py-6 text-slate-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                          Nenhum horário definido.
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-100">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h4 className="text-xs font-black text-slate-500 uppercase flex items-center gap-2"><DollarSign size={14} /> Configuração Financeira</h4>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Habilitar cobranças</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newStudent?.paymentConfig?.enabled || false}
+                            onChange={(e) => setNewStudent({
+                              ...newStudent,
+                              paymentConfig: {
+                                enabled: e.target.checked,
+                                model: newStudent.paymentConfig?.model || 'monthly',
+                                value: newStudent.paymentConfig?.value || 0,
+                                dueDay: newStudent.paymentConfig?.dueDay || 5
+                              }
+                            })}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                      </div>
+
+                      {(newStudent?.paymentConfig?.enabled) && (
+                        <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2 fade-in mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100/50">
+                          <div className="col-span-1">
+                            <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Modelo</label>
+                            <select
+                              value={newStudent.paymentConfig?.model}
+                              onChange={(e) => setNewStudent({
+                                ...newStudent,
+                                paymentConfig: { ...newStudent.paymentConfig!, model: e.target.value as any }
+                              })}
+                              className="w-full bg-white border-none rounded-lg px-3 py-2 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs uppercase"
+                            >
+                              <option value="monthly">Mensalidade</option>
+                              <option value="per_class">Por Aula</option>
+                            </select>
+                          </div>
+                          <div className="col-span-1">
+                            <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Valor (R$)</label>
+                            <input
+                              type="number"
+                              value={newStudent.paymentConfig?.value}
+                              onChange={(e) => setNewStudent({
+                                ...newStudent,
+                                paymentConfig: { ...newStudent.paymentConfig!, value: Number(e.target.value) }
+                              })}
+                              className="w-full bg-white border-none rounded-lg px-3 py-2 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 text-xs"
+                            />
+                          </div>
+                          {newStudent.paymentConfig?.model === 'monthly' && (
+                            <div className="col-span-2">
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Dia de Vencimento</label>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-slate-500">Todo dia</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="31"
+                                  value={newStudent.paymentConfig?.dueDay}
+                                  onChange={(e) => setNewStudent({
+                                    ...newStudent,
+                                    paymentConfig: { ...newStudent.paymentConfig!, dueDay: Number(e.target.value) }
+                                  })}
+                                  className="w-16 bg-white border-none rounded-lg px-2 py-2 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 text-center text-xs"
+                                />
+                                <span className="text-xs font-bold text-slate-500">do mês</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
+
+                    <div className="pt-4 border-t border-slate-100">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-xs font-black text-slate-500 uppercase flex items-center gap-2"><Clock size={14} /> Horários de Aula</h4>
+                        <button onClick={addSchedule} className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition flex items-center gap-1">
+                          <Plus size={12} /> Adicionar
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {(newStudent?.schedules || []).map((schedule, idx) => (
+                          <div key={schedule.id} className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-100 group">
+                            <select
+                              value={schedule.dayOfWeek}
+                              onChange={e => updateSchedule(schedule.id, 'dayOfWeek', parseInt(e.target.value))}
+                              className="bg-white border-none rounded-lg text-xs font-bold text-slate-600 py-1.5 pl-2 pr-6 outline-none cursor-pointer"
+                            >
+                              {Object.entries(DAYS_OF_WEEK_NAMES).map(([key, value]) => (
+                                <option key={key} value={key}>{value}</option>
+                              ))}
+                            </select>
+                            <input
+                              type="time"
+                              value={schedule.startTime}
+                              onChange={e => updateSchedule(schedule.id, 'startTime', e.target.value)}
+                              className="bg-white border-none rounded-lg text-xs font-bold text-slate-600 py-1.5 px-2 outline-none w-24 text-center"
+                            />
+                            <span className="text-slate-300 font-bold text-xs">às</span>
+                            <input
+                              type="time"
+                              value={schedule.endTime}
+                              onChange={e => updateSchedule(schedule.id, 'endTime', e.target.value)}
+                              className="bg-white border-none rounded-lg text-xs font-bold text-slate-600 py-1.5 px-2 outline-none w-24 text-center"
+                            />
+                            <button onClick={() => removeSchedule(schedule.id)} className="ml-auto text-slate-300 hover:text-red-500 p-1.5"><Trash2 size={14} /></button>
+                          </div>
+                        ))}
+                        {(!newStudent.schedules || newStudent.schedules.length === 0) && (
+                          <div className="text-center py-6 text-slate-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                            Nenhum horário definido.
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  (!newStudent?.paymentConfig?.enabled) ? (
+                    <div className="text-center py-10 flex flex-col items-center">
+                      <div className="bg-slate-100 p-4 rounded-full mb-3 text-slate-400">
+                        <DollarSign size={24} />
+                      </div>
+                      <p className="text-sm font-bold text-slate-600 mb-1">Controle Financeiro Desativado</p>
+                      <p className="text-xs text-slate-400 max-w-[200px]">Ative o controle financeiro na aba "Dados Gerais" para registrar pagamentos.</p>
+                      <button
+                        onClick={() => setActiveTab('general')}
+                        className="mt-4 text-indigo-600 font-bold text-xs hover:underline"
+                      >
+                        Ir para Configurações
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-6 animate-in slide-in-from-top-4 fade-in">
+
+                      <div className="pt-4 border-t border-slate-100">
+                        <div className="flex justify-between items-center mb-4">
+                          <h4 className="text-xs font-black text-slate-500 uppercase flex items-center gap-2">
+                            <DollarSign size={14} /> Registrar Pagamento
+                          </h4>
+                        </div>
+
+                        <div className="grid grid-cols-12 gap-3 mb-6 p-4 bg-slate-100/50 rounded-xl border border-slate-200/50">
+                          <div className="col-span-4">
+                            <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Valor (R$)</label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">R$</span>
+                              <input
+                                type="number"
+                                value={paymentForm.amount}
+                                onChange={e => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                                className="w-full bg-white border-none rounded-lg pl-8 pr-3 py-2 font-bold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-green-500/20"
+                                placeholder="0,00"
+                              />
+                            </div>
+                          </div>
+                          <div className="col-span-4">
+                            <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Data</label>
+                            <input
+                              type="date"
+                              value={paymentForm.date}
+                              onChange={e => setPaymentForm({ ...paymentForm, date: e.target.value })}
+                              className="w-full bg-white border-none rounded-lg px-3 py-2 font-bold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-green-500/20"
+                            />
+                          </div>
+                          <div className="col-span-4">
+                            <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Referência</label>
+                            <input
+                              type="text"
+                              value={paymentForm.reference}
+                              onChange={e => setPaymentForm({ ...paymentForm, reference: e.target.value })}
+                              className="w-full bg-white border-none rounded-lg px-3 py-2 font-bold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-green-500/20"
+                              placeholder="Ref..."
+                            />
+                          </div>
+                          <div className="col-span-12 flex justify-end">
+                            <button
+                              onClick={addPayment}
+                              className="bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-green-700 transition flex items-center gap-2 shadow-sm shadow-green-200"
+                            >
+                              <Plus size={14} /> Adicionar Pagamento
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between items-center mb-4 pt-4 border-t border-slate-100">
+                          <h4 className="text-xs font-black text-slate-500 uppercase flex items-center gap-2">
+                            <History size={14} /> Histórico
+                          </h4>
+                          <button onClick={handleExportPayments} className="text-[10px] font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg hover:bg-slate-200 transition flex items-center gap-1" title="Exportar CSV">
+                            <Download size={12} /> Exportar
+                          </button>
+                        </div>
+
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                          {(newStudent.payments || [])
+                            .sort((a, b) => b.date.localeCompare(a.date))
+                            .map(payment => (
+                              <div key={payment.id} className="flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center text-green-600">
+                                    <DollarSign size={14} />
+                                  </div>
+                                  <div>
+                                    <p className="text-xs font-black text-slate-700">R$ {payment.amount.toFixed(2)}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                                      {new Date(payment.date + 'T12:00:00').toLocaleDateString('pt-BR')} • {payment.referenceData}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button onClick={() => removePayment(payment.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1">
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          {(!newStudent.payments || newStudent.payments.length === 0) && (
+                            <div className="text-center py-6 text-slate-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                              Nenhum pagamento registrado.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                )}
               </div>
 
               <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3.5">
@@ -330,6 +713,6 @@ export default function StudentManagement({ data, onUpdateData }: StudentManagem
           </div>
         )
       }
-    </div>
+    </div >
   );
 }

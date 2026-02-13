@@ -227,6 +227,52 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
   };
 
   const [selectedDate, setSelectedDate] = useState(getYYYYMMDD(new Date()));
+
+  // Self-Healing: Remove Duplicate Logs on Mount
+  useEffect(() => {
+    // Safety check ensuring data.logs exists
+    if (!data.logs) return;
+
+    const uniqueLogs = new Map<string, LessonLog>();
+    const duplicates: string[] = [];
+    let hasChanges = false;
+
+    // Only check active logs
+    const activeLogs = data.logs.filter(l => l.status !== 'removed');
+
+    activeLogs.forEach(log => {
+      // Key: Date + School + Slot (Defines a unique lesson slot)
+      const key = `${log.date}-${log.schoolId || log.studentId}-${log.slotId}`;
+
+      if (uniqueLogs.has(key)) {
+        const existing = uniqueLogs.get(key)!;
+        // DUPLICATE FOUND
+        // Strategy: Keep the one with clearer content.
+        const existingLen = (existing.subject || '').length;
+        const currentLen = (log.subject || '').length;
+
+        if (currentLen > existingLen) {
+          // Replace existing with current (mark existing as dup)
+          duplicates.push(existing.id);
+          uniqueLogs.set(key, log);
+        } else {
+          // Keep existing, mark current as dup
+          duplicates.push(log.id);
+        }
+        hasChanges = true;
+      } else {
+        uniqueLogs.set(key, log);
+      }
+    });
+
+    if (hasChanges && duplicates.length > 0) {
+      console.log(`[Self-Healing] Found ${duplicates.length} duplicate logs. Cleaning up...`, duplicates);
+      const cleanedLogs = data.logs.filter(l => !duplicates.includes(l.id));
+      onUpdateData({ logs: cleanedLogs });
+      showSuccess(`Base de dados otimizada: ${duplicates.length} duplicatas removidas.`);
+    }
+  }, []); // Run once on mount
+
   const [activeLesson, setActiveLesson] = useState<{ schedule: ScheduleEntry, institution: School | Student, slot: TimeSlot, date: string, type: 'school' | 'private' } | null>(null);
 
   const [isExtraLessonModalOpen, setIsExtraLessonModalOpen] = useState(false);
@@ -3051,52 +3097,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             </div>
 
             {/* Self-Healing: Remove Duplicate Logs on Mount */}
-            {(() => {
-              useEffect(() => {
-                const uniqueLogs = new Map<string, LessonLog>();
-                const duplicates: string[] = [];
-                let hasChanges = false;
 
-                // Only check active logs
-                const activeLogs = data.logs.filter(l => l.status !== 'removed');
-
-                activeLogs.forEach(log => {
-                  // Key: Date + School + Slot (Defines a unique lesson slot)
-                  // We don't check ClassId because it might be inconsistent in some old data, 
-                  // but SlotId + SchoolId + Date should be unique for a teacher's schedule.
-                  const key = `${log.date}-${log.schoolId || log.studentId}-${log.slotId}`;
-
-                  if (uniqueLogs.has(key)) {
-                    const existing = uniqueLogs.get(key)!;
-                    // DUPLICATE FOUND
-                    // Strategy: Keep the one with clearer content, or the most recent one (ID based? Timestamp not avail).
-                    // We'll prefer the one with longer subject text.
-                    const existingLen = (existing.subject || '').length;
-                    const currentLen = (log.subject || '').length;
-
-                    if (currentLen > existingLen) {
-                      // Replace existing with current (keep current, mark existing as dup)
-                      duplicates.push(existing.id);
-                      uniqueLogs.set(key, log);
-                    } else {
-                      // Keep existing, mark current as dup
-                      duplicates.push(log.id);
-                    }
-                    hasChanges = true;
-                  } else {
-                    uniqueLogs.set(key, log);
-                  }
-                });
-
-                if (hasChanges && duplicates.length > 0) {
-                  console.log(`[Self-Healing] Found ${duplicates.length} duplicate logs. Cleaning up...`, duplicates);
-                  const cleanedLogs = data.logs.filter(l => !duplicates.includes(l.id));
-                  onUpdateData({ logs: cleanedLogs });
-                  showToast('Base de dados otimizada: Duplicatas removidas.', 'info');
-                }
-              }, []); // Run once on mount (or when data changes? No, unsafe loop. Just mount.)
-              return null;
-            })()}
 
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
               {/* OPÇÃO 1: AULA REGULAR (Para reposições ou aulas manuais que DEVEM contar na carga horária) */}

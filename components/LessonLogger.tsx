@@ -68,7 +68,7 @@ const OCCURRENCE_TYPES = [
 
 interface EditableContentFieldProps {
   initialValue: string;
-  onSave: (newValue: string) => Promise<void>;
+  onSave: (newValue: string, contextId?: string) => Promise<string | void>;
   isBulkEditing: boolean;
   isPlaceholder?: boolean;
 }
@@ -76,7 +76,8 @@ interface EditableContentFieldProps {
 const EditableContentField: React.FC<EditableContentFieldProps> = ({ initialValue, onSave, isBulkEditing, isPlaceholder }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState(initialValue);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  // Store the ID of the created/updated log to handle subsequent edits (e.g. create -> update)
+  const [savedContext, setSavedContext] = useState<{ id: string } | null>(null);
 
   // Update local value if prop changes (e.g. external refresh)
   useEffect(() => {
@@ -84,20 +85,30 @@ const EditableContentField: React.FC<EditableContentFieldProps> = ({ initialValu
   }, [initialValue]);
 
   const handleSave = async () => {
-    if (value === initialValue && !isEditing) {
+    // Basic check: if value hasn't changed AND we don't have a pending "newly created" context to rely on, skip.
+    // However, if we JUST created a log (savedContext exists) and we edit again, we want to ensure we pass that ID.
+    if (value === initialValue && !isEditing && !savedContext) {
       setIsEditing(false);
       return;
     }
 
     setSaveStatus('saving');
     try {
-      await onSave(value);
+      // Pass the savedContext ID if available to force an update instead of create
+      const result = await onSave(value, savedContext?.id);
+
+      // If the save returns an ID (meaning a log was created/updated), store it.
+      if (result && typeof result === 'string') {
+        setSavedContext({ id: result });
+      }
+
       setSaveStatus('success');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {
       console.error("Failed to save:", error);
       setSaveStatus('error');
     }
+
     setIsEditing(false);
   };
 
@@ -2632,16 +2643,29 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     newContent: string,
     schedule: ScheduleEntry,
     date: string,
-    existingLog?: LessonLog
-  ) => {
+    existingLog?: LessonLog,
+    contextId?: string // New parameter from EditableContentField
+  ): Promise<string | void> => {
+    // 1. Determine the effective Log ID to update
+    // Priority: contextId (just created) > existingLog.id (passed prop) > undefined (create new)
+    const logIdToUpdate = contextId || existingLog?.id;
+    let finalLogId = logIdToUpdate;
+
     // Optimistic Update / Data Preparation
     let updatedLogs = [...data.logs];
 
-    if (existingLog) {
-      // Update existing log
+    // Check if we can find the log in the CURRENT data (in case existingLog prop is stale)
+    const freshLog = data.logs.find(l =>
+      l.id === logIdToUpdate ||
+      (l.date === date && l.slotId === schedule.slotId && (l.schoolId === schedule.schoolId || l.studentId === schedule.schoolId) && l.status !== 'removed')
+    );
+
+    if (freshLog) {
+      // Update existing log (UPSERT STRATEGY: Prefer update if ANY match found)
       updatedLogs = updatedLogs.map(l =>
-        l.id === existingLog.id ? { ...l, subject: newContent } : l
+        l.id === freshLog.id ? { ...l, subject: newContent } : l
       );
+      finalLogId = freshLog.id;
     } else {
       // Create new log (for Future/Planned items)
       // Determine IDs
@@ -2652,7 +2676,6 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
       // Find Slot Times (Crucial for Planning)
       if (schedule.shiftId === 'private') {
-        // Private logic
         const student = data.students.find(s => s.id === schedule.schoolId);
         const pSlot = student?.schedules?.find(s => s.id === schedule.slotId);
         if (pSlot) {
@@ -2669,8 +2692,9 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
         }
       }
 
+      finalLogId = crypto.randomUUID();
       const newLog: LessonLog = {
-        id: crypto.randomUUID(),
+        id: finalLogId,
         date,
         schoolId: schedule.shiftId === 'private' ? '' : schedule.schoolId,
         studentId: schedule.shiftId === 'private' ? schedule.schoolId : undefined,
@@ -2691,6 +2715,9 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
     // Persist
     onUpdateData({ logs: updatedLogs });
+
+    // Return the ID so the UI can lock onto it
+    return finalLogId;
   };
 
   // ... (Restante do arquivo mantido, renderização do grid) ...
@@ -2976,7 +3003,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                               <p className="text-[7px] md:text-[8px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-tight mb-0.5 ml-1">Planejado:</p>
                               <EditableContentField
                                 initialValue={item.log.subject}
-                                onSave={(val) => handleQuickSave(val, item.schedule, item.date, item.log)}
+                                onSave={(val, ctxId) => handleQuickSave(val, item.schedule, item.date, item.log, ctxId)} // Pass ctxId
                                 isBulkEditing={isBulkEditMode}
                               />
                             </div>
@@ -3023,7 +3050,53 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               )}
             </div>
 
-            {/* Footer Removed (Unified Timeline) */}
+            {/* Self-Healing: Remove Duplicate Logs on Mount */}
+            {(() => {
+              useEffect(() => {
+                const uniqueLogs = new Map<string, LessonLog>();
+                const duplicates: string[] = [];
+                let hasChanges = false;
+
+                // Only check active logs
+                const activeLogs = data.logs.filter(l => l.status !== 'removed');
+
+                activeLogs.forEach(log => {
+                  // Key: Date + School + Slot (Defines a unique lesson slot)
+                  // We don't check ClassId because it might be inconsistent in some old data, 
+                  // but SlotId + SchoolId + Date should be unique for a teacher's schedule.
+                  const key = `${log.date}-${log.schoolId || log.studentId}-${log.slotId}`;
+
+                  if (uniqueLogs.has(key)) {
+                    const existing = uniqueLogs.get(key)!;
+                    // DUPLICATE FOUND
+                    // Strategy: Keep the one with clearer content, or the most recent one (ID based? Timestamp not avail).
+                    // We'll prefer the one with longer subject text.
+                    const existingLen = (existing.subject || '').length;
+                    const currentLen = (log.subject || '').length;
+
+                    if (currentLen > existingLen) {
+                      // Replace existing with current (keep current, mark existing as dup)
+                      duplicates.push(existing.id);
+                      uniqueLogs.set(key, log);
+                    } else {
+                      // Keep existing, mark current as dup
+                      duplicates.push(log.id);
+                    }
+                    hasChanges = true;
+                  } else {
+                    uniqueLogs.set(key, log);
+                  }
+                });
+
+                if (hasChanges && duplicates.length > 0) {
+                  console.log(`[Self-Healing] Found ${duplicates.length} duplicate logs. Cleaning up...`, duplicates);
+                  const cleanedLogs = data.logs.filter(l => !duplicates.includes(l.id));
+                  onUpdateData({ logs: cleanedLogs });
+                  showToast('Base de dados otimizada: Duplicatas removidas.', 'info');
+                }
+              }, []); // Run once on mount (or when data changes? No, unsafe loop. Just mount.)
+              return null;
+            })()}
 
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
               {/* OPÇÃO 1: AULA REGULAR (Para reposições ou aulas manuais que DEVEM contar na carga horária) */}
@@ -3305,7 +3378,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                               {item.log && <p className="text-[9px] font-black text-purple-600 dark:text-purple-300 uppercase mb-1">Planejado:</p>}
                               <EditableContentField
                                 initialValue={item.log?.subject || ''}
-                                onSave={(val) => handleQuickSave(val, item.schedule, item.date, item.log)}
+                                onSave={(val, ctxId) => handleQuickSave(val, item.schedule, item.date, item.log, ctxId)} // Pass ctxId
                                 isBulkEditing={isBulkEditMode}
                                 isPlaceholder={!item.log}
                               />
@@ -3486,7 +3559,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                                   // Pass isPlaceholder=true if no log exists to show "Registro Pendente" when not editing
                                   <EditableContentField
                                     initialValue={item.log?.subject || ''}
-                                    onSave={(val) => handleQuickSave(val, item.schedule, item.date, item.log)}
+                                    onSave={(val, ctxId) => handleQuickSave(val, item.schedule, item.date, item.log, ctxId)} // Pass ctxId
                                     isBulkEditing={isBulkEditMode}
                                     isPlaceholder={!item.log}
                                   />

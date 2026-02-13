@@ -76,6 +76,7 @@ interface EditableContentFieldProps {
 const EditableContentField: React.FC<EditableContentFieldProps> = ({ initialValue, onSave, isBulkEditing, isPlaceholder }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState(initialValue);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   // Store the ID of the created/updated log to handle subsequent edits (e.g. create -> update)
   const [savedContext, setSavedContext] = useState<{ id: string } | null>(null);
 

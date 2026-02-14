@@ -395,8 +395,10 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
       versionedSchedules.filter(s => Number(s.dayOfWeek) === dayOfWeek && s.classId !== 'window').forEach(s => {
         if (isLessonBlocked(data, dateStr, s.schoolId, s.shiftId, s.classId)) return;
+
         const school = data.schools.find(sc => sc.id === s.schoolId);
         const slot = school?.shifts.find(sh => sh.id === s.shiftId)?.slots.find(sl => sl.id === s.slotId);
+
         if (slot && school && !school.deleted) {
           daySchedules.push({
             type: 'school', schedule: s, school, slot,

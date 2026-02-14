@@ -35,7 +35,8 @@ import {
   Loader2,
   ArrowUpNarrowWide,
   ArrowDownWideNarrow,
-  Edit3
+  Edit3,
+  Eye
 } from 'lucide-react';
 import { DAYS_OF_WEEK_NAMES } from '../constants';
 import { parseTimeToMinutes, getCurrentTimeInMinutes, getHolidayName, isHoliday, getDayOfWeekFromDate, getCurrentDate } from '../utils';
@@ -315,8 +316,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     return saved ? parseInt(saved) : 3;
   });
 
-  const [showWithContent, setShowWithContent] = useState(true);
-  const [showWithoutContent, setShowWithoutContent] = useState(true);
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed'>('all');
 
   const [showPendencies, setShowPendencies] = useState(false);
   const [isBulkEditMode, setIsBulkEditMode] = useState(false);
@@ -326,8 +326,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     if (defaultShowPendencies) {
       // NEW BEHAVIOR: Open History Tab with "Without Content" filter only
       setViewMode('registered');
-      setShowWithContent(false);
-      setShowWithoutContent(true);
+      setFilterStatus('pending');
       setShowPendencies(false); // Ensure accordion is closed if we return to day view
 
       if (onClearShowPendencies) onClearShowPendencies();
@@ -763,8 +762,9 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       schoolId: filterInstId,
       classId: filterClassId,
       periodIdx: filterPeriodIdx,
-      showWithContent,
-      showWithoutContent
+      periodIdx: filterPeriodIdx,
+      showWithContent: filterStatus !== 'pending',
+      showWithoutContent: filterStatus !== 'completed'
     });
 
     const today = new Date();
@@ -804,7 +804,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
       return true;
     });
-  }, [data, historyDateRange, filterInstId, filterClassId, filterPeriodIdx, showWithContent, showWithoutContent]);
+  }, [data, historyDateRange, filterInstId, filterClassId, filterPeriodIdx, filterStatus]);
 
   const stats = useMemo(() => {
     const pastItems = historyItems.filter(i => i.isPast);
@@ -2830,10 +2830,13 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           </div>
 
           {/* Stats e Toggle juntos */}
-          <div className="flex flex-col md:flex-row items-center justify-between gap-3 pt-2 border-t border-slate-50 dark:border-slate-800">
+          {/* Stats e Toggle juntos */}
+          <div className="flex flex-col md:flex-row items-center justify-between gap-3 pt-2 border-t border-slate-50 dark:border-slate-800 w-full">
             {/* Estatísticas */}
             {/* Estatísticas (Compacto) */}
-            <div className="flex items-center gap-2 md:gap-3 bg-slate-50 dark:bg-slate-800/60 py-2 px-3 md:px-4 rounded-xl border border-slate-100 dark:border-slate-800">
+            {/* Estatísticas (Compacto) */}
+            {/* Estatísticas (Compacto) */}
+            <div className="flex items-center gap-2 md:gap-3 bg-slate-50 dark:bg-slate-800/60 py-2 px-3 md:px-4 rounded-xl border border-slate-100 dark:border-slate-800 w-full md:w-[280px] justify-center whitespace-nowrap flex-shrink-0">
               <BarChart2 size={14} className="text-slate-400" />
               <div className="flex items-center gap-2 md:gap-3 text-[9px] md:text-[10px] font-black uppercase tracking-wide text-slate-500">
                 <div className="flex items-center gap-1">
@@ -2849,43 +2852,59 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             </div>
 
             {/* Filtros de Conteúdo */}
-            <div className="flex gap-2 bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl items-center">
+            {/* Filtros de Conteúdo - Segmented Control */}
+            <div className="flex bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl items-center w-full md:w-auto justify-center">
+              <div className="hidden md:flex items-center justify-center px-2 text-slate-400">
+                <Eye size={14} />
+              </div>
               <button
-                onClick={() => setShowWithoutContent(!showWithoutContent)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] md:text-[10px] font-black uppercase transition-all ${showWithoutContent ? 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 shadow-sm border border-slate-200 dark:border-slate-600' : 'text-slate-400 hover:text-slate-600'}`}
+                onClick={() => setFilterStatus('all')}
+                className={`flex-1 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${filterStatus === 'all' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
               >
-                <div className={`w-3 h-3 rounded border flex items-center justify-center ${showWithoutContent ? 'bg-primary border-primary' : 'border-slate-300'}`}>
-                  {showWithoutContent && <CheckCircle2 size={8} className="text-white" />}
-                </div>
-                <span>Sem Conteúdo</span>
+                Todos
               </button>
               <button
-                onClick={() => setShowWithContent(!showWithContent)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] md:text-[10px] font-black uppercase transition-all ${showWithContent ? 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 shadow-sm border border-slate-200 dark:border-slate-600' : 'text-slate-400 hover:text-slate-600'}`}
+                onClick={() => setFilterStatus('pending')}
+                className={`flex-1 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${filterStatus === 'pending' ? 'bg-white dark:bg-slate-600 text-amber-600 dark:text-amber-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
               >
-                <div className={`w-3 h-3 rounded border flex items-center justify-center ${showWithContent ? 'bg-primary border-primary' : 'border-slate-300'}`}>
-                  {showWithContent && <CheckCircle2 size={8} className="text-white" />}
-                </div>
-                <span>Com Conteúdo</span>
+                Pendentes
+              </button>
+              <button
+                onClick={() => setFilterStatus('completed')}
+                className={`flex-1 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${filterStatus === 'completed' ? 'bg-white dark:bg-slate-600 text-green-600 dark:text-green-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+              >
+                Concluídos
               </button>
             </div>
 
             {/* Toggle de Visualização */}
-            <div className="flex gap-2 items-center">
-              {/* BULK EDIT TOGGLE - Separated Group */}
+
+
+            {/* View & Sort Options & Edit Mode Combined */}
+            <div className="flex flex-wrap justify-center gap-2 items-center w-full md:w-auto">
+
+              {/* DESKTOP ONLY: Edit Button Separated */}
               {((viewMode === 'future' && futureViewType === 'list') || (viewMode === 'registered' && historyViewType === 'list')) && (
-                <div className="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl items-center mr-2">
+                <div className="hidden md:flex bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl items-center mr-2">
                   <button
                     onClick={() => setIsBulkEditMode(!isBulkEditMode)}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] md:text-[10px] font-black uppercase transition-all ${isBulkEditMode ? 'bg-indigo-500 text-white shadow-md ring-2 ring-indigo-200' : 'text-indigo-500 bg-indigo-50 hover:bg-indigo-100'}`}
+                    className={`flex w-32 justify-center items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${isBulkEditMode ? 'bg-indigo-500 text-white shadow-md ring-2 ring-indigo-200' : 'text-indigo-500 bg-indigo-50 hover:bg-indigo-100'}`}
                   >
                     <Edit3 size={13} /> <span>{isBulkEditMode ? 'Salvar Edição' : 'Modo Edição'}</span>
                   </button>
                 </div>
               )}
 
-              {/* View & Sort Options */}
               <div className="flex gap-2 bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl items-center">
+                {/* BULK EDIT TOGGLE - MOBILE ONLY (Merged) */}
+                {((viewMode === 'future' && futureViewType === 'list') || (viewMode === 'registered' && historyViewType === 'list')) && (
+                  <button
+                    onClick={() => setIsBulkEditMode(!isBulkEditMode)}
+                    className={`md:hidden flex w-auto justify-center items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${isBulkEditMode ? 'bg-indigo-500 text-white shadow-md ring-2 ring-indigo-200' : 'text-indigo-500 bg-indigo-50 hover:bg-indigo-100'}`}
+                  >
+                    <Edit3 size={13} />
+                  </button>
+                )}
                 {viewMode === 'future' ? (
                   <>
                     {futureViewType === 'list' && (
@@ -3220,8 +3239,9 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                   if (log && log.status === 'removed') return;
 
                   // Content Filters
-                  if (log && !showWithContent) return;
-                  if (!log && !showWithoutContent) return;
+                  // Content Filters
+                  if (log && filterStatus === 'pending') return;
+                  if (!log && filterStatus === 'completed') return;
 
                   futureLessons.push({
                     schedule: s,
@@ -3246,8 +3266,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                       if (log && log.status === 'removed') return;
 
                       // Content Filters
-                      if (log && !showWithContent) return;
-                      if (!log && !showWithoutContent) return;
+                      if (log && filterStatus === 'pending') return;
+                      if (!log && filterStatus === 'completed') return;
 
                       futureLessons.push({
                         schedule: { dayOfWeek, schoolId: st.id, shiftId: 'private', slotId: ps.id, classId: st.name },

@@ -516,6 +516,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       const filterLogs = (logs: any[]) => {
          return logs.filter(l => {
             if (l.type === 'substitution') return false;
+            // FIX: Exclude window lessons (deleted or active)
+            if (l.classId === 'window') return false;
+
             const instId = l.schoolId || l.studentId;
             const instMatch = filterInstId === 'all' || instId === filterInstId;
             const classMatch = filterClassId === 'all' || l.classId === filterClassId;
@@ -536,16 +539,31 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
          if (logs.length === 0) return alert('Sem registros para exportar com os filtros atuais.');
 
-         downloadCSV(logs.map(l => ({
-            Data: new Date(l.date).toLocaleDateString('pt-BR'),
-            Tipo: l.type === 'extra' ? 'Aula Extra' : 'Regular',
-            Instituicao: availableInstitutions.find(i => i.id === (l.schoolId || l.studentId))?.name || 'N/A',
-            Turma: l.classId,
-            Horario: l.startTime ? `${l.startTime}-${l.endTime}` : 'Grade Normal',
-            Conteudo: l.subject,
-            Tarefa: l.homework,
-            Notas: l.notes
-         })), `diario_aulas_${new Date().toISOString().split('T')[0]}`);
+         downloadCSV(logs.map(l => {
+            // FIX: Resolve Class Name if it's a UUID
+            let className = l.classId;
+            if (l.schoolId) {
+               const school = data.schools.find(s => s.id === l.schoolId);
+               if (school) {
+                  // Try to find the class by ID or Name
+                  const classObj = school.classes.find(c => (typeof c === 'string' ? c : c.id) === l.classId);
+                  if (classObj) {
+                     className = typeof classObj === 'string' ? classObj : classObj.name;
+                  }
+               }
+            }
+
+            return {
+               Data: new Date(l.date).toLocaleDateString('pt-BR'),
+               Tipo: l.type === 'extra' ? 'Aula Extra' : 'Regular',
+               Instituicao: availableInstitutions.find(i => i.id === (l.schoolId || l.studentId))?.name || 'N/A',
+               Turma: className,
+               Horario: l.startTime ? `${l.startTime}-${l.endTime}` : 'Grade Normal',
+               Conteudo: l.subject,
+               Tarefa: l.homework,
+               Notas: l.notes
+            };
+         }), `diario_aulas_${new Date().toISOString().split('T')[0]}`);
 
       } else if (type === 'privateLessons') {
          // Filtra apenas os logs de alunos particulares (que têm studentId)
@@ -2335,8 +2353,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                      onClick={handleFinishOnboarding}
                      disabled={!data.settings.termsAccepted}
                      className={`px-10 py-4 rounded-xl font-black uppercase tracking-tight shadow-xl shadow-green-200 flex items-center gap-2 mx-auto transition-all ${!data.settings.termsAccepted
-                           ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
-                           : 'bg-green-600 text-white animate-pulse hover:animate-none hover:scale-105 hover:bg-green-700'
+                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                        : 'bg-green-600 text-white animate-pulse hover:animate-none hover:scale-105 hover:bg-green-700'
                         }`}
                   >
                      <CheckCircle2 size={24} /> Finalizar e Começar

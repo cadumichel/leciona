@@ -790,7 +790,7 @@ const App: React.FC = () => {
   ];
 
   return (
-    <div className={`flex flex-col md:flex-row min-h-screen transition-colors duration-300 bg-slate-100 dark:bg-slate-950`}>
+    <div className={`flex flex-col lg:flex-row min-h-screen transition-colors duration-300 bg-slate-100 dark:bg-slate-950`}>
       <style>{`
         :root {
           --primary-color: ${data.settings.themeColor};
@@ -807,7 +807,7 @@ const App: React.FC = () => {
 
       {/* Menu Mobile Compacto - Ocultar no Onboarding */}
       {!isOnboarding && (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t dark:border-slate-800 z-50 flex justify-between px-4 py-2 safe-area-bottom shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] overflow-x-auto">
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t dark:border-slate-800 z-50 flex justify-between px-4 py-2 safe-area-bottom shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] overflow-x-auto">
           {navItems.map(item => (
             <button key={item.id} onClick={() => { setActiveTab(item.id); if (item.id !== 'lessons') setPreSelectedLesson(null); }} className={`flex flex-col items-center justify-center p-1 min-w-[50px] rounded-xl transition-all ${activeTab === item.id ? 'text-primary' : 'text-slate-400 dark:text-slate-500'}`}>
               <item.icon size={20} className={activeTab === item.id ? 'mb-0.5' : 'mb-0'} />
@@ -818,7 +818,7 @@ const App: React.FC = () => {
       )}
 
       {!isOnboarding && (
-        <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-slate-900 border-r dark:border-slate-800 min-h-screen sticky top-0 transition-colors">
+        <aside className="hidden lg:flex flex-col w-64 bg-white dark:bg-slate-900 border-r dark:border-slate-800 min-h-screen sticky top-0 transition-colors">
           <div className="p-6">
             <h1 className="text-2xl font-black text-primary flex items-center gap-2 tracking-tight">
               <BookOpen className="text-primary" /> Leciona
@@ -856,11 +856,11 @@ const App: React.FC = () => {
         </aside>
       )}
 
-      <main className="flex-1 pb-24 md:pb-0 overflow-x-hidden">
-        <header className="bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-4 py-3 md:px-6 md:py-4 flex justify-between items-center sticky top-0 z-40 transition-colors shadow-sm md:shadow-none gap-3">
+      <main className="flex-1 pb-24 lg:pb-0 overflow-x-hidden">
+        <header className="bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-4 py-3 lg:px-6 lg:py-4 flex justify-between items-center sticky top-0 z-40 transition-colors shadow-sm lg:shadow-none gap-3">
 
           {/* Esquerda: Título da Seção */}
-          <h2 className="text-lg md:text-xl font-black text-slate-800 dark:text-white truncate">
+          <h2 className="text-lg lg:text-xl font-black text-slate-800 dark:text-white truncate">
             {navItems.find(i => i.id === activeTab)?.label}
           </h2>
 
@@ -876,14 +876,14 @@ const App: React.FC = () => {
             )}
 
             {/* Branding Mobile (Leciona + Logo) */}
-            <div className="md:hidden flex items-center gap-2 pl-3 border-l border-slate-200 dark:border-slate-700 h-6">
+            <div className="lg:hidden flex items-center gap-2 pl-3 border-l border-slate-200 dark:border-slate-700 h-6">
               <span className="text-xs font-black text-slate-800 dark:text-white tracking-tighter">Leciona</span>
               <BookOpen className="text-primary w-5 h-5" />
             </div>
           </div>
         </header>
 
-        <div className="p-3 md:p-8 max-w-6xl mx-auto">
+        <div className="p-3 lg:p-8 max-w-6xl mx-auto">
           {activeTab === 'dashboard' && (
             <>
               {data.settings.showQuickStartGuide && (

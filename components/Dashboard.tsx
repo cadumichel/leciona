@@ -290,7 +290,11 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     // FIX: Use versioned schedules + Flexible Day Check
     const dailySchedules = getSchedulesForDate(data, todayDateStr);
 
-    const schoolSchedules = dailySchedules.filter(s => Number(s.dayOfWeek) === today).map(s => {
+    const schoolSchedules = dailySchedules.filter(s => {
+      // Check if this specific lesson is blocked (Recess/Holiday/Event)
+      if (isLessonBlocked(data, todayDateStr, s.schoolId, s.shiftId, s.classId)) return false;
+      return Number(s.dayOfWeek) === today;
+    }).map(s => {
       const school = data.schools.find(sc => sc.id === s.schoolId);
       const shift = school?.shifts.find(sh => sh.id === s.shiftId);
       const slot = shift?.slots.find(sl => sl.id === s.slotId);
@@ -303,6 +307,9 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     const privateSchedules: any[] = [];
     if (data.settings.isPrivateTeacher) {
       data.students.forEach(student => {
+        // Check global block for student (e.g. holiday)
+        if (isLessonBlocked(data, todayDateStr, student.id)) return;
+
         student.schedules.filter(ps => Number(ps.dayOfWeek) === today).forEach(ps => {
           privateSchedules.push({ type: 'private' as const, student, schedule: ps, startTime: ps.startTime, endTime: ps.endTime });
         });
@@ -310,7 +317,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     }
 
     return [...schoolSchedules, ...privateSchedules].sort((a, b) => parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime));
-  }, [data.schedules, data.students, data.settings.isPrivateTeacher, today]);
+  }, [data.schedules, data.students, data.settings.isPrivateTeacher, today, todayDateStr, data]);
 
   const getSlotStartTime = useMemo(() => (schoolId: string, slotId: string) => {
     const school = data.schools.find(s => s.id === schoolId);

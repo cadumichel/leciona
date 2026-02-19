@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { AppData, SchoolEvent, EventType, TimeSlot, DayOfWeek, LessonLog } from '../types';
 import { FileCheck, Calendar, Trash2, AlertTriangle, Plus, X, Layers, Clock, ArrowRight, ChevronRight, School as SchoolIcon, Copy, CheckCircle2, Pencil } from 'lucide-react';
 import { isWeekend, isHoliday, getHolidayName, getDayOfWeekFromDate, getSafeDate } from '../utils';
+import { getSchedulesForDate } from '../utils/schedule';
 
 interface AssessmentManagementProps {
   data: AppData;
@@ -183,7 +184,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     const className = typeof selectedClassObj === 'string' ? selectedClassObj : selectedClassObj.name;
     const classId = typeof selectedClassObj === 'string' ? selectedClassObj : selectedClassObj.id;
 
-    const validEntries = (data.schedules || []).filter(s =>
+    const validEntries = getSchedulesForDate(data, newEvent.date).filter(s =>
       Number(s.dayOfWeek) === dayOfWeek &&
       s.schoolId === newEvent.schoolId &&
       // Compara com ID OU Nome (para compatibilidade legada)
@@ -233,7 +234,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     const className = typeof targetClassObj === 'string' ? targetClassObj : targetClassObj.name;
     const classId = typeof targetClassObj === 'string' ? targetClassObj : targetClassObj.id;
 
-    const validEntries = (data.schedules || []).filter(s =>
+    const validEntries = getSchedulesForDate(data, copyData.targetDate).filter(s =>
       Number(s.dayOfWeek) === dayOfWeek &&
       s.schoolId === copyData.targetSchoolId &&
       // Compara com ID OU Nome

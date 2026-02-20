@@ -546,8 +546,130 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       ) : (
         <div className="space-y-6">
           {grouped.map(group => {
-            // Flatten all events in month for event-count display
             const totalInMonth = group.weeks.reduce((s, w) => s + w.events.length, 0);
+            const allMonthEvents = group.weeks.flatMap(w => w.events);
+
+            // Reusable card renderer
+            const renderCard = (event: SchoolEvent) => {
+              const school = data.schools.find(s => s.id === event.schoolId);
+              const color = school?.color || '#3b82f6';
+              const evtClassName = resolveClassName(event);
+              const status = getStatusBadge(event);
+              const isPast = event.date.split('T')[0] < today;
+              const slotLabel = (() => {
+                if (!school || !event.slotId) return null;
+                for (const shift of (school.shifts || [])) {
+                  const slot = shift.slots.find(s => s.id === event.slotId);
+                  if (slot) return `${slot.label} (${slot.startTime})`;
+                }
+                return null;
+              })();
+              return (
+                <div
+                  key={event.id}
+                  onClick={() => openEditForm(event)}
+                  title={event.title}
+                  className={`bg-white dark:bg-slate-900 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group flex items-stretch gap-0 overflow-hidden ${isPast ? 'opacity-80' : ''} ${cardsPerRow > 2 ? 'flex-col' : ''}`}
+                  style={{ borderColor: color + '40' }}
+                >
+                  {/* Vertical accent bar */}
+                  <div className="w-1 shrink-0" style={{ backgroundColor: color }} />
+
+                  {/* Card body */}
+                  <div className={`flex-1 flex gap-3 p-3 min-w-0 ${cardsPerRow > 2 ? 'flex-col items-start' : 'items-center'}`}>
+                    {/* Left: Icon */}
+                    <div
+                      className="w-9 h-9 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: color + '18', color }}
+                    >
+                      <FileCheck size={16} />
+                    </div>
+
+                    {/* Center: Title + badges */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                        <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase truncate max-w-[120px] sm:max-w-none">
+                          {event.title}
+                        </h4>
+                        <span
+                          className="text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0"
+                          style={{ backgroundColor: color + '22', color }}
+                        >
+                          {event.type === 'test' ? 'Prova' : 'Trabalho'}
+                        </span>
+                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-tight px-1 py-0.5 rounded border border-slate-100 dark:border-slate-700 shrink-0">
+                          Turma {evtClassName}
+                        </span>
+                      </div>
+
+                      {event.description && event.description.trim() && (
+                        <p className="text-[9px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
+                          <BookOpen size={9} className="text-slate-300 shrink-0" />
+                          {event.description}
+                        </p>
+                      )}
+
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[9px] font-bold truncate" style={{ color }}>{school?.name}</span>
+                        {slotLabel && (
+                          <span className="text-[9px] text-slate-400 font-bold flex items-center gap-0.5">
+                            <Clock size={9} /> {slotLabel}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right: Date + Status + Actions */}
+                    <div className={`shrink-0 flex gap-1.5 ${cardsPerRow > 2 ? 'flex-wrap items-center' : 'flex-col items-end ml-2'}`}>
+                      <div className="flex items-center gap-1 text-[10px] font-black text-slate-600 dark:text-slate-300">
+                        <Calendar size={11} className="text-slate-400" />
+                        <span>{getSafeDate(event.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
+                        {cardsPerRow <= 2 && (
+                          <span className="text-slate-400 text-[8px] hidden sm:inline">
+                            · {getSafeDate(event.date).toLocaleDateString('pt-BR', { weekday: 'short' }).slice(0, 3)}
+                          </span>
+                        )}
+                      </div>
+
+                      <span className={`text-[7px] font-black uppercase tracking-tight px-1.5 py-0.5 rounded border ${status.color}`}>
+                        {status.label}
+                      </span>
+
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={e => { e.stopPropagation(); openEditForm(event); }}
+                          className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                          title="Editar"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                        {deletingEventId === event.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={e => { e.stopPropagation(); onUpdateData({ events: data.events.filter(ev => ev.id !== event.id) }); setDeletingEventId(null); }}
+                              className="bg-red-500 text-white px-2 py-1 rounded text-[8px] font-bold"
+                            >Sim</button>
+                            <button
+                              onClick={e => { e.stopPropagation(); setDeletingEventId(null); }}
+                              className="bg-slate-200 text-slate-600 px-2 py-1 rounded text-[8px] font-bold"
+                            >Não</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={e => { e.stopPropagation(); setDeletingEventId(event.id); }}
+                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                            title="Excluir"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            };
+
             return (
               <div key={group.key}>
                 {/* Month divider */}
@@ -557,163 +679,34 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   <span className="text-[9px] font-black text-slate-300 uppercase">{totalInMonth} av.</span>
                 </div>
 
-                {/* Weeks inside month */}
-                <div className="space-y-4">
-                  {group.weeks.map(week => (
-                    <div key={week.weekKey}>
-                      {/* Week sub-divider (only when groupByWeek is on) */}
-                      {groupByWeek && (
+                {groupByWeek ? (
+                  /* ── Week sub-groups ── */
+                  <div className="space-y-4">
+                    {group.weeks.map(week => (
+                      <div key={week.weekKey}>
                         <div className="flex items-center gap-2 mb-2">
                           <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
                           <span className="text-[9px] font-black text-slate-400 uppercase tracking-wide">{week.label}</span>
                           <div className="flex-1 h-px bg-slate-100 dark:bg-slate-700" />
                           <span className="text-[8px] font-bold text-slate-300">{week.events.length} av.</span>
                         </div>
-                      )}
-
-                      {/* Cards grid */}
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: `repeat(${cardsPerRow}, minmax(0, 1fr))`,
-                          gap: '0.5rem'
-                        }}
-                      >
-                        {week.events.map(event => {
-                          const school = data.schools.find(s => s.id === event.schoolId);
-                          const color = school?.color || '#3b82f6';
-                          const className = resolveClassName(event);
-                          const status = getStatusBadge(event);
-                          const isPast = event.date.split('T')[0] < today;
-
-                          // Slot label
-                          const slotLabel = (() => {
-                            if (!school || !event.slotId) return null;
-                            for (const shift of (school.shifts || [])) {
-                              const slot = shift.slots.find(s => s.id === event.slotId);
-                              if (slot) return `${slot.label} (${slot.startTime})`;
-                            }
-                            return null;
-                          })();
-
-                          return (
-                            <div
-                              key={event.id}
-                              onClick={() => openEditForm(event)}
-                              title={event.title}
-                              className={`bg-white dark:bg-slate-900 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group flex items-stretch gap-0 overflow-hidden ${isPast ? 'opacity-80' : ''} ${cardsPerRow > 2 ? 'flex-col' : ''}`}
-                              style={{ borderColor: color + '40' }}
-                            >
-                              {/* Vertical accent bar */}
-                              <div className="w-1 shrink-0" style={{ backgroundColor: color }} />
-
-                              {/* Card body */}
-                              <div className={`flex-1 flex gap-3 p-3 min-w-0 ${cardsPerRow > 2 ? 'flex-col items-start' : 'items-center'}`}>
-                                {/* Left: Icon */}
-                                <div
-                                  className="w-9 h-9 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0"
-                                  style={{ backgroundColor: color + '18', color }}
-                                >
-                                  <FileCheck size={16} />
-                                </div>
-
-                                {/* Center-left: Title + badges */}
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
-                                    <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase truncate max-w-[120px] sm:max-w-none">
-                                      {event.title}
-                                    </h4>
-                                    <span
-                                      className="text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0"
-                                      style={{ backgroundColor: color + '22', color }}
-                                    >
-                                      {event.type === 'test' ? 'Prova' : 'Trabalho'}
-                                    </span>
-                                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-tight px-1 py-0.5 rounded border border-slate-100 dark:border-slate-700 shrink-0">
-                                      Turma {className}
-                                    </span>
-                                  </div>
-
-                                  {/* Subject / description snippet */}
-                                  {event.description && event.description.trim() && (
-                                    <p className="text-[9px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
-                                      <BookOpen size={9} className="text-slate-300 shrink-0" />
-                                      {event.description}
-                                    </p>
-                                  )}
-
-                                  {/* School + slot */}
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-[9px] font-bold truncate" style={{ color }}>{school?.name}</span>
-                                    {slotLabel && (
-                                      <span className="text-[9px] text-slate-400 font-bold flex items-center gap-0.5">
-                                        <Clock size={9} /> {slotLabel}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Right: Date + Status badge + Actions */}
-                                <div className={`shrink-0 flex gap-1.5 ${cardsPerRow > 2 ? 'flex-wrap items-center' : 'flex-col items-end ml-2'}`}>
-                                  {/* Date */}
-                                  <div className="flex items-center gap-1 text-[10px] font-black text-slate-600 dark:text-slate-300">
-                                    <Calendar size={11} className="text-slate-400" />
-                                    <span>{getSafeDate(event.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
-                                    {cardsPerRow <= 2 && (
-                                      <span className="text-slate-400 text-[8px] hidden sm:inline">
-                                        · {getSafeDate(event.date).toLocaleDateString('pt-BR', { weekday: 'short' }).slice(0, 3)}
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {/* Status */}
-                                  <span className={`text-[7px] font-black uppercase tracking-tight px-1.5 py-0.5 rounded border ${status.color}`}>
-                                    {status.label}
-                                  </span>
-
-                                  {/* Actions (visible on hover) */}
-                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                                    <button
-                                      onClick={e => { e.stopPropagation(); openEditForm(event); }}
-                                      className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                      title="Editar"
-                                    >
-                                      <Pencil size={12} />
-                                    </button>
-                                    {deletingEventId === event.id ? (
-                                      <div className="flex items-center gap-1">
-                                        <button
-                                          onClick={e => { e.stopPropagation(); onUpdateData({ events: data.events.filter(ev => ev.id !== event.id) }); setDeletingEventId(null); }}
-                                          className="bg-red-500 text-white px-2 py-1 rounded text-[8px] font-bold"
-                                        >Sim</button>
-                                        <button
-                                          onClick={e => { e.stopPropagation(); setDeletingEventId(null); }}
-                                          className="bg-slate-200 text-slate-600 px-2 py-1 rounded text-[8px] font-bold"
-                                        >Não</button>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        onClick={e => { e.stopPropagation(); setDeletingEventId(event.id); }}
-                                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                        title="Excluir"
-                                      >
-                                        <Trash2 size={12} />
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>{/* end cards grid */}
-                    </div>
-                  ))}
-                </div>{/* end weeks */}
+                        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cardsPerRow}, minmax(0, 1fr))`, gap: '0.5rem' }}>
+                          {week.events.map(renderCard)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  /* ── One flat grid for the whole month ── */
+                  <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cardsPerRow}, minmax(0, 1fr))`, gap: '0.5rem' }}>
+                    {allMonthEvents.map(renderCard)}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
+
       )}
 
       {/* ── Add / Edit Modal ── */}

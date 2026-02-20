@@ -343,7 +343,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       let month = months.find(m => m.key === monthKey);
       if (!month) { month = { key: monthKey, label: formatMonthHeader(e.date), weeks: [] }; months.push(month); }
 
-      const weekKey = getMondayOfWeek(e.date);
+      const weekKey = getMondayOfWeek(e.date.split('T')[0]);
       let week = month.weeks.find(w => w.weekKey === weekKey);
       if (!week) {
         if (!weekSeq.has(weekKey)) { weekSeq.set(weekKey, ++weekCounter); }
@@ -500,8 +500,8 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   key={n}
                   onClick={() => setCardsPerRow(n)}
                   className={`w-6 h-6 rounded text-[9px] font-black transition-all ${cardsPerRow === n
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
                     }`}
                 >
                   {n}
@@ -516,8 +516,8 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
           <button
             onClick={() => setGroupByWeek(v => !v)}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all ${groupByWeek
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
+              ? 'bg-blue-600 text-white'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
               }`}
           >
             <Calendar size={11} />

@@ -2597,24 +2597,21 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               <div className="space-y-3">
                 <button
                   onClick={() => {
-                    const existingLog = data.logs.find(l =>
-                      l.date === activeLesson.date &&
+                    // Find ALL matching logs (handles race-condition duplicates)
+                    const matchingLogs = data.logs.filter(l =>
+                      l.date.startsWith(activeLesson.date) &&
                       ((l.schoolId === activeLesson.institution.id && l.slotId === activeLesson.schedule.slotId) ||
                         (l.id === activeLesson.schedule.slotId))
-                    ) || data.logs.find(l => l.date.startsWith(activeLesson.date) && l.schoolId === activeLesson.institution.id && l.slotId === activeLesson.schedule.slotId);
+                    );
 
-                    const isScheduled = activeLesson.type === 'school' && activeLesson.schedule.shiftId !== 'extra';
-                    const isWindow = activeLesson.schedule.classId === 'window';
-
-                    if (existingLog) {
-                      // Hard delete the log so the slot becomes "Pending" again
-                      const updatedLogs = data.logs.filter(l => l.id !== existingLog.id);
-                      onUpdateData({ logs: updatedLogs as any });
-                    }
+                    // Hard delete all matching logs so the slot becomes "Pending" again
+                    const matchingIds = new Set(matchingLogs.map(l => l.id));
+                    const updatedLogs = data.logs.filter(l => !matchingIds.has(l.id));
+                    onUpdateData({ logs: updatedLogs as any });
 
                     setShowDeleteOptionsModal(false);
-                    setLogForm({ subject: '', homework: '', notes: '', occurrences: [], attendance: [] }); // Clear local form
-                    showSuccess(isWindow ? 'Janela restaurada.' : 'Conteúdo da aula limpo com sucesso.');
+                    setLogForm({ subject: '', homework: '', notes: '', occurrences: [], attendance: [] });
+                    showSuccess('Conteúdo da aula limpo com sucesso.');
                   }}
                   className="w-full p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 group transition-all text-left"
                 >
@@ -2624,20 +2621,25 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
                 <button
                   onClick={() => {
-                    // Logic for "Excluir Aula" (Remove from Grid/Cancel)
-                    const existingLog = data.logs.find(l =>
-                      l.date === activeLesson.date &&
+                    // Find ALL matching logs (handles race-condition duplicates)
+                    const matchingLogs = data.logs.filter(l =>
+                      l.date.startsWith(activeLesson.date) &&
                       ((l.schoolId === activeLesson.institution.id && l.slotId === activeLesson.schedule.slotId) ||
                         (l.id === activeLesson.schedule.slotId))
-                    ) || data.logs.find(l => l.date.startsWith(activeLesson.date) && l.schoolId === activeLesson.institution.id && l.slotId === activeLesson.schedule.slotId);
+                    );
 
                     const isScheduled = activeLesson.type === 'school' && activeLesson.schedule.shiftId !== 'extra';
                     let updatedLogs: LessonLog[];
 
                     if (isScheduled) {
-                      // Soft delete: Mark as 'removed'
-                      if (existingLog) {
-                        updatedLogs = data.logs.map(l => l.id === existingLog.id ? { ...l, status: 'removed', subject: '', homework: '', notes: '', occurrences: [], attendance: [] } : l);
+                      // Soft delete: Mark ALL matching logs as 'removed' (or create one if none exist)
+                      if (matchingLogs.length > 0) {
+                        const matchingIds = new Set(matchingLogs.map(l => l.id));
+                        updatedLogs = data.logs.map(l =>
+                          matchingIds.has(l.id)
+                            ? { ...l, status: 'removed', subject: '', homework: '', notes: '', occurrences: [], attendance: [] }
+                            : l
+                        );
                       } else {
                         // Create new "removed" log
                         const newRemovedLog: LessonLog = {
@@ -2657,12 +2659,9 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                         updatedLogs = [...data.logs, newRemovedLog];
                       }
                     } else {
-                      // Hard delete for extra (removes it entirely)
-                      if (existingLog) {
-                        updatedLogs = data.logs.filter(l => l.id !== existingLog.id);
-                      } else {
-                        updatedLogs = [...data.logs];
-                      }
+                      // Hard delete for extra (removes all matching entries)
+                      const matchingIds = new Set(matchingLogs.map(l => l.id));
+                      updatedLogs = data.logs.filter(l => !matchingIds.has(l.id));
                     }
 
                     onUpdateData({ logs: updatedLogs as any });

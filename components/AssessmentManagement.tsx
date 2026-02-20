@@ -579,16 +579,20 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   <div className={`flex-1 flex gap-3 p-3 min-w-0 ${cardsPerRow > 2 ? 'flex-col items-start' : 'items-center'}`}>
                     {/* Left: Icon */}
                     <div
-                      className="w-9 h-9 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: color + '18', color }}
+                      className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: color + '20', color }}
                     >
-                      <FileCheck size={16} />
+                      <FileCheck size={12} />
                     </div>
 
                     {/* Center: Title + badges */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
-                        <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase truncate max-w-[120px] sm:max-w-none">
+                      {/* Class name — prominent */}
+                      <p className="text-[11px] font-black uppercase tracking-tight truncate mb-0.5" style={{ color }}>
+                        {evtClassName}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <h4 className="text-[10px] font-black text-slate-700 dark:text-white uppercase truncate">
                           {event.title}
                         </h4>
                         <span
@@ -596,9 +600,6 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                           style={{ backgroundColor: color + '22', color }}
                         >
                           {event.type === 'test' ? 'Prova' : 'Trabalho'}
-                        </span>
-                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-tight px-1 py-0.5 rounded border border-slate-100 dark:border-slate-700 shrink-0">
-                          Turma {evtClassName}
                         </span>
                       </div>
 

@@ -25,6 +25,26 @@ function getMonthKey(dateStr: string): string {
   return dateStr.slice(0, 7); // YYYY-MM
 }
 
+// Return the Monday (YYYY-MM-DD) of the week containing dateStr
+function getMondayOfWeek(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  const dow = d.getDay(); // 0=Sun … 6=Sat
+  const diff = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().split('T')[0];
+}
+
+// Return the Friday (YYYY-MM-DD) of the week starting on mondayStr
+function getFridayOfWeek(mondayStr: string): string {
+  const d = new Date(mondayStr + 'T12:00:00');
+  d.setDate(d.getDate() + 4);
+  return d.toISOString().split('T')[0];
+}
+
+function fmtShort(dateStr: string): string {
+  return getSafeDate(dateStr).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpdateData }) => {
@@ -45,6 +65,10 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   const [filterClassId, setFilterClassId] = useState('all');
   const [filterTermIdx, setFilterTermIdx] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // ── Layout/Grouping State ────────────────────────────────────────────────
+  const [cardsPerRow, setCardsPerRow] = useState(1);
+  const [groupByWeek, setGroupByWeek] = useState(false);
 
   // ── Copy State ───────────────────────────────────────────────────────────
   const [copyData, setCopyData] = useState({
@@ -304,16 +328,33 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     return list.sort((a, b) => a.date.localeCompare(b.date));
   }, [assessmentEvents, filterSchoolId, filterClassId, filterTermIdx, searchQuery, data.schools, data.calendars]);
 
-  // Group by month
-  const grouped = useMemo(() => {
-    const groups: { key: string; label: string; events: SchoolEvent[] }[] = [];
+  // Group by month (and optionally by Mon–Fri week inside each month)
+  type WeekGroup = { weekKey: string; label: string; events: SchoolEvent[] };
+  type MonthGroup = { key: string; label: string; weeks: WeekGroup[] };
+
+  const grouped = useMemo((): MonthGroup[] => {
+    const months: MonthGroup[] = [];
+    // Track sequential week number across the whole list
+    const weekSeq = new Map<string, number>();
+    let weekCounter = 0;
+
     filteredEvents.forEach(e => {
-      const key = getMonthKey(e.date);
-      let g = groups.find(x => x.key === key);
-      if (!g) { g = { key, label: formatMonthHeader(e.date), events: [] }; groups.push(g); }
-      g.events.push(e);
+      const monthKey = getMonthKey(e.date);
+      let month = months.find(m => m.key === monthKey);
+      if (!month) { month = { key: monthKey, label: formatMonthHeader(e.date), weeks: [] }; months.push(month); }
+
+      const weekKey = getMondayOfWeek(e.date);
+      let week = month.weeks.find(w => w.weekKey === weekKey);
+      if (!week) {
+        if (!weekSeq.has(weekKey)) { weekSeq.set(weekKey, ++weekCounter); }
+        const fridayStr = getFridayOfWeek(weekKey);
+        const label = `Semana ${weekSeq.get(weekKey)}: ${fmtShort(weekKey)} a ${fmtShort(fridayStr)}`;
+        week = { weekKey, label, events: [] };
+        month.weeks.push(week);
+      }
+      week.events.push(e);
     });
-    return groups;
+    return months;
   }, [filteredEvents]);
 
   // ── Helper: resolve class name from event ─────────────────────────────────
@@ -447,6 +488,42 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
             </button>
           )}
         </div>
+
+        {/* Layout row */}
+        <div className="flex items-center gap-3 pt-1 border-t border-slate-100 dark:border-slate-800">
+          {/* Cards per row */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight shrink-0">Cards/linha:</span>
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5, 6].map(n => (
+                <button
+                  key={n}
+                  onClick={() => setCardsPerRow(n)}
+                  className={`w-6 h-6 rounded text-[9px] font-black transition-all ${cardsPerRow === n
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
+                    }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+
+          {/* Week grouping toggle */}
+          <button
+            onClick={() => setGroupByWeek(v => !v)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all ${groupByWeek
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
+              }`}
+          >
+            <Calendar size={11} />
+            Por semana
+          </button>
+        </div>
       </div>
 
       {/* ── Grouped Assessment List ── */}
@@ -468,146 +545,174 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
         </div>
       ) : (
         <div className="space-y-6">
-          {grouped.map(group => (
-            <div key={group.key}>
-              {/* Month divider */}
-              <div className="flex items-center gap-3 mb-3">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{group.label}</span>
-                <div className="flex-1 h-px bg-slate-100 dark:bg-slate-800" />
-                <span className="text-[9px] font-black text-slate-300 uppercase">{group.events.length} av.</span>
-              </div>
+          {grouped.map(group => {
+            // Flatten all events in month for event-count display
+            const totalInMonth = group.weeks.reduce((s, w) => s + w.events.length, 0);
+            return (
+              <div key={group.key}>
+                {/* Month divider */}
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{group.label}</span>
+                  <div className="flex-1 h-px bg-slate-100 dark:bg-slate-800" />
+                  <span className="text-[9px] font-black text-slate-300 uppercase">{totalInMonth} av.</span>
+                </div>
 
-              {/* Cards */}
-              <div className="flex flex-col gap-2">
-                {group.events.map(event => {
-                  const school = data.schools.find(s => s.id === event.schoolId);
-                  const color = school?.color || '#3b82f6';
-                  const className = resolveClassName(event);
-                  const status = getStatusBadge(event);
-                  const isPast = event.date.split('T')[0] < today;
-
-                  // Slot label
-                  const slotLabel = (() => {
-                    if (!school || !event.slotId) return null;
-                    for (const shift of (school.shifts || [])) {
-                      const slot = shift.slots.find(s => s.id === event.slotId);
-                      if (slot) return `${slot.label} (${slot.startTime})`;
-                    }
-                    return null;
-                  })();
-
-                  return (
-                    <div
-                      key={event.id}
-                      onClick={() => openEditForm(event)}
-                      className={`bg-white dark:bg-slate-900 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group flex items-stretch gap-0 overflow-hidden ${isPast ? 'opacity-80' : ''}`}
-                      style={{ borderColor: color + '40' }}
-                    >
-                      {/* Vertical accent bar */}
-                      <div className="w-1 shrink-0" style={{ backgroundColor: color }} />
-
-                      {/* Card body */}
-                      <div className="flex-1 flex items-center gap-3 p-3 min-w-0">
-                        {/* Left: Icon */}
-                        <div
-                          className="w-9 h-9 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0"
-                          style={{ backgroundColor: color + '18', color }}
-                        >
-                          <FileCheck size={16} />
+                {/* Weeks inside month */}
+                <div className="space-y-4">
+                  {group.weeks.map(week => (
+                    <div key={week.weekKey}>
+                      {/* Week sub-divider (only when groupByWeek is on) */}
+                      {groupByWeek && (
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wide">{week.label}</span>
+                          <div className="flex-1 h-px bg-slate-100 dark:bg-slate-700" />
+                          <span className="text-[8px] font-bold text-slate-300">{week.events.length} av.</span>
                         </div>
+                      )}
 
-                        {/* Center-left: Title + badges */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
-                            <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase truncate max-w-[120px] sm:max-w-none">
-                              {event.title}
-                            </h4>
-                            <span
-                              className="text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0"
-                              style={{ backgroundColor: color + '22', color }}
+                      {/* Cards grid */}
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: `repeat(${cardsPerRow}, minmax(0, 1fr))`,
+                          gap: '0.5rem'
+                        }}
+                      >
+                        {group.events.map(event => {
+                          const school = data.schools.find(s => s.id === event.schoolId);
+                          const color = school?.color || '#3b82f6';
+                          const className = resolveClassName(event);
+                          const status = getStatusBadge(event);
+                          const isPast = event.date.split('T')[0] < today;
+
+                          // Slot label
+                          const slotLabel = (() => {
+                            if (!school || !event.slotId) return null;
+                            for (const shift of (school.shifts || [])) {
+                              const slot = shift.slots.find(s => s.id === event.slotId);
+                              if (slot) return `${slot.label} (${slot.startTime})`;
+                            }
+                            return null;
+                          })();
+
+                          return (
+                            <div
+                              key={event.id}
+                              onClick={() => openEditForm(event)}
+                              title={event.title}
+                              className={`bg-white dark:bg-slate-900 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group flex items-stretch gap-0 overflow-hidden ${isPast ? 'opacity-80' : ''} ${cardsPerRow > 2 ? 'flex-col' : ''}`}
+                              style={{ borderColor: color + '40' }}
                             >
-                              {event.type === 'test' ? 'Prova' : 'Trabalho'}
-                            </span>
-                            <span className="text-[7px] font-black text-slate-400 uppercase tracking-tight px-1 py-0.5 rounded border border-slate-100 dark:border-slate-700 shrink-0">
-                              Turma {className}
-                            </span>
-                          </div>
+                              {/* Vertical accent bar */}
+                              <div className="w-1 shrink-0" style={{ backgroundColor: color }} />
 
-                          {/* Subject / description snippet */}
-                          {event.description && event.description.trim() && (
-                            <p className="text-[9px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
-                              <BookOpen size={9} className="text-slate-300 shrink-0" />
-                              {event.description}
-                            </p>
-                          )}
+                              {/* Card body */}
+                              <div className={`flex-1 flex gap-3 p-3 min-w-0 ${cardsPerRow > 2 ? 'flex-col items-start' : 'items-center'}`}>
+                                {/* Left: Icon */}
+                                <div
+                                  className="w-9 h-9 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0"
+                                  style={{ backgroundColor: color + '18', color }}
+                                >
+                                  <FileCheck size={16} />
+                                </div>
 
-                          {/* School + slot */}
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[9px] font-bold truncate" style={{ color }}>{school?.name}</span>
-                            {slotLabel && (
-                              <span className="text-[9px] text-slate-400 font-bold flex items-center gap-0.5">
-                                <Clock size={9} /> {slotLabel}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                                {/* Center-left: Title + badges */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                                    <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase truncate max-w-[120px] sm:max-w-none">
+                                      {event.title}
+                                    </h4>
+                                    <span
+                                      className="text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0"
+                                      style={{ backgroundColor: color + '22', color }}
+                                    >
+                                      {event.type === 'test' ? 'Prova' : 'Trabalho'}
+                                    </span>
+                                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-tight px-1 py-0.5 rounded border border-slate-100 dark:border-slate-700 shrink-0">
+                                      Turma {className}
+                                    </span>
+                                  </div>
 
-                        {/* Right: Date + Status badge + Actions */}
-                        <div className="shrink-0 flex flex-col items-end gap-1.5 ml-2">
-                          {/* Date */}
-                          <div className="flex items-center gap-1 text-[10px] font-black text-slate-600 dark:text-slate-300">
-                            <Calendar size={11} className="text-slate-400" />
-                            <span>
-                              {getSafeDate(event.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                            </span>
-                            <span className="text-slate-400 text-[8px] hidden sm:inline">
-                              · {getSafeDate(event.date).toLocaleDateString('pt-BR', { weekday: 'short' }).slice(0, 3)}
-                            </span>
-                          </div>
+                                  {/* Subject / description snippet */}
+                                  {event.description && event.description.trim() && (
+                                    <p className="text-[9px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
+                                      <BookOpen size={9} className="text-slate-300 shrink-0" />
+                                      {event.description}
+                                    </p>
+                                  )}
 
-                          {/* Status */}
-                          <span className={`text-[7px] font-black uppercase tracking-tight px-1.5 py-0.5 rounded border ${status.color}`}>
-                            {status.label}
-                          </span>
+                                  {/* School + slot */}
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-[9px] font-bold truncate" style={{ color }}>{school?.name}</span>
+                                    {slotLabel && (
+                                      <span className="text-[9px] text-slate-400 font-bold flex items-center gap-0.5">
+                                        <Clock size={9} /> {slotLabel}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
 
-                          {/* Actions (visible on hover) */}
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5" onClick={e => e.stopPropagation()}>
-                            <button
-                              onClick={e => { e.stopPropagation(); openEditForm(event); }}
-                              className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                              title="Editar"
-                            >
-                              <Pencil size={12} />
-                            </button>
-                            {deletingEventId === event.id ? (
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={e => { e.stopPropagation(); onUpdateData({ events: data.events.filter(ev => ev.id !== event.id) }); setDeletingEventId(null); }}
-                                  className="bg-red-500 text-white px-2 py-1 rounded text-[8px] font-bold"
-                                >Sim</button>
-                                <button
-                                  onClick={e => { e.stopPropagation(); setDeletingEventId(null); }}
-                                  className="bg-slate-200 text-slate-600 px-2 py-1 rounded text-[8px] font-bold"
-                                >Não</button>
+                                {/* Right: Date + Status badge + Actions */}
+                                <div className={`shrink-0 flex gap-1.5 ${cardsPerRow > 2 ? 'flex-wrap items-center' : 'flex-col items-end ml-2'}`}>
+                                  {/* Date */}
+                                  <div className="flex items-center gap-1 text-[10px] font-black text-slate-600 dark:text-slate-300">
+                                    <Calendar size={11} className="text-slate-400" />
+                                    <span>{getSafeDate(event.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
+                                    {cardsPerRow <= 2 && (
+                                      <span className="text-slate-400 text-[8px] hidden sm:inline">
+                                        · {getSafeDate(event.date).toLocaleDateString('pt-BR', { weekday: 'short' }).slice(0, 3)}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Status */}
+                                  <span className={`text-[7px] font-black uppercase tracking-tight px-1.5 py-0.5 rounded border ${status.color}`}>
+                                    {status.label}
+                                  </span>
+
+                                  {/* Actions (visible on hover) */}
+                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                                    <button
+                                      onClick={e => { e.stopPropagation(); openEditForm(event); }}
+                                      className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                      title="Editar"
+                                    >
+                                      <Pencil size={12} />
+                                    </button>
+                                    {deletingEventId === event.id ? (
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          onClick={e => { e.stopPropagation(); onUpdateData({ events: data.events.filter(ev => ev.id !== event.id) }); setDeletingEventId(null); }}
+                                          className="bg-red-500 text-white px-2 py-1 rounded text-[8px] font-bold"
+                                        >Sim</button>
+                                        <button
+                                          onClick={e => { e.stopPropagation(); setDeletingEventId(null); }}
+                                          className="bg-slate-200 text-slate-600 px-2 py-1 rounded text-[8px] font-bold"
+                                        >Não</button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={e => { e.stopPropagation(); setDeletingEventId(event.id); }}
+                                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                        title="Excluir"
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                            ) : (
-                              <button
-                                onClick={e => { e.stopPropagation(); setDeletingEventId(event.id); }}
-                                className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                title="Excluir"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                            </div>
+                          );
+                        })}
+                      </div>{/* end cards grid */}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>{/* end weeks */}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

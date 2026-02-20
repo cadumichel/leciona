@@ -957,10 +957,6 @@ const App: React.FC = () => {
             <AssessmentManagement
               data={data}
               onUpdateData={updateData}
-              onNavigateToLesson={(schedule, date) => {
-                setPreSelectedLesson({ schedule, date });
-                setActiveTab('lessons');
-              }}
             />
           )}
           {activeTab === 'grades' && <GradesManagement data={data} onUpdateData={updateData} />}

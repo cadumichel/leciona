@@ -7,10 +7,9 @@ import { getSchedulesForDate } from '../utils/schedule';
 interface AssessmentManagementProps {
   data: AppData;
   onUpdateData: (newData: Partial<AppData>) => void;
-  onNavigateToLesson: (schedule: any, date: string) => void;
 }
 
-const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpdateData, onNavigateToLesson }) => {
+const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpdateData }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newEvent, setNewEvent] = useState<Partial<SchoolEvent>>({
     type: 'test',
@@ -508,20 +507,17 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
             <div
               key={event.id}
               onClick={() => {
-                // Reconstruct schedule for navigation
-                const dayOfWeek = getDayOfWeekFromDate(event.date);
-                // Find shift
-                const shift = school?.shifts.find(sh => sh.slots.some(sl => sl.id === event.slotId));
-                if (shift) {
-                  const schedule = {
-                    dayOfWeek,
-                    schoolId: event.schoolId,
-                    shiftId: shift.id,
-                    slotId: event.slotId,
-                    classId: event.classId
-                  };
-                  onNavigateToLesson(schedule, event.date.split('T')[0]);
-                }
+                setNewEvent({
+                  id: event.id,
+                  title: event.title,
+                  date: event.date.split('T')[0],
+                  schoolId: event.schoolId,
+                  classId: event.classId,
+                  slotId: event.slotId,
+                  type: event.type,
+                  description: event.description
+                });
+                setIsAdding(true);
               }}
               className="bg-white dark:bg-slate-900 p-2 md:p-3 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm relative group hover:shadow-md transition-all duration-300 cursor-pointer hover:border-blue-200 dark:hover:border-blue-800 flex items-center gap-3 md:gap-4"
               style={{ borderColor: color + '30', backgroundColor: color + '05' }}

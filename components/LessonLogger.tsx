@@ -823,6 +823,24 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     const instId = activeLesson.institution.id;
     const currentSlotStart = parseTimeToMinutes(activeLesson.slot.startTime);
 
+    // Build an inclusive set of acceptable classId values for backward compatibility:
+    // Legacy logs may store the class *name* as classId; modern logs store the UUID.
+    // We accept both so the retrospective works regardless of when the log was created.
+    const acceptableClassIds = new Set<string>([classId]);
+    if (activeLesson.type === 'school') {
+      const school = data.schools.find(s => s.id === instId);
+      if (school) {
+        const schoolClass = school.classes.find(c =>
+          typeof c !== 'string' && (c.id === classId || c.name === classId)
+        );
+        if (schoolClass && typeof schoolClass !== 'string') {
+          // Add both ID and name so both legacy and modern logs match
+          acceptableClassIds.add(schoolClass.id);
+          acceptableClassIds.add(schoolClass.name);
+        }
+      }
+    }
+
     // Find the current lesson's log (if any)
     const currentLog = data.logs.find(l =>
       l.date.startsWith(activeLesson.date) &&
@@ -836,8 +854,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
         // Exclude current lesson log from retrospective
         if (currentLog && l.id === currentLog.id) return false;
 
-        // Filter by Class and Institution
-        if (l.classId !== classId) return false;
+        // Filter by Class and Institution (backward-compatible: accept both UUID and name)
+        if (!acceptableClassIds.has(l.classId)) return false;
         if (l.schoolId !== instId && l.studentId !== instId) return false;
         if (l.status === 'removed') return false;
 

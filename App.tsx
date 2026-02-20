@@ -154,6 +154,46 @@ const mergeArrays = <T extends { id: string; deleted?: boolean; deletedAt?: stri
   return Array.from(map.values());
 };
 
+// Função Auxiliar para Deduplicar Logs por (data, escola/aluno, slotId)
+// Resolve o problema de aulas duplicadas criadas em dispositivos diferentes antes do sync
+const deduplicateLogs = <T extends { id: string; date: string; schoolId?: string; studentId?: string; slotId?: string; subject?: string; homework?: string; notes?: string; deleted?: boolean; type?: string }>(logs: T[]): T[] => {
+  const seen = new Map<string, T>();
+  const duplicateIds = new Set<string>();
+
+  for (const log of logs) {
+    // Não deduplicar logs deletados ou extras (slotId único gerado dinamicamente)
+    if (log.deleted || log.type === 'extra' || log.type === 'substitution') continue;
+    if (!log.slotId) continue;
+
+    const dateKey = log.date ? log.date.split('T')[0] : '';
+    const instKey = log.schoolId || log.studentId || '';
+    const key = `${dateKey}-${instKey}-${log.slotId}`;
+
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, log);
+    } else {
+      // Pontuar pelo conteúdo: preferir o log com mais dados
+      const scoreOf = (l: typeof log) =>
+        (l.subject ? 2 : 0) + (l.homework ? 1 : 0) + (l.notes ? 1 : 0);
+
+      if (scoreOf(log) > scoreOf(existing)) {
+        // Novo log tem mais conteúdo: descartar o antigo
+        duplicateIds.add(existing.id);
+        seen.set(key, log);
+      } else {
+        // Manter o existente: descartar o novo
+        duplicateIds.add(log.id);
+      }
+    }
+  }
+
+  if (duplicateIds.size === 0) return logs;
+
+  console.log(`🧹 [DEDUP] Removendo ${duplicateIds.size} log(s) duplicado(s) criados em dispositivos diferentes.`);
+  return logs.filter(l => !duplicateIds.has(l.id));
+};
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [data, setData] = useState<AppData>(() => {
@@ -378,7 +418,8 @@ const App: React.FC = () => {
                 ...cloudData,
                 events: mergeArrays(cloudData.events, localData.events),
                 reminders: mergeArrays(cloudData.reminders, localData.reminders),
-                logs: mergeArrays(cloudData.logs, localData.logs),
+                // FIX: Deduplica após o merge para resolver race condition multi-device
+                logs: deduplicateLogs(mergeArrays(cloudData.logs, localData.logs)),
                 schools: mergeArrays(cloudData.schools, localData.schools),
                 students: mergeArrays(cloudData.students, localData.students),
 

@@ -24,6 +24,8 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   const [dateWarning, setDateWarning] = useState('');
   const [isInvalidDate, setIsInvalidDate] = useState(false);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
+  // New: save-success animation state
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // FIX: Sincroniza a escola selecionada com os dados reais
   const activeSchool = useMemo(() => (data.schools || []).find(s => s.id === newEvent.schoolId), [data.schools, newEvent.schoolId]);
@@ -31,7 +33,6 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   // FIX: Se abrir o modal e não tiver escola selecionada (ou ID inválido), seleciona a primeira
   useEffect(() => {
     if (isAdding) {
-      // Se schoolId estiver vazio ou não existir mais na lista de escolas
       const isValidSchool = (data.schools || []).some(s => s.id === newEvent.schoolId && !s.deleted);
       if (!newEvent.schoolId || !isValidSchool) {
         const firstActive = (data.schools || []).find(s => !s.deleted);
@@ -42,19 +43,21 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     }
   }, [isAdding, data.schools, newEvent.schoolId]);
 
+  // Reset save success when form changes
+  useEffect(() => {
+    setSaveSuccess(false);
+  }, [newEvent.title, newEvent.classId, newEvent.slotId, newEvent.date, newEvent.schoolId]);
+
   // Lógica de validação extraída para evitar dependência de estado stale
   const validateDateLogic = (dateStr: string, schoolId: string, classId: string) => {
-    // Usamos getSafeDate para garantir data válida
     const date = getSafeDate(dateStr);
     let warning = '';
     let invalid = false;
 
-    // Checagem de Feriado
     if (isHoliday(date)) {
       warning = `Feriado: ${getHolidayName(date)}.`;
       invalid = true;
     } else {
-      // Checagem de Recesso
       const calendar = data.calendars.find(c => c.schoolId === schoolId);
       if (calendar) {
         if (calendar.midYearBreak.start && dateStr >= calendar.midYearBreak.start && dateStr <= calendar.midYearBreak.end) {
@@ -67,7 +70,6 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       }
     }
 
-    // Verificação de eventos bloqueantes
     if (!invalid) {
       const blockingEvent = data.events.find(e =>
         e.schoolId === schoolId &&
@@ -90,42 +92,32 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     const { warning, invalid } = validateDateLogic(dateStr, newEvent.schoolId!, newEvent.classId!);
     setIsInvalidDate(invalid);
     setDateWarning(warning);
-    // Atualiza estado preservando outros campos
     setNewEvent(prev => ({ ...prev, date: dateStr, slotId: '' }));
   };
 
   // Handler específico para mudança de turma
   const handleClassChange = (classId: string) => {
-    // Valida usando a NOVA turma e a data ATUAL
     const { warning, invalid } = validateDateLogic(newEvent.date!, newEvent.schoolId!, classId);
     setIsInvalidDate(invalid);
     setDateWarning(warning);
-    // Atualiza estado preservando a data
     setNewEvent(prev => ({ ...prev, classId, slotId: '' }));
   };
 
   const handleSaveEvent = () => {
     if (!newEvent.title || !newEvent.classId || !newEvent.slotId || isInvalidDate) return;
 
-    // ISO Safe
     const safeDateISO = getSafeDate(newEvent.date!).toISOString();
 
-    // Determine ID (keep existing if editing, or generate new)
     const eventId = newEvent.id || crypto.randomUUID();
 
-    // Check if we are updating an existing event to clean up old logs
     let currentLogs = [...data.logs];
     let currentEvents = [...data.events];
 
     if (newEvent.id) {
-      // Find original event to know where to delete the old log
       const originalEvent = data.events.find(e => e.id === newEvent.id);
       if (originalEvent) {
-        // Remove original event
         currentEvents = currentEvents.filter(e => e.id !== newEvent.id);
-
-        // Remove log associated with original event (Old Date/Slot)
-        const oldDateISO = originalEvent.date; // already ISO
+        const oldDateISO = originalEvent.date;
         currentLogs = currentLogs.filter(l =>
           !(l.date === oldDateISO && l.schoolId === originalEvent.schoolId && l.slotId === originalEvent.slotId)
         );
@@ -155,9 +147,6 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       notes: event.description || ''
     };
 
-    // Filter out any conflicts at the NEW location (overwrite logic)
-    // Note: If we just removed the old log above, this ensures we also clear the way for the new slot
-    // if it's different or if it was occupied by something else.
     currentLogs = currentLogs.filter(l =>
       !(l.date.split('T')[0] === newEvent.date && l.schoolId === event.schoolId && l.slotId === event.slotId)
     );
@@ -167,8 +156,15 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       logs: [...currentLogs, newLog]
     });
 
-    setIsAdding(false);
-    setNewEvent({ ...newEvent, title: '', classId: '', slotId: '', description: '', id: undefined });
+    // Show green success animation, keep modal open
+    setSaveSuccess(true);
+    // Update newEvent.id if this was a new save (so subsequent saves are updates)
+    if (!newEvent.id) {
+      setNewEvent(prev => ({ ...prev, id: eventId }));
+    }
+
+    // Auto-reset success state after 2.5s
+    setTimeout(() => setSaveSuccess(false), 2500);
   };
 
   const restrictedAvailableSlots = useMemo(() => {
@@ -176,7 +172,6 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
 
     const dayOfWeek = getDayOfWeekFromDate(newEvent.date);
 
-    // Encontra o objeto da turma selecionada para comparar ID e Nome
     const selectedClassObj = activeSchool?.classes.find(c => (typeof c === 'string' ? c : c.id) === newEvent.classId);
     if (!selectedClassObj) return [];
 
@@ -186,7 +181,6 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     const validEntries = getSchedulesForDate(data, newEvent.date).filter(s =>
       Number(s.dayOfWeek) === dayOfWeek &&
       s.schoolId === newEvent.schoolId &&
-      // Compara com ID OU Nome (para compatibilidade legada)
       (s.classId === classId || s.classId === className)
     );
 
@@ -221,12 +215,10 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   const availableSlotsForCopy = useMemo(() => {
     if (!copyTargetSchool || !copyData.targetDate || !copyData.targetClassId) return [];
 
-    // Check validation logic for target
     const { invalid } = validateDateLogic(copyData.targetDate, copyData.targetSchoolId, copyData.targetClassId);
     if (invalid) return [];
 
     const dayOfWeek = getDayOfWeekFromDate(copyData.targetDate);
-    // Encontra o objeto da turma de destino para comparar ID e Nome
     const targetClassObj = copyTargetSchool?.classes.find(c => (typeof c === 'string' ? c : c.id) === copyData.targetClassId);
     if (!targetClassObj) return [];
 
@@ -236,7 +228,6 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     const validEntries = getSchedulesForDate(data, copyData.targetDate).filter(s =>
       Number(s.dayOfWeek) === dayOfWeek &&
       s.schoolId === copyData.targetSchoolId &&
-      // Compara com ID OU Nome
       (s.classId === classId || s.classId === className)
     );
 
@@ -279,10 +270,6 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       notes: event.description || ''
     };
 
-    // Remove any existing log for that target slot/date (overwrite logic for conflict? or just append? 
-    // Usually overwrite is clearer for same slot, but let's just append or filter duplicates if needed.
-    // Based on main save logic, it filters.)
-
     const filteredLogs = data.logs.filter(l =>
       !(l.date.split('T')[0] === copyData.targetDate && l.schoolId === event.schoolId && l.slotId === event.slotId)
     );
@@ -292,7 +279,6 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       logs: [...filteredLogs, newLog]
     });
 
-    alert(`Avaliação copiada para Turma ${copyData.targetClassId}!`);
     setCopyData(prev => ({ ...prev, isOpen: false, targetDate: '', targetClassId: '', targetSlotId: '' }));
   };
 
@@ -308,10 +294,10 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
         <button
           onClick={() => {
             setIsAdding(true);
-            // Reseta form ao abrir para evitar dados presos
+            setSaveSuccess(false);
             setNewEvent(prev => ({
               ...prev,
-              id: undefined, // Ensure we are creating new
+              id: undefined,
               title: '',
               schoolId: (data.schools || [])[0]?.id || '',
               classId: '',
@@ -327,34 +313,41 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
 
       {isAdding && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 md:p-8 w-full max-w-2xl shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6 md:mb-8"><h3 className="text-lg md:text-xl font-black uppercase">Agendar Avaliação</h3><button onClick={() => setIsAdding(false)} className="text-slate-300 hover:text-slate-600"><X /></button></div>
+          {/* Compact modal: max-w-lg, no overflow-y-auto, tighter padding */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 w-full max-w-lg shadow-2xl animate-in zoom-in-95">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-black uppercase">{newEvent.id ? 'Editar Avaliação' : 'Agendar Avaliação'}</h3>
+              <button onClick={() => setIsAdding(false)} className="text-slate-300 hover:text-slate-600"><X /></button>
+            </div>
 
-            <div className="space-y-4 md:space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => setNewEvent({ ...newEvent, type: 'test' })} className={`py-4 rounded-lg md:rounded-xl font-black uppercase text-[9px] md:text-[10px] tracking-tight border-2 transition-all ${newEvent.type === 'test' ? 'bg-red-50 border-red-500 text-red-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Prova</button>
-                <button onClick={() => setNewEvent({ ...newEvent, type: 'work' })} className={`py-4 rounded-lg md:rounded-xl font-black uppercase text-[9px] md:text-[10px] tracking-tight border-2 transition-all ${newEvent.type === 'work' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Trabalho</button>
+            <div className="space-y-3">
+              {/* Type selector */}
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => setNewEvent({ ...newEvent, type: 'test' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'test' ? 'bg-red-50 border-red-500 text-red-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Prova</button>
+                <button onClick={() => setNewEvent({ ...newEvent, type: 'work' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'work' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Trabalho</button>
               </div>
 
+              {/* Title */}
               <div>
-                <label className="block text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1.5 ml-1">Assunto / Título</label>
-                <input type="text" value={newEvent.title} onChange={e => setNewEvent(prev => ({ ...prev, title: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg md:rounded-xl px-4 md:px-5 py-3 font-bold dark:text-white text-sm" placeholder="Ex: Prova Mensal de História" />
+                <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Assunto / Título</label>
+                <input type="text" value={newEvent.title} onChange={e => setNewEvent(prev => ({ ...prev, title: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm" placeholder="Ex: Prova Mensal de História" />
               </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
+              {/* School + Class */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1.5 ml-1">Escola</label>
-                  <select value={newEvent.schoolId} onChange={e => setNewEvent(prev => ({ ...prev, schoolId: e.target.value, classId: '', slotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg md:rounded-xl px-4 md:px-5 py-3 font-bold dark:text-white text-sm">
+                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Escola</label>
+                  <select value={newEvent.schoolId} onChange={e => setNewEvent(prev => ({ ...prev, schoolId: e.target.value, classId: '', slotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm">
                     {(data.schools || []).length === 0 && <option value="">Nenhuma escola cadastrada</option>}
                     {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1.5 ml-1">Turma</label>
+                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Turma</label>
                   <select
                     value={newEvent.classId}
                     onChange={e => handleClassChange(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg md:rounded-xl px-4 md:px-5 py-3 font-bold dark:text-white text-sm"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm"
                     disabled={!activeSchool}
                   >
                     <option value="">Selecione...</option>
@@ -367,42 +360,65 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
+              {/* Date + Slot */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1.5 ml-1">Data</label>
-                  <input type="date" value={newEvent.date} onChange={e => handleDateChange(e.target.value)} className={`w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg md:rounded-xl px-4 md:px-5 py-3 font-bold dark:text-white text-sm ${isInvalidDate ? 'ring-2 ring-pink-500' : ''}`} />
-                  {dateWarning && <p className="text-[8px] md:text-[9px] text-pink-600 font-black uppercase mt-1 ml-1">{dateWarning}</p>}
+                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Data</label>
+                  <input type="date" value={newEvent.date} onChange={e => handleDateChange(e.target.value)} className={`w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm ${isInvalidDate ? 'ring-2 ring-pink-500' : ''}`} />
+                  {dateWarning && <p className="text-[8px] text-pink-600 font-black uppercase mt-0.5 ml-1">{dateWarning}</p>}
                 </div>
                 <div>
-                  <label className="block text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1.5 ml-1">Horário (Slot)</label>
-                  <select disabled={!newEvent.classId || isInvalidDate} value={newEvent.slotId} onChange={e => setNewEvent(prev => ({ ...prev, slotId: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg md:rounded-xl px-4 md:px-5 py-3 font-bold dark:text-white disabled:opacity-50 text-sm">
-                    <option value="">{restrictedAvailableSlots.length > 0 ? 'Escolha o horário...' : (newEvent.classId ? 'Nenhum horário disponível' : 'Selecione a turma')}</option>
+                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Horário (Slot)</label>
+                  <select disabled={!newEvent.classId || isInvalidDate} value={newEvent.slotId} onChange={e => setNewEvent(prev => ({ ...prev, slotId: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white disabled:opacity-50 text-sm">
+                    <option value="">{restrictedAvailableSlots.length > 0 ? 'Escolha o horário...' : (newEvent.classId ? 'Nenhum horário' : 'Selecione a turma')}</option>
                     {restrictedAvailableSlots.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
                   </select>
                 </div>
               </div>
 
+              {/* Description — 2 rows to keep modal compact */}
               <div>
-                <label className="block text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1.5 ml-1">Descrição / Observações</label>
-                <textarea value={newEvent.description} onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))} rows={3} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg md:rounded-xl px-4 md:px-5 py-3 font-bold dark:text-white text-sm" placeholder="Capítulos, observações para os alunos..." />
+                <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Descrição / Observações</label>
+                <textarea value={newEvent.description} onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))} rows={2} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm resize-none" placeholder="Capítulos, observações..." />
               </div>
             </div>
 
-            <div className="mt-8 flex gap-4">
+            <div className="mt-4 flex gap-3">
               <button
-                onClick={() => setCopyData(prev => ({ ...prev, isOpen: true, targetDate: '' }))}
-                className="flex-none py-4 px-6 rounded-lg md:rounded-xl font-black uppercase text-[9px] md:text-[10px] tracking-tight bg-slate-50 text-blue-600 hover:bg-blue-50 transition-colors border-2 border-slate-100 hover:border-blue-100"
+                onClick={() => setCopyData(prev => ({
+                  ...prev,
+                  isOpen: true,
+                  // Pre-fill with source assessment values
+                  targetDate: newEvent.date || '',
+                  targetSchoolId: newEvent.schoolId || (data.schools[0]?.id || ''),
+                  targetClassId: newEvent.classId || '',
+                  targetSlotId: newEvent.slotId || '',
+                }))}
+                className="flex-none py-3 px-4 rounded-lg font-black uppercase text-[9px] tracking-tight bg-slate-50 text-blue-600 hover:bg-blue-50 transition-colors border-2 border-slate-100 hover:border-blue-100"
                 title="Copiar para outra turma"
               >
                 <Copy size={16} />
               </button>
-              <button onClick={() => setIsAdding(false)} className="flex-1 py-4 font-black text-slate-400 uppercase text-[9px] md:text-[10px]">Cancelar</button>
+              <button onClick={() => setIsAdding(false)} className="flex-1 py-3 font-black text-slate-400 uppercase text-[9px]">Cancelar</button>
               <button
                 onClick={handleSaveEvent}
                 disabled={!newEvent.title || !newEvent.slotId || isInvalidDate}
-                className={`flex-1 py-4 rounded-lg md:rounded-xl font-black uppercase text-[9px] md:text-[10px] tracking-tight transition-all ${(!newEvent.title || !newEvent.slotId || isInvalidDate) ? 'bg-slate-100 text-slate-300' : 'bg-blue-600 text-white shadow-xl shadow-blue-100'}`}
+                className={`flex-1 py-3 rounded-lg font-black uppercase text-[9px] tracking-tight transition-all duration-300 flex items-center justify-center gap-2
+                  ${saveSuccess
+                    ? 'bg-green-500 text-white shadow-lg shadow-green-200 scale-105'
+                    : (!newEvent.title || !newEvent.slotId || isInvalidDate)
+                      ? 'bg-slate-100 text-slate-300'
+                      : 'bg-blue-600 text-white shadow-xl shadow-blue-100 hover:brightness-110'
+                  }`}
               >
-                Salvar Avaliação
+                {saveSuccess ? (
+                  <>
+                    <CheckCircle2 size={14} className="animate-in zoom-in-50 duration-300" />
+                    Salvo!
+                  </>
+                ) : (
+                  'Salvar Avaliação'
+                )}
               </button>
             </div>
           </div>
@@ -411,20 +427,20 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
 
       {isAdding && copyData.isOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl p-6 flex flex-col max-h-[90vh]">
-            <div className="flex justify-between items-center mb-6 shrink-0">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl p-5 flex flex-col">
+            <div className="flex justify-between items-center mb-4 shrink-0">
               <div>
-                <h3 className="text-lg font-black uppercase text-slate-800 dark:text-white flex items-center gap-2">
-                  <Copy className="text-blue-600" /> Copiar Avaliação
+                <h3 className="text-base font-black uppercase text-slate-800 dark:text-white flex items-center gap-2">
+                  <Copy className="text-blue-600" size={18} /> Copiar Avaliação
                 </h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">
                   Você está copiando: <span className="text-blue-600">"{newEvent.title || 'Sem título'}"</span>
                 </p>
               </div>
               <button onClick={() => setCopyData(prev => ({ ...prev, isOpen: false }))} className="text-slate-300 hover:text-slate-600"><X /></button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               {/* School Select (if multiple exist) */}
               {(data.schools || []).length > 1 && (
                 <div>
@@ -432,7 +448,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   <select
                     value={copyData.targetSchoolId}
                     onChange={e => setCopyData(prev => ({ ...prev, targetSchoolId: e.target.value, targetClassId: '', targetSlotId: '' }))}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-3 text-xs font-bold outline-none dark:text-white"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white"
                   >
                     {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
@@ -445,7 +461,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                 <select
                   value={copyData.targetClassId}
                   onChange={e => setCopyData(prev => ({ ...prev, targetClassId: e.target.value, targetSlotId: '' }))}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-3 text-xs font-bold outline-none dark:text-white"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white"
                 >
                   <option value="">Selecione a turma...</option>
                   {(copyTargetSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map(c => {
@@ -463,7 +479,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   type="date"
                   value={copyData.targetDate}
                   onChange={e => setCopyData(prev => ({ ...prev, targetDate: e.target.value, targetSlotId: '' }))}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-3 text-xs font-bold outline-none dark:text-white"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white"
                 />
               </div>
 
@@ -474,7 +490,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   value={copyData.targetSlotId}
                   onChange={e => setCopyData(prev => ({ ...prev, targetSlotId: e.target.value }))}
                   disabled={!copyData.targetDate || !copyData.targetClassId}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-3 text-xs font-bold outline-none dark:text-white disabled:opacity-50"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white disabled:opacity-50"
                 >
                   <option value="">
                     {availableSlotsForCopy.length > 0 ? 'Selecione o horário...' : (copyData.targetClassId && copyData.targetDate ? 'Nenhum horário disponível neste dia' : 'Aguardando seleção...')}
@@ -484,7 +500,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
               </div>
             </div>
 
-            <div className="mt-6 flex gap-4">
+            <div className="mt-5 flex gap-3">
               <button onClick={() => setCopyData(prev => ({ ...prev, isOpen: false }))} className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-lg font-black uppercase text-[9px] tracking-tight hover:bg-slate-200 transition-all">Cancelar</button>
               <button
                 onClick={handleCopyAssessment}
@@ -507,6 +523,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
             <div
               key={event.id}
               onClick={() => {
+                setSaveSuccess(false);
                 setNewEvent({
                   id: event.id,
                   title: event.title,
@@ -533,7 +550,6 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                     {event.type === 'test' ? 'Prova' : 'Trabalho'}
                   </span>
                   {event.classId && (() => {
-                    // Lookup class name from ID
                     const schoolClass = school?.classes.find(c =>
                       (typeof c === 'string' ? c : c.id) === event.classId ||
                       (typeof c === 'string' ? c : c.name) === event.classId
@@ -582,6 +598,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      setSaveSuccess(false);
                       setNewEvent({
                         id: event.id,
                         title: event.title,

@@ -1,7 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { AppData, SchoolEvent, EventType, TimeSlot, DayOfWeek, LessonLog } from '../types';
-import { FileCheck, Calendar, Trash2, AlertTriangle, Plus, X, Layers, Clock, ArrowRight, ChevronRight, School as SchoolIcon, Copy, CheckCircle2, Pencil } from 'lucide-react';
-import { isWeekend, isHoliday, getHolidayName, getDayOfWeekFromDate, getSafeDate } from '../utils';
+import { AppData, SchoolEvent, TimeSlot, LessonLog, AcademicCalendar, Term } from '../types';
+import {
+  FileCheck, Calendar, Trash2, Plus, X, Copy, CheckCircle2, Pencil,
+  School as SchoolIcon, Search, ChevronRight, ChevronDown, SlidersHorizontal,
+  Clock, AlertTriangle, CheckCheck, BookOpen
+} from 'lucide-react';
+import { isHoliday, getHolidayName, getDayOfWeekFromDate, getSafeDate } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 
 interface AssessmentManagementProps {
@@ -9,311 +13,607 @@ interface AssessmentManagementProps {
   onUpdateData: (newData: Partial<AppData>) => void;
 }
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function formatMonthHeader(dateStr: string): string {
+  const d = getSafeDate(dateStr);
+  return d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+    .replace(/^\w/, c => c.toUpperCase());
+}
+
+function getMonthKey(dateStr: string): string {
+  return dateStr.slice(0, 7); // YYYY-MM
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
 const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpdateData }) => {
+
+  // ── Modal State ──────────────────────────────────────────────────────────
   const [isAdding, setIsAdding] = useState(false);
   const [newEvent, setNewEvent] = useState<Partial<SchoolEvent>>({
-    type: 'test',
-    title: '',
-    date: new Date().toISOString().split('T')[0],
-    schoolId: '',
-    classId: '',
-    slotId: '',
-    description: ''
+    type: 'test', title: '', date: new Date().toISOString().split('T')[0],
+    schoolId: '', classId: '', slotId: '', description: ''
   });
-
   const [dateWarning, setDateWarning] = useState('');
   const [isInvalidDate, setIsInvalidDate] = useState(false);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
-  // New: save-success animation state
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // FIX: Sincroniza a escola selecionada com os dados reais
-  const activeSchool = useMemo(() => (data.schools || []).find(s => s.id === newEvent.schoolId), [data.schools, newEvent.schoolId]);
+  // ── Filter State ─────────────────────────────────────────────────────────
+  const [filterSchoolId, setFilterSchoolId] = useState('all');
+  const [filterClassId, setFilterClassId] = useState('all');
+  const [filterTermIdx, setFilterTermIdx] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // FIX: Se abrir o modal e não tiver escola selecionada (ou ID inválido), seleciona a primeira
+  // ── Copy State ───────────────────────────────────────────────────────────
+  const [copyData, setCopyData] = useState({
+    isOpen: false, targetDate: '', targetSchoolId: '', targetClassId: '', targetSlotId: '',
+  });
+
+  // ── Derived: active school for the form ──────────────────────────────────
+  const activeSchool = useMemo(
+    () => (data.schools || []).find(s => s.id === newEvent.schoolId),
+    [data.schools, newEvent.schoolId]
+  );
+
+  // Auto-select first school when modal opens
   useEffect(() => {
     if (isAdding) {
-      const isValidSchool = (data.schools || []).some(s => s.id === newEvent.schoolId && !s.deleted);
-      if (!newEvent.schoolId || !isValidSchool) {
-        const firstActive = (data.schools || []).find(s => !s.deleted);
-        if (firstActive) {
-          setNewEvent(prev => ({ ...prev, schoolId: firstActive.id }));
-        }
+      const isValid = (data.schools || []).some(s => s.id === newEvent.schoolId && !s.deleted);
+      if (!newEvent.schoolId || !isValid) {
+        const first = (data.schools || []).find(s => !s.deleted);
+        if (first) setNewEvent(prev => ({ ...prev, schoolId: first.id }));
       }
     }
   }, [isAdding, data.schools, newEvent.schoolId]);
 
-  // Reset save success when form changes
+  // Auto-select school for copy modal
   useEffect(() => {
-    setSaveSuccess(false);
-  }, [newEvent.title, newEvent.classId, newEvent.slotId, newEvent.date, newEvent.schoolId]);
+    if (copyData.isOpen && !copyData.targetSchoolId && data.schools.length > 0) {
+      setCopyData(prev => ({ ...prev, targetSchoolId: data.schools[0].id }));
+    }
+  }, [copyData.isOpen, data.schools]);
 
-  // Lógica de validação extraída para evitar dependência de estado stale
+  // Reset save animation on field change
+  useEffect(() => { setSaveSuccess(false); },
+    [newEvent.title, newEvent.classId, newEvent.slotId, newEvent.date, newEvent.schoolId]);
+
+  // ── Validation helpers ────────────────────────────────────────────────────
   const validateDateLogic = (dateStr: string, schoolId: string, classId: string) => {
     const date = getSafeDate(dateStr);
-    let warning = '';
-    let invalid = false;
-
-    if (isHoliday(date)) {
-      warning = `Feriado: ${getHolidayName(date)}.`;
-      invalid = true;
-    } else {
+    let warning = '', invalid = false;
+    if (isHoliday(date)) { warning = `Feriado: ${getHolidayName(date)}.`; invalid = true; }
+    else {
       const calendar = data.calendars.find(c => c.schoolId === schoolId);
       if (calendar) {
         if (calendar.midYearBreak.start && dateStr >= calendar.midYearBreak.start && dateStr <= calendar.midYearBreak.end) {
-          warning = 'Data em período de recesso.';
-          invalid = true;
+          warning = 'Data em período de recesso.'; invalid = true;
         } else if (calendar.extraRecesses?.some(r => r.date === dateStr)) {
-          warning = 'Data em período de recesso.';
-          invalid = true;
+          warning = 'Data em período de recesso.'; invalid = true;
         }
       }
     }
-
     if (!invalid) {
-      const blockingEvent = data.events.find(e =>
-        e.schoolId === schoolId &&
-        e.date.startsWith(dateStr) &&
-        e.blocksClasses &&
-        (!e.classId || e.classId === classId)
+      const blocking = data.events.find(e =>
+        e.schoolId === schoolId && e.date.startsWith(dateStr) && e.blocksClasses && (!e.classId || e.classId === classId)
       );
-
-      if (blockingEvent) {
-        warning = `Conflito: Evento "${blockingEvent.title}" cancela aulas.`;
-        invalid = true;
-      }
+      if (blocking) { warning = `Conflito: "${blocking.title}" cancela aulas.`; invalid = true; }
     }
-
     return { warning, invalid };
   };
 
-  // Handler específico para mudança de data
   const handleDateChange = (dateStr: string) => {
     const { warning, invalid } = validateDateLogic(dateStr, newEvent.schoolId!, newEvent.classId!);
-    setIsInvalidDate(invalid);
-    setDateWarning(warning);
+    setIsInvalidDate(invalid); setDateWarning(warning);
     setNewEvent(prev => ({ ...prev, date: dateStr, slotId: '' }));
   };
 
-  // Handler específico para mudança de turma
   const handleClassChange = (classId: string) => {
     const { warning, invalid } = validateDateLogic(newEvent.date!, newEvent.schoolId!, classId);
-    setIsInvalidDate(invalid);
-    setDateWarning(warning);
+    setIsInvalidDate(invalid); setDateWarning(warning);
     setNewEvent(prev => ({ ...prev, classId, slotId: '' }));
   };
 
-  const handleSaveEvent = () => {
-    if (!newEvent.title || !newEvent.classId || !newEvent.slotId || isInvalidDate) return;
-
-    const safeDateISO = getSafeDate(newEvent.date!).toISOString();
-
-    const eventId = newEvent.id || crypto.randomUUID();
-
-    let currentLogs = [...data.logs];
-    let currentEvents = [...data.events];
-
-    if (newEvent.id) {
-      const originalEvent = data.events.find(e => e.id === newEvent.id);
-      if (originalEvent) {
-        currentEvents = currentEvents.filter(e => e.id !== newEvent.id);
-        const oldDateISO = originalEvent.date;
-        currentLogs = currentLogs.filter(l =>
-          !(l.date === oldDateISO && l.schoolId === originalEvent.schoolId && l.slotId === originalEvent.slotId)
-        );
-      }
-    }
-
-    const event: SchoolEvent = {
-      id: eventId,
-      title: newEvent.title!,
-      date: safeDateISO,
-      schoolId: newEvent.schoolId!,
-      classId: newEvent.classId!,
-      slotId: newEvent.slotId,
-      type: newEvent.type as 'test' | 'work',
-      description: newEvent.description || '',
-      blocksClasses: false
-    };
-
-    const newLog: LessonLog = {
-      id: crypto.randomUUID(),
-      date: safeDateISO,
-      schoolId: event.schoolId,
-      classId: event.classId!,
-      slotId: event.slotId!,
-      subject: `Avaliação: ${event.title}`,
-      homework: '',
-      notes: event.description || ''
-    };
-
-    currentLogs = currentLogs.filter(l =>
-      !(l.date.split('T')[0] === newEvent.date && l.schoolId === event.schoolId && l.slotId === event.slotId)
-    );
-
-    onUpdateData({
-      events: [...currentEvents, event],
-      logs: [...currentLogs, newLog]
-    });
-
-    // Show green success animation, keep modal open
-    setSaveSuccess(true);
-    // Update newEvent.id if this was a new save (so subsequent saves are updates)
-    if (!newEvent.id) {
-      setNewEvent(prev => ({ ...prev, id: eventId }));
-    }
-
-    // Auto-reset success state after 2.5s
-    setTimeout(() => setSaveSuccess(false), 2500);
-  };
-
+  // ── Available slots for the form ─────────────────────────────────────────
   const restrictedAvailableSlots = useMemo(() => {
     if (!activeSchool || !newEvent.date || !newEvent.classId || isInvalidDate) return [];
-
-    const dayOfWeek = getDayOfWeekFromDate(newEvent.date);
-
-    const selectedClassObj = activeSchool?.classes.find(c => (typeof c === 'string' ? c : c.id) === newEvent.classId);
-    if (!selectedClassObj) return [];
-
-    const className = typeof selectedClassObj === 'string' ? selectedClassObj : selectedClassObj.name;
-    const classId = typeof selectedClassObj === 'string' ? selectedClassObj : selectedClassObj.id;
-
-    const validEntries = getSchedulesForDate(data, newEvent.date).filter(s =>
-      Number(s.dayOfWeek) === dayOfWeek &&
-      s.schoolId === newEvent.schoolId &&
-      (s.classId === classId || s.classId === className)
+    const dow = getDayOfWeekFromDate(newEvent.date);
+    const cls = activeSchool.classes.find(c => (typeof c === 'string' ? c : c.id) === newEvent.classId);
+    if (!cls) return [];
+    const cName = typeof cls === 'string' ? cls : cls.name;
+    const cId = typeof cls === 'string' ? cls : cls.id;
+    const entries = getSchedulesForDate(data, newEvent.date).filter(s =>
+      Number(s.dayOfWeek) === dow && s.schoolId === newEvent.schoolId &&
+      (s.classId === cId || s.classId === cName)
     );
-
     const slots: TimeSlot[] = [];
-    validEntries.forEach(entry => {
-      if (!activeSchool?.shifts || !Array.isArray(activeSchool.shifts)) return;
-      const shift = activeSchool.shifts.find(sh => sh.id === entry.shiftId);
+    entries.forEach(entry => {
+      const shift = activeSchool.shifts?.find(sh => sh.id === entry.shiftId);
       const slot = shift?.slots.find(sl => sl.id === entry.slotId);
       if (slot) slots.push(slot);
     });
     return slots;
   }, [activeSchool, newEvent.date, newEvent.classId, data.schedules, isInvalidDate]);
 
-  // --- Copy Feature State & Logic ---
-  const [copyData, setCopyData] = useState({
-    isOpen: false,
-    targetDate: '',
-    targetSchoolId: '',
-    targetClassId: '',
-    targetSlotId: '',
-  });
-
-  // Auto-set school when opening copy modal
-  useEffect(() => {
-    if (copyData.isOpen && !copyData.targetSchoolId && (data.schools || []).length > 0) {
-      setCopyData(prev => ({ ...prev, targetSchoolId: data.schools[0].id }));
-    }
-  }, [copyData.isOpen, data.schools]);
-
-  const copyTargetSchool = useMemo(() => (data.schools || []).find(s => s.id === copyData.targetSchoolId), [data.schools, copyData.targetSchoolId]);
-
+  // ── Available slots for copy ──────────────────────────────────────────────
+  const copyTargetSchool = useMemo(
+    () => (data.schools || []).find(s => s.id === copyData.targetSchoolId),
+    [data.schools, copyData.targetSchoolId]
+  );
   const availableSlotsForCopy = useMemo(() => {
     if (!copyTargetSchool || !copyData.targetDate || !copyData.targetClassId) return [];
-
     const { invalid } = validateDateLogic(copyData.targetDate, copyData.targetSchoolId, copyData.targetClassId);
     if (invalid) return [];
-
-    const dayOfWeek = getDayOfWeekFromDate(copyData.targetDate);
-    const targetClassObj = copyTargetSchool?.classes.find(c => (typeof c === 'string' ? c : c.id) === copyData.targetClassId);
-    if (!targetClassObj) return [];
-
-    const className = typeof targetClassObj === 'string' ? targetClassObj : targetClassObj.name;
-    const classId = typeof targetClassObj === 'string' ? targetClassObj : targetClassObj.id;
-
-    const validEntries = getSchedulesForDate(data, copyData.targetDate).filter(s =>
-      Number(s.dayOfWeek) === dayOfWeek &&
-      s.schoolId === copyData.targetSchoolId &&
-      (s.classId === classId || s.classId === className)
+    const dow = getDayOfWeekFromDate(copyData.targetDate);
+    const cls = copyTargetSchool.classes.find(c => (typeof c === 'string' ? c : c.id) === copyData.targetClassId);
+    if (!cls) return [];
+    const cName = typeof cls === 'string' ? cls : cls.name;
+    const cId = typeof cls === 'string' ? cls : cls.id;
+    const entries = getSchedulesForDate(data, copyData.targetDate).filter(s =>
+      Number(s.dayOfWeek) === dow && s.schoolId === copyData.targetSchoolId &&
+      (s.classId === cId || s.classId === cName)
     );
-
     const slots: TimeSlot[] = [];
-    validEntries.forEach(entry => {
-      if (!copyTargetSchool?.shifts || !Array.isArray(copyTargetSchool.shifts)) return;
-      const shift = copyTargetSchool.shifts.find(sh => sh.id === entry.shiftId);
+    entries.forEach(entry => {
+      const shift = copyTargetSchool.shifts?.find(sh => sh.id === entry.shiftId);
       const slot = shift?.slots.find(sl => sl.id === entry.slotId);
       if (slot) slots.push(slot);
     });
     return slots;
   }, [copyTargetSchool, copyData.targetDate, copyData.targetClassId, data.schedules]);
 
+  // ── Save ──────────────────────────────────────────────────────────────────
+  const handleSaveEvent = () => {
+    if (!newEvent.title || !newEvent.classId || !newEvent.slotId || isInvalidDate) return;
+    const safeDateISO = getSafeDate(newEvent.date!).toISOString();
+    const eventId = newEvent.id || crypto.randomUUID();
+    let currentLogs = [...data.logs];
+    let currentEvents = [...data.events];
+    if (newEvent.id) {
+      const orig = data.events.find(e => e.id === newEvent.id);
+      if (orig) {
+        currentEvents = currentEvents.filter(e => e.id !== newEvent.id);
+        currentLogs = currentLogs.filter(l => !(l.date === orig.date && l.schoolId === orig.schoolId && l.slotId === orig.slotId));
+      }
+    }
+    const event: SchoolEvent = {
+      id: eventId, title: newEvent.title!, date: safeDateISO,
+      schoolId: newEvent.schoolId!, classId: newEvent.classId!, slotId: newEvent.slotId,
+      type: newEvent.type as 'test' | 'work', description: newEvent.description || '', blocksClasses: false
+    };
+    const newLog: LessonLog = {
+      id: crypto.randomUUID(), date: safeDateISO, schoolId: event.schoolId,
+      classId: event.classId!, slotId: event.slotId!,
+      subject: `Avaliação: ${event.title}`, homework: '', notes: event.description || ''
+    };
+    currentLogs = currentLogs.filter(l =>
+      !(l.date.split('T')[0] === newEvent.date && l.schoolId === event.schoolId && l.slotId === event.slotId)
+    );
+    onUpdateData({ events: [...currentEvents, event], logs: [...currentLogs, newLog] });
+    setSaveSuccess(true);
+    if (!newEvent.id) setNewEvent(prev => ({ ...prev, id: eventId }));
+    setTimeout(() => setSaveSuccess(false), 2500);
+  };
+
+  // ── Copy ──────────────────────────────────────────────────────────────────
   const handleCopyAssessment = () => {
     if (!newEvent.title || !copyData.targetDate || !copyData.targetClassId || !copyData.targetSlotId) return;
-
     const safeDateISO = getSafeDate(copyData.targetDate).toISOString();
-
     const eventId = crypto.randomUUID();
     const event: SchoolEvent = {
-      id: eventId,
-      title: newEvent.title,
-      date: safeDateISO,
-      schoolId: copyData.targetSchoolId,
-      classId: copyData.targetClassId,
-      slotId: copyData.targetSlotId,
-      type: newEvent.type as 'test' | 'work',
-      description: newEvent.description || '',
-      blocksClasses: false
+      id: eventId, title: newEvent.title, date: safeDateISO,
+      schoolId: copyData.targetSchoolId, classId: copyData.targetClassId, slotId: copyData.targetSlotId,
+      type: newEvent.type as 'test' | 'work', description: newEvent.description || '', blocksClasses: false
     };
-
     const newLog: LessonLog = {
-      id: crypto.randomUUID(),
-      date: safeDateISO,
-      schoolId: event.schoolId,
-      classId: event.classId!,
-      slotId: event.slotId!,
-      subject: `Avaliação: ${event.title}`,
-      homework: '',
-      notes: event.description || ''
+      id: crypto.randomUUID(), date: safeDateISO, schoolId: event.schoolId,
+      classId: event.classId!, slotId: event.slotId!,
+      subject: `Avaliação: ${event.title}`, homework: '', notes: event.description || ''
     };
-
     const filteredLogs = data.logs.filter(l =>
       !(l.date.split('T')[0] === copyData.targetDate && l.schoolId === event.schoolId && l.slotId === event.slotId)
     );
-
-    onUpdateData({
-      events: [...data.events, event],
-      logs: [...filteredLogs, newLog]
-    });
-
+    onUpdateData({ events: [...data.events, event], logs: [...filteredLogs, newLog] });
     setCopyData(prev => ({ ...prev, isOpen: false, targetDate: '', targetClassId: '', targetSlotId: '' }));
   };
 
+  // ── Filter options derived from data ──────────────────────────────────────
+  const assessmentEvents = useMemo(
+    () => data.events.filter(e => e.type === 'test' || e.type === 'work'),
+    [data.events]
+  );
+
+  // Collect unique schools that have assessments
+  const schoolsWithEvents = useMemo(() => {
+    const ids = new Set(assessmentEvents.map(e => e.schoolId));
+    return (data.schools || []).filter(s => ids.has(s.id));
+  }, [assessmentEvents, data.schools]);
+
+  // Classes for selected filter school
+  const classesForFilter = useMemo(() => {
+    if (filterSchoolId === 'all') {
+      const all: { id: string; name: string }[] = [];
+      schoolsWithEvents.forEach(s => {
+        (s.classes || []).filter(c => typeof c === 'string' || !c.deleted).forEach(c => {
+          const id = typeof c === 'string' ? c : c.id;
+          const name = typeof c === 'string' ? c : c.name;
+          if (!all.find(x => x.id === id)) all.push({ id, name });
+        });
+      });
+      return all.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    const school = data.schools.find(s => s.id === filterSchoolId);
+    return (school?.classes || [])
+      .filter(c => typeof c === 'string' || !c.deleted)
+      .map(c => ({ id: typeof c === 'string' ? c : c.id, name: typeof c === 'string' ? c : c.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [filterSchoolId, schoolsWithEvents, data.schools]);
+
+  // Terms for selected filter school
+  const termsForFilter = useMemo((): (Term & { idx: number })[] => {
+    const schoolId = filterSchoolId !== 'all' ? filterSchoolId : null;
+    const cal = data.calendars.find(c => !schoolId || c.schoolId === schoolId);
+    if (!cal) return [];
+    return cal.terms.map((t, i) => ({ ...t, idx: i }));
+  }, [filterSchoolId, data.calendars]);
+
+  // ── Filtered list ─────────────────────────────────────────────────────────
+  const today = new Date().toISOString().split('T')[0];
+
+  const filteredEvents = useMemo(() => {
+    let list = assessmentEvents;
+
+    if (filterSchoolId !== 'all') list = list.filter(e => e.schoolId === filterSchoolId);
+
+    if (filterClassId !== 'all') {
+      list = list.filter(e => {
+        const school = data.schools.find(s => s.id === e.schoolId);
+        const cls = school?.classes.find(c =>
+          (typeof c === 'string' ? c : c.id) === filterClassId ||
+          (typeof c === 'string' ? c : c.name) === filterClassId
+        );
+        if (!cls) return false;
+        const cId = typeof cls === 'string' ? cls : cls.id;
+        const cName = typeof cls === 'string' ? cls : cls.name;
+        return e.classId === cId || e.classId === cName;
+      });
+    }
+
+    if (filterTermIdx !== 'all') {
+      const idx = parseInt(filterTermIdx);
+      // Find term dates — try to find the matching calendar
+      const calendars = data.calendars;
+      list = list.filter(e => {
+        const cal = calendars.find(c => c.schoolId === e.schoolId) || calendars[0];
+        const term = cal?.terms[idx];
+        if (!term) return false;
+        const d = e.date.split('T')[0];
+        return d >= term.start && d <= term.end;
+      });
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(e =>
+        e.title.toLowerCase().includes(q) ||
+        (e.description || '').toLowerCase().includes(q)
+      );
+    }
+
+    return list.sort((a, b) => a.date.localeCompare(b.date));
+  }, [assessmentEvents, filterSchoolId, filterClassId, filterTermIdx, searchQuery, data.schools, data.calendars]);
+
+  // Group by month
+  const grouped = useMemo(() => {
+    const groups: { key: string; label: string; events: SchoolEvent[] }[] = [];
+    filteredEvents.forEach(e => {
+      const key = getMonthKey(e.date);
+      let g = groups.find(x => x.key === key);
+      if (!g) { g = { key, label: formatMonthHeader(e.date), events: [] }; groups.push(g); }
+      g.events.push(e);
+    });
+    return groups;
+  }, [filteredEvents]);
+
+  // ── Helper: resolve class name from event ─────────────────────────────────
+  const resolveClassName = (event: SchoolEvent) => {
+    const school = data.schools.find(s => s.id === event.schoolId);
+    const cls = school?.classes.find(c =>
+      (typeof c === 'string' ? c : c.id) === event.classId ||
+      (typeof c === 'string' ? c : c.name) === event.classId
+    );
+    return cls ? (typeof cls === 'string' ? cls : cls.name) : event.classId;
+  };
+
+  // ── Helper: status badge for assessment ───────────────────────────────────
+  const getStatusBadge = (event: SchoolEvent) => {
+    const d = event.date.split('T')[0];
+    const hasGrades = data.grades.some(g => g.assessmentId === event.id);
+    if (hasGrades) return { label: 'Notas Lançadas', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' };
+    if (d < today) return { label: 'Realizada', color: 'bg-amber-50 text-amber-600 border-amber-200' };
+    return { label: 'Agendada', color: 'bg-blue-50 text-blue-600 border-blue-200' };
+  };
+
+  // ── Open form for new assessment ──────────────────────────────────────────
+  const openNewForm = () => {
+    setSaveSuccess(false);
+    setNewEvent({
+      type: 'test', title: '', date: new Date().toISOString().split('T')[0],
+      schoolId: (data.schools || [])[0]?.id || '', classId: '', slotId: '', description: ''
+    });
+    setDateWarning(''); setIsInvalidDate(false);
+    setIsAdding(true);
+  };
+
+  const openEditForm = (event: SchoolEvent) => {
+    setSaveSuccess(false);
+    setNewEvent({
+      id: event.id, title: event.title, date: event.date.split('T')[0],
+      schoolId: event.schoolId, classId: event.classId, slotId: event.slotId,
+      type: event.type, description: event.description
+    });
+    setDateWarning(''); setIsInvalidDate(false);
+    setIsAdding(true);
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 md:space-y-8 pb-20">
-      <div className="bg-white dark:bg-slate-900 p-5 md:p-8 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-4 md:space-y-6 pb-20">
+
+      {/* ── Header ── */}
+      <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h3 className="text-lg md:text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-3">
-            <FileCheck className="text-blue-600 w-5 h-5 md:w-6 md:h-6" /> Avaliações
+          <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
+            <FileCheck className="text-blue-600 w-5 h-5" /> Avaliações
           </h3>
-          <p className="text-[9px] md:text-[10px] text-slate-500 font-black uppercase tracking-tight mt-1">Planeje provas, trabalhos e atividades avaliativas.</p>
+          <p className="text-[9px] text-slate-500 font-black uppercase tracking-tight mt-0.5">
+            {filteredEvents.length} avaliação{filteredEvents.length !== 1 ? 'ões' : ''} {filterSchoolId !== 'all' || filterClassId !== 'all' || filterTermIdx !== 'all' || searchQuery ? 'encontrada' + (filteredEvents.length !== 1 ? 's' : '') : 'no total'}
+          </p>
         </div>
         <button
-          onClick={() => {
-            setIsAdding(true);
-            setSaveSuccess(false);
-            setNewEvent(prev => ({
-              ...prev,
-              id: undefined,
-              title: '',
-              schoolId: (data.schools || [])[0]?.id || '',
-              classId: '',
-              slotId: '',
-              description: ''
-            }));
-          }}
-          className="bg-blue-600 text-white px-6 md:px-8 py-3 md:py-3.5 rounded-lg font-black uppercase text-[9px] md:text-xs tracking-tight shadow-xl shadow-blue-100 hover:brightness-110 transition-all flex items-center gap-2"
+          onClick={openNewForm}
+          className="bg-blue-600 text-white px-5 py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight shadow-lg shadow-blue-100 hover:brightness-110 transition-all flex items-center gap-2 self-start sm:self-auto shrink-0"
         >
-          <Plus size={16} className="md:w-[18px] md:h-[18px]" /> Nova Avaliação
+          <Plus size={15} /> Nova Avaliação
         </button>
       </div>
 
+      {/* ── Filter Toolbar ── */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-3 md:p-4 space-y-3">
+        {/* Search row */}
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Buscar avaliação..."
+            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg border-none text-sm font-bold dark:text-white placeholder:text-slate-400 placeholder:font-normal"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Filter dropdowns row */}
+        <div className="flex gap-2 flex-wrap">
+          <div className="flex items-center gap-1 shrink-0">
+            <SlidersHorizontal size={12} className="text-slate-400" />
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight">Filtros:</span>
+          </div>
+
+          {/* School filter */}
+          <select
+            value={filterSchoolId}
+            onChange={e => { setFilterSchoolId(e.target.value); setFilterClassId('all'); setFilterTermIdx('all'); }}
+            className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-1.5 text-[10px] font-bold dark:text-white flex-1 min-w-[120px]"
+          >
+            <option value="all">Todas as escolas</option>
+            {schoolsWithEvents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+
+          {/* Class filter */}
+          <select
+            value={filterClassId}
+            onChange={e => setFilterClassId(e.target.value)}
+            className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-1.5 text-[10px] font-bold dark:text-white flex-1 min-w-[110px]"
+          >
+            <option value="all">Todas as turmas</option>
+            {classesForFilter.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+
+          {/* Period filter */}
+          {termsForFilter.length > 0 && (
+            <select
+              value={filterTermIdx}
+              onChange={e => setFilterTermIdx(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-1.5 text-[10px] font-bold dark:text-white flex-1 min-w-[110px]"
+            >
+              <option value="all">Todo o período</option>
+              {termsForFilter.map(t => <option key={t.idx} value={String(t.idx)}>{t.name}</option>)}
+            </select>
+          )}
+
+          {/* Clear filters */}
+          {(filterSchoolId !== 'all' || filterClassId !== 'all' || filterTermIdx !== 'all' || searchQuery) && (
+            <button
+              onClick={() => { setFilterSchoolId('all'); setFilterClassId('all'); setFilterTermIdx('all'); setSearchQuery(''); }}
+              className="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg text-[9px] font-black uppercase tracking-tight hover:bg-red-100 transition-colors flex items-center gap-1"
+            >
+              <X size={10} /> Limpar
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Grouped Assessment List ── */}
+      {grouped.length === 0 ? (
+        <div className="py-16 bg-white dark:bg-slate-900 rounded-2xl border-2 border-dashed border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center gap-4 text-center">
+          <FileCheck size={40} className="text-slate-300 dark:text-slate-700" />
+          <div>
+            <p className="text-slate-500 font-black uppercase text-[10px] tracking-tight">
+              {searchQuery || filterSchoolId !== 'all' || filterClassId !== 'all' || filterTermIdx !== 'all'
+                ? 'Nenhuma avaliação encontrada'
+                : 'Nenhuma avaliação agendada'}
+            </p>
+            <p className="text-slate-400 text-[9px] uppercase mt-1">
+              {searchQuery || filterSchoolId !== 'all' || filterClassId !== 'all' || filterTermIdx !== 'all'
+                ? 'Tente ajustar os filtros.'
+                : 'Clique em "Nova Avaliação" para começar.'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {grouped.map(group => (
+            <div key={group.key}>
+              {/* Month divider */}
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{group.label}</span>
+                <div className="flex-1 h-px bg-slate-100 dark:bg-slate-800" />
+                <span className="text-[9px] font-black text-slate-300 uppercase">{group.events.length} av.</span>
+              </div>
+
+              {/* Cards */}
+              <div className="flex flex-col gap-2">
+                {group.events.map(event => {
+                  const school = data.schools.find(s => s.id === event.schoolId);
+                  const color = school?.color || '#3b82f6';
+                  const className = resolveClassName(event);
+                  const status = getStatusBadge(event);
+                  const isPast = event.date.split('T')[0] < today;
+
+                  // Slot label
+                  const slotLabel = (() => {
+                    if (!school || !event.slotId) return null;
+                    for (const shift of (school.shifts || [])) {
+                      const slot = shift.slots.find(s => s.id === event.slotId);
+                      if (slot) return `${slot.label} (${slot.startTime})`;
+                    }
+                    return null;
+                  })();
+
+                  return (
+                    <div
+                      key={event.id}
+                      onClick={() => openEditForm(event)}
+                      className={`bg-white dark:bg-slate-900 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group flex items-stretch gap-0 overflow-hidden ${isPast ? 'opacity-80' : ''}`}
+                      style={{ borderColor: color + '40' }}
+                    >
+                      {/* Vertical accent bar */}
+                      <div className="w-1 shrink-0" style={{ backgroundColor: color }} />
+
+                      {/* Card body */}
+                      <div className="flex-1 flex items-center gap-3 p-3 min-w-0">
+                        {/* Left: Icon */}
+                        <div
+                          className="w-9 h-9 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: color + '18', color }}
+                        >
+                          <FileCheck size={16} />
+                        </div>
+
+                        {/* Center-left: Title + badges */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                            <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase truncate max-w-[120px] sm:max-w-none">
+                              {event.title}
+                            </h4>
+                            <span
+                              className="text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0"
+                              style={{ backgroundColor: color + '22', color }}
+                            >
+                              {event.type === 'test' ? 'Prova' : 'Trabalho'}
+                            </span>
+                            <span className="text-[7px] font-black text-slate-400 uppercase tracking-tight px-1 py-0.5 rounded border border-slate-100 dark:border-slate-700 shrink-0">
+                              Turma {className}
+                            </span>
+                          </div>
+
+                          {/* Subject / description snippet */}
+                          {event.description && event.description.trim() && (
+                            <p className="text-[9px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
+                              <BookOpen size={9} className="text-slate-300 shrink-0" />
+                              {event.description}
+                            </p>
+                          )}
+
+                          {/* School + slot */}
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[9px] font-bold truncate" style={{ color }}>{school?.name}</span>
+                            {slotLabel && (
+                              <span className="text-[9px] text-slate-400 font-bold flex items-center gap-0.5">
+                                <Clock size={9} /> {slotLabel}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Right: Date + Status badge + Actions */}
+                        <div className="shrink-0 flex flex-col items-end gap-1.5 ml-2">
+                          {/* Date */}
+                          <div className="flex items-center gap-1 text-[10px] font-black text-slate-600 dark:text-slate-300">
+                            <Calendar size={11} className="text-slate-400" />
+                            <span>
+                              {getSafeDate(event.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                            </span>
+                            <span className="text-slate-400 text-[8px] hidden sm:inline">
+                              · {getSafeDate(event.date).toLocaleDateString('pt-BR', { weekday: 'short' }).slice(0, 3)}
+                            </span>
+                          </div>
+
+                          {/* Status */}
+                          <span className={`text-[7px] font-black uppercase tracking-tight px-1.5 py-0.5 rounded border ${status.color}`}>
+                            {status.label}
+                          </span>
+
+                          {/* Actions (visible on hover) */}
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5" onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={e => { e.stopPropagation(); openEditForm(event); }}
+                              className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                              title="Editar"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                            {deletingEventId === event.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={e => { e.stopPropagation(); onUpdateData({ events: data.events.filter(ev => ev.id !== event.id) }); setDeletingEventId(null); }}
+                                  className="bg-red-500 text-white px-2 py-1 rounded text-[8px] font-bold"
+                                >Sim</button>
+                                <button
+                                  onClick={e => { e.stopPropagation(); setDeletingEventId(null); }}
+                                  className="bg-slate-200 text-slate-600 px-2 py-1 rounded text-[8px] font-bold"
+                                >Não</button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={e => { e.stopPropagation(); setDeletingEventId(event.id); }}
+                                className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                title="Excluir"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Add / Edit Modal ── */}
       {isAdding && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          {/* Compact modal: max-w-lg, no overflow-y-auto, tighter padding */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 w-full max-w-lg shadow-2xl animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-base font-black uppercase">{newEvent.id ? 'Editar Avaliação' : 'Agendar Avaliação'}</h3>
@@ -321,7 +621,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
             </div>
 
             <div className="space-y-3">
-              {/* Type selector */}
+              {/* Type */}
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => setNewEvent({ ...newEvent, type: 'test' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'test' ? 'bg-red-50 border-red-500 text-red-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Prova</button>
                 <button onClick={() => setNewEvent({ ...newEvent, type: 'work' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'work' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Trabalho</button>
@@ -338,18 +638,12 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                 <div>
                   <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Escola</label>
                   <select value={newEvent.schoolId} onChange={e => setNewEvent(prev => ({ ...prev, schoolId: e.target.value, classId: '', slotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm">
-                    {(data.schools || []).length === 0 && <option value="">Nenhuma escola cadastrada</option>}
                     {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Turma</label>
-                  <select
-                    value={newEvent.classId}
-                    onChange={e => handleClassChange(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm"
-                    disabled={!activeSchool}
-                  >
+                  <select value={newEvent.classId} onChange={e => handleClassChange(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm" disabled={!activeSchool}>
                     <option value="">Selecione...</option>
                     {(activeSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map(c => {
                       const cId = typeof c === 'string' ? c : c.id;
@@ -376,7 +670,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                 </div>
               </div>
 
-              {/* Description — 2 rows to keep modal compact */}
+              {/* Description */}
               <div>
                 <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Descrição / Observações</label>
                 <textarea value={newEvent.description} onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))} rows={2} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm resize-none" placeholder="Capítulos, observações..." />
@@ -386,9 +680,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
             <div className="mt-4 flex gap-3">
               <button
                 onClick={() => setCopyData(prev => ({
-                  ...prev,
-                  isOpen: true,
-                  // Pre-fill with source assessment values
+                  ...prev, isOpen: true,
                   targetDate: newEvent.date || '',
                   targetSchoolId: newEvent.schoolId || (data.schools[0]?.id || ''),
                   targetClassId: newEvent.classId || '',
@@ -411,58 +703,41 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                       : 'bg-blue-600 text-white shadow-xl shadow-blue-100 hover:brightness-110'
                   }`}
               >
-                {saveSuccess ? (
-                  <>
-                    <CheckCircle2 size={14} className="animate-in zoom-in-50 duration-300" />
-                    Salvo!
-                  </>
-                ) : (
-                  'Salvar Avaliação'
-                )}
+                {saveSuccess ? (<><CheckCircle2 size={14} className="animate-in zoom-in-50 duration-300" /> Salvo!</>) : 'Salvar Avaliação'}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* ── Copy Modal ── */}
       {isAdding && copyData.isOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl p-5 flex flex-col">
-            <div className="flex justify-between items-center mb-4 shrink-0">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl p-5">
+            <div className="flex justify-between items-center mb-4">
               <div>
                 <h3 className="text-base font-black uppercase text-slate-800 dark:text-white flex items-center gap-2">
                   <Copy className="text-blue-600" size={18} /> Copiar Avaliação
                 </h3>
                 <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">
-                  Você está copiando: <span className="text-blue-600">"{newEvent.title || 'Sem título'}"</span>
+                  Copiando: <span className="text-blue-600">"{newEvent.title || 'Sem título'}"</span>
                 </p>
               </div>
               <button onClick={() => setCopyData(prev => ({ ...prev, isOpen: false }))} className="text-slate-300 hover:text-slate-600"><X /></button>
             </div>
 
             <div className="space-y-3">
-              {/* School Select (if multiple exist) */}
               {(data.schools || []).length > 1 && (
                 <div>
                   <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Escola de Destino</label>
-                  <select
-                    value={copyData.targetSchoolId}
-                    onChange={e => setCopyData(prev => ({ ...prev, targetSchoolId: e.target.value, targetClassId: '', targetSlotId: '' }))}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white"
-                  >
+                  <select value={copyData.targetSchoolId} onChange={e => setCopyData(prev => ({ ...prev, targetSchoolId: e.target.value, targetClassId: '', targetSlotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white">
                     {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
               )}
-
-              {/* Class Select */}
               <div>
                 <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual turma?</label>
-                <select
-                  value={copyData.targetClassId}
-                  onChange={e => setCopyData(prev => ({ ...prev, targetClassId: e.target.value, targetSlotId: '' }))}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white"
-                >
+                <select value={copyData.targetClassId} onChange={e => setCopyData(prev => ({ ...prev, targetClassId: e.target.value, targetSlotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white">
                   <option value="">Selecione a turma...</option>
                   {(copyTargetSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map(c => {
                     const cId = typeof c === 'string' ? c : c.id;
@@ -471,30 +746,14 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   })}
                 </select>
               </div>
-
-              {/* Date Select */}
               <div>
                 <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual dia?</label>
-                <input
-                  type="date"
-                  value={copyData.targetDate}
-                  onChange={e => setCopyData(prev => ({ ...prev, targetDate: e.target.value, targetSlotId: '' }))}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white"
-                />
+                <input type="date" value={copyData.targetDate} onChange={e => setCopyData(prev => ({ ...prev, targetDate: e.target.value, targetSlotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white" />
               </div>
-
-              {/* Slot Select */}
               <div>
                 <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Horário (Slot)</label>
-                <select
-                  value={copyData.targetSlotId}
-                  onChange={e => setCopyData(prev => ({ ...prev, targetSlotId: e.target.value }))}
-                  disabled={!copyData.targetDate || !copyData.targetClassId}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white disabled:opacity-50"
-                >
-                  <option value="">
-                    {availableSlotsForCopy.length > 0 ? 'Selecione o horário...' : (copyData.targetClassId && copyData.targetDate ? 'Nenhum horário disponível neste dia' : 'Aguardando seleção...')}
-                  </option>
+                <select value={copyData.targetSlotId} onChange={e => setCopyData(prev => ({ ...prev, targetSlotId: e.target.value }))} disabled={!copyData.targetDate || !copyData.targetClassId} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white disabled:opacity-50">
+                  <option value="">{availableSlotsForCopy.length > 0 ? 'Selecione o horário...' : (copyData.targetClassId && copyData.targetDate ? 'Nenhum horário disponível' : 'Aguardando seleção...')}</option>
                   {availableSlotsForCopy.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
                 </select>
               </div>
@@ -502,145 +761,11 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
 
             <div className="mt-5 flex gap-3">
               <button onClick={() => setCopyData(prev => ({ ...prev, isOpen: false }))} className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-lg font-black uppercase text-[9px] tracking-tight hover:bg-slate-200 transition-all">Cancelar</button>
-              <button
-                onClick={handleCopyAssessment}
-                disabled={!copyData.targetSlotId || !newEvent.title}
-                className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-black uppercase text-[9px] tracking-tight shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all"
-              >
-                Confirmar Cópia
-              </button>
+              <button onClick={handleCopyAssessment} disabled={!copyData.targetSlotId || !newEvent.title} className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-black uppercase text-[9px] tracking-tight shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all">Confirmar Cópia</button>
             </div>
           </div>
         </div>
       )}
-
-      <div className="flex flex-col gap-2 md:gap-3">
-        {data.events.filter(e => e.type === 'test' || e.type === 'work').sort((a, b) => a.date.localeCompare(b.date)).map(event => {
-          const school = data.schools.find(s => s.id === event.schoolId);
-          const color = school?.color || '#3b82f6';
-
-          return (
-            <div
-              key={event.id}
-              onClick={() => {
-                setSaveSuccess(false);
-                setNewEvent({
-                  id: event.id,
-                  title: event.title,
-                  date: event.date.split('T')[0],
-                  schoolId: event.schoolId,
-                  classId: event.classId,
-                  slotId: event.slotId,
-                  type: event.type,
-                  description: event.description
-                });
-                setIsAdding(true);
-              }}
-              className="bg-white dark:bg-slate-900 p-2 md:p-3 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm relative group hover:shadow-md transition-all duration-300 cursor-pointer hover:border-blue-200 dark:hover:border-blue-800 flex items-center gap-3 md:gap-4"
-              style={{ borderColor: color + '30', backgroundColor: color + '05' }}
-            >
-              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg flex items-center justify-center border-b-2 shrink-0" style={{ backgroundColor: color + '15', color: color, borderColor: color + '30' }}>
-                <FileCheck size={18} className="md:w-[20px] md:h-[20px]" />
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <h4 className="text-xs md:text-sm font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
-                  <span className="text-[7px] md:text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase shrink-0" style={{ backgroundColor: color + '20', color: color }}>
-                    {event.type === 'test' ? 'Prova' : 'Trabalho'}
-                  </span>
-                  {event.classId && (() => {
-                    const schoolClass = school?.classes.find(c =>
-                      (typeof c === 'string' ? c : c.id) === event.classId ||
-                      (typeof c === 'string' ? c : c.name) === event.classId
-                    );
-                    const className = schoolClass ? (typeof schoolClass === 'string' ? schoolClass : schoolClass.name) : event.classId;
-                    return <span className="text-[7px] md:text-[8px] font-black text-slate-400 uppercase tracking-tight shrink-0 border border-slate-100 dark:border-slate-700 px-1 rounded">Turma {className}</span>;
-                  })()}
-                </div>
-
-                <div className="flex items-center gap-3 text-[9px] md:text-[10px] font-bold text-slate-500">
-                  <div className="flex items-center gap-1">
-                    <Calendar size={10} className="text-slate-300" />
-                    <span className="truncate">
-                      {getSafeDate(event.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} • {getSafeDate(event.date).toLocaleDateString('pt-BR', { weekday: 'short' }).slice(0, 3)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 truncate">
-                    <SchoolIcon size={10} className="text-slate-300" />
-                    <span className="truncate" style={{ color: color }}>{school?.name}</span>
-                  </div>
-                </div>
-              </div>
-
-              {deletingEventId === event.id ? (
-                <div className="flex items-center gap-2 pr-2" onClick={e => e.stopPropagation()}>
-                  <span className="text-[8px] font-bold text-slate-600 uppercase hidden md:inline">Confirmar?</span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onUpdateData({ events: data.events.filter(e => e.id !== event.id) });
-                      setDeletingEventId(null);
-                    }}
-                    className="bg-red-500 text-white px-2 py-1 rounded text-[9px] font-bold hover:bg-red-600"
-                  >
-                    Sim
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setDeletingEventId(null); }}
-                    className="bg-slate-200 text-slate-600 px-2 py-1 rounded text-[9px] font-bold hover:bg-slate-300"
-                  >
-                    Não
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity pr-1">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSaveSuccess(false);
-                      setNewEvent({
-                        id: event.id,
-                        title: event.title,
-                        date: event.date.split('T')[0],
-                        schoolId: event.schoolId,
-                        classId: event.classId,
-                        slotId: event.slotId,
-                        type: event.type,
-                        description: event.description
-                      });
-                      setIsAdding(true);
-                    }}
-                    className="p-2 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                    title="Editar"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setDeletingEventId(event.id); }}
-                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                    title="Excluir"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                  <div className="text-slate-200 pl-1">
-                    <ChevronRight size={14} />
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-        {data.events.filter(e => e.type === 'test' || e.type === 'work').length === 0 && (
-          <div className="py-16 md:py-20 bg-white dark:bg-slate-900 rounded-2xl border-2 border-dashed border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center gap-4 text-center">
-            <FileCheck size={40} className="md:w-[48px] md:h-[48px] text-slate-400 dark:text-slate-800" />
-            <div>
-              <p className="text-slate-500 font-black uppercase text-[10px] md:text-xs tracking-tight">Nenhuma avaliação agendada</p>
-              <p className="text-slate-400 text-[9px] md:text-[10px] uppercase mt-1">Sua grade de avaliações está livre.</p>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 };

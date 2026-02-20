@@ -579,7 +579,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                           gap: '0.5rem'
                         }}
                       >
-                        {group.events.map(event => {
+                        {week.events.map(event => {
                           const school = data.schools.find(s => s.id === event.schoolId);
                           const color = school?.color || '#3b82f6';
                           const className = resolveClassName(event);

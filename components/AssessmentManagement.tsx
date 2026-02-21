@@ -64,10 +64,11 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   const [filterSchoolId, setFilterSchoolId] = useState('all');
   const [filterClassId, setFilterClassId] = useState('all');
   const [filterTermIdx, setFilterTermIdx] = useState('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'scheduled' | 'done'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   // ── Layout/Grouping State ────────────────────────────────────────────────
-  const [cardsPerRow, setCardsPerRow] = useState(1);
+  const [cardsPerRow, setCardsPerRow] = useState(4);
   const [groupByWeek, setGroupByWeek] = useState(false);
 
   // ── Copy State ───────────────────────────────────────────────────────────
@@ -317,6 +318,15 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       });
     }
 
+    if (filterStatus !== 'all') {
+      list = list.filter(e => {
+        const d = e.date.split('T')[0];
+        const hasGrades = data.grades.some(g => g.assessmentId === e.id);
+        const isDone = hasGrades || d < today;
+        return filterStatus === 'done' ? isDone : !isDone;
+      });
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(e =>
@@ -326,7 +336,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     }
 
     return list.sort((a, b) => a.date.localeCompare(b.date));
-  }, [assessmentEvents, filterSchoolId, filterClassId, filterTermIdx, searchQuery, data.schools, data.calendars]);
+  }, [assessmentEvents, filterSchoolId, filterClassId, filterTermIdx, filterStatus, searchQuery, data.schools, data.calendars, data.grades, today]);
 
   // Group by month (and optionally by Mon–Fri week inside each month)
   type WeekGroup = { weekKey: string; label: string; events: SchoolEvent[] };
@@ -478,15 +488,6 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
             </select>
           )}
 
-          {/* Clear filters */}
-          {(filterSchoolId !== 'all' || filterClassId !== 'all' || filterTermIdx !== 'all' || searchQuery) && (
-            <button
-              onClick={() => { setFilterSchoolId('all'); setFilterClassId('all'); setFilterTermIdx('all'); setSearchQuery(''); }}
-              className="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg text-[9px] font-black uppercase tracking-tight hover:bg-red-100 transition-colors flex items-center gap-1"
-            >
-              <X size={10} /> Limpar
-            </button>
-          )}
         </div>
 
         {/* Layout row */}
@@ -523,6 +524,28 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
             <Calendar size={11} />
             Por semana
           </button>
+
+          <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+
+          {/* Status filter */}
+          <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
+            {([['all', 'Todas'], ['scheduled', 'Agendadas'], ['done', 'Realizadas']] as const).map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setFilterStatus(val)}
+                className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-tight transition-all ${filterStatus === val
+                  ? val === 'done'
+                    ? 'bg-amber-500 text-white shadow-sm'
+                    : val === 'scheduled'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-600'
+                  }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -532,12 +555,12 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
           <FileCheck size={40} className="text-slate-300 dark:text-slate-700" />
           <div>
             <p className="text-slate-500 font-black uppercase text-[10px] tracking-tight">
-              {searchQuery || filterSchoolId !== 'all' || filterClassId !== 'all' || filterTermIdx !== 'all'
+              {searchQuery || filterSchoolId !== 'all' || filterClassId !== 'all' || filterTermIdx !== 'all' || filterStatus !== 'all'
                 ? 'Nenhuma avaliação encontrada'
                 : 'Nenhuma avaliação agendada'}
             </p>
             <p className="text-slate-400 text-[9px] uppercase mt-1">
-              {searchQuery || filterSchoolId !== 'all' || filterClassId !== 'all' || filterTermIdx !== 'all'
+              {searchQuery || filterSchoolId !== 'all' || filterClassId !== 'all' || filterTermIdx !== 'all' || filterStatus !== 'all'
                 ? 'Tente ajustar os filtros.'
                 : 'Clique em "Nova Avaliação" para começar.'}
             </p>
@@ -553,119 +576,95 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
             const renderCard = (event: SchoolEvent) => {
               const school = data.schools.find(s => s.id === event.schoolId);
               const color = school?.color || '#3b82f6';
-              const evtClassName = resolveClassName(event);
               const status = getStatusBadge(event);
-              const isPast = event.date.split('T')[0] < today;
-              const slotLabel = (() => {
-                if (!school || !event.slotId) return null;
+              // Diary-style date badge helpers
+              const evDate = getSafeDate(event.date);
+              const dayAbbr = evDate.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '').toUpperCase();
+              const dayMonth = evDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+              const evtClassName = resolveClassName(event);
+              const shiftInfo = (() => {
+                if (!school || !event.slotId) return { label: null, shiftName: null };
                 for (const shift of (school.shifts || [])) {
                   const slot = shift.slots.find(s => s.id === event.slotId);
-                  if (slot) return `${slot.label} (${slot.startTime})`;
+                  if (slot) return { label: slot.label, shiftName: shift.name };
                 }
-                return null;
+                return { label: null, shiftName: null };
               })();
+
               return (
                 <div
                   key={event.id}
                   onClick={() => openEditForm(event)}
                   title={event.title}
-                  className={`bg-white dark:bg-slate-900 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group flex items-stretch gap-0 overflow-hidden ${isPast ? 'opacity-80' : ''} ${cardsPerRow > 2 ? 'flex-col' : ''}`}
-                  style={{ borderColor: color + '40' }}
+                  className="relative bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group overflow-hidden"
                 >
-                  {/* Vertical accent bar */}
-                  <div className="w-1 shrink-0" style={{ backgroundColor: color }} />
+                  {/* Top strip: date badge + center info + right slot */}
+                  <div className="flex items-center gap-3 p-3">
 
-                  {/* Card body */}
-                  <div className={`flex-1 flex gap-3 p-3 min-w-0 ${cardsPerRow > 2 ? 'flex-col items-start' : 'items-center'}`}>
-                    {/* Left: Icon */}
+                    {/* LEFT: Colored date badge (mirrors diary history card) */}
                     <div
-                      className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: color + '20', color }}
+                      className="rounded-xl px-2.5 py-1.5 flex flex-col items-center justify-center shrink-0 min-w-[48px]"
+                      style={{ backgroundColor: color }}
                     >
-                      <FileCheck size={12} />
+                      <span className="text-[8px] font-black text-white/80 uppercase tracking-widest leading-none">{dayAbbr}</span>
+                      <span className="text-[13px] font-black text-white leading-tight mt-0.5">{dayMonth}</span>
                     </div>
 
-                    {/* Center: Title + badges */}
+                    {/* CENTER: Class name + assessment title */}
                     <div className="flex-1 min-w-0">
-                      {/* Class name — prominent */}
-                      <p className="text-[11px] font-black uppercase tracking-tight truncate mb-0.5" style={{ color }}>
-                        {evtClassName}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <h4 className="text-[10px] font-black text-slate-700 dark:text-white uppercase truncate">
-                          {event.title}
-                        </h4>
+                      <p className="text-[13px] font-black text-slate-700 dark:text-white leading-tight truncate">{evtClassName}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate">{event.title}</p>
                         <span
                           className="text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0"
-                          style={{ backgroundColor: color + '22', color }}
+                          style={{ backgroundColor: color + `22`, color }}
                         >
-                          {event.type === 'test' ? 'Prova' : 'Trabalho'}
+                          {event.type === `test` ? `Prova` : `Trabalho`}
                         </span>
                       </div>
+                    </div>
 
-                      {event.description && event.description.trim() && (
-                        <p className="text-[9px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
-                          <BookOpen size={9} className="text-slate-300 shrink-0" />
-                          {event.description}
-                        </p>
+                    {/* RIGHT: Slot label + shift name */}
+                    <div className="shrink-0 text-right">
+                      {shiftInfo.label && (
+                        <p className="text-[9px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-tight">{shiftInfo.label}</p>
                       )}
-
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[9px] font-bold truncate" style={{ color }}>{school?.name}</span>
-                        {slotLabel && (
-                          <span className="text-[9px] text-slate-400 font-bold flex items-center gap-0.5">
-                            <Clock size={9} /> {slotLabel}
-                          </span>
-                        )}
-                      </div>
+                      {shiftInfo.shiftName && (
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tight mt-0.5">{shiftInfo.shiftName}</p>
+                      )}
                     </div>
+                  </div>
 
-                    {/* Right: Date + Status + Actions */}
-                    <div className={`shrink-0 flex gap-1.5 ${cardsPerRow > 2 ? 'flex-wrap items-center' : 'flex-col items-end ml-2'}`}>
-                      <div className="flex items-center gap-1 text-[10px] font-black text-slate-600 dark:text-slate-300">
-                        <Calendar size={11} className="text-slate-400" />
-                        <span>{getSafeDate(event.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
-                        {cardsPerRow <= 2 && (
-                          <span className="text-slate-400 text-[8px] hidden sm:inline">
-                            · {getSafeDate(event.date).toLocaleDateString('pt-BR', { weekday: 'short' }).slice(0, 3)}
-                          </span>
-                        )}
+                  {/* Action buttons — absolute top-right, no layout impact */}
+                  <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                    <button onClick={e => { e.stopPropagation(); openEditForm(event); }} className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Editar">
+                      <Pencil size={12} />
+                    </button>
+                    {deletingEventId === event.id ? (
+                      <div className="flex items-center gap-1">
+                        <button onClick={e => { e.stopPropagation(); onUpdateData({ events: data.events.filter(ev => ev.id !== event.id) }); setDeletingEventId(null); }} className="bg-red-500 text-white px-2 py-1 rounded text-[8px] font-bold">Sim</button>
+                        <button onClick={e => { e.stopPropagation(); setDeletingEventId(null); }} className="bg-slate-200 text-slate-600 px-2 py-1 rounded text-[8px] font-bold">Não</button>
                       </div>
+                    ) : (
+                      <button onClick={e => { e.stopPropagation(); setDeletingEventId(event.id); }} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all" title="Excluir">
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
 
-                      <span className={`text-[7px] font-black uppercase tracking-tight px-1.5 py-0.5 rounded border ${status.color}`}>
-                        {status.label}
-                      </span>
-
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                        <button
-                          onClick={e => { e.stopPropagation(); openEditForm(event); }}
-                          className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                          title="Editar"
-                        >
-                          <Pencil size={12} />
-                        </button>
-                        {deletingEventId === event.id ? (
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={e => { e.stopPropagation(); onUpdateData({ events: data.events.filter(ev => ev.id !== event.id) }); setDeletingEventId(null); }}
-                              className="bg-red-500 text-white px-2 py-1 rounded text-[8px] font-bold"
-                            >Sim</button>
-                            <button
-                              onClick={e => { e.stopPropagation(); setDeletingEventId(null); }}
-                              className="bg-slate-200 text-slate-600 px-2 py-1 rounded text-[8px] font-bold"
-                            >Não</button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={e => { e.stopPropagation(); setDeletingEventId(event.id); }}
-                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                            title="Excluir"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                  {/* Bottom strip: school name + status badge + optional description */}
+                  <div className="border-t border-slate-50 dark:border-slate-800 px-3 py-1.5 flex items-center gap-2">
+                    <span className="text-[9px] font-bold truncate" style={{ color }}>{school?.name}</span>
+                    <div className="flex-1" />
+                    {event.description && event.description.trim() && (
+                      <p className="text-[9px] text-slate-400 font-medium truncate flex items-center gap-1 max-w-[140px]">
+                        <BookOpen size={9} className="text-slate-300 shrink-0" />
+                        {event.description}
+                      </p>
+                    )}
+                    <span className={`text-[7px] font-black uppercase tracking-tight px-1.5 py-0.5 rounded border shrink-0 ${status.color}`}>
+                      {status.label}
+                    </span>
                   </div>
                 </div>
               );
@@ -691,7 +690,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                           <div className="flex-1 h-px bg-slate-100 dark:bg-slate-700" />
                           <span className="text-[8px] font-bold text-slate-300">{week.events.length} av.</span>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cardsPerRow}, minmax(0, 1fr))`, gap: '0.5rem' }}>
+                        <div style={{ display: `grid`, gridTemplateColumns: `repeat(${cardsPerRow}, minmax(0, 1fr))`, gap: `0.5rem` }}>
                           {week.events.map(renderCard)}
                         </div>
                       </div>
@@ -699,7 +698,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   </div>
                 ) : (
                   /* ── One flat grid for the whole month ── */
-                  <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cardsPerRow}, minmax(0, 1fr))`, gap: '0.5rem' }}>
+                  <div style={{ display: `grid`, gridTemplateColumns: `repeat(${cardsPerRow}, minmax(0, 1fr))`, gap: `0.5rem` }}>
                     {allMonthEvents.map(renderCard)}
                   </div>
                 )}
@@ -707,166 +706,169 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
             );
           })}
         </div>
-
       )}
 
-      {/* ── Add / Edit Modal ── */}
-      {isAdding && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 w-full max-w-lg shadow-2xl animate-in zoom-in-95">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-black uppercase">{newEvent.id ? 'Editar Avaliação' : 'Agendar Avaliação'}</h3>
-              <button onClick={() => setIsAdding(false)} className="text-slate-300 hover:text-slate-600"><X /></button>
-            </div>
+            {/* ── Add / Edit Modal ── */ }
+              {
+                isAdding && (
+                  <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 w-full max-w-lg shadow-2xl animate-in zoom-in-95">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-base font-black uppercase">{newEvent.id ? 'Editar Avaliação' : 'Agendar Avaliação'}</h3>
+                        <button onClick={() => setIsAdding(false)} className="text-slate-300 hover:text-slate-600"><X /></button>
+                      </div>
 
-            <div className="space-y-3">
-              {/* Type */}
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => setNewEvent({ ...newEvent, type: 'test' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'test' ? 'bg-red-50 border-red-500 text-red-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Prova</button>
-                <button onClick={() => setNewEvent({ ...newEvent, type: 'work' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'work' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Trabalho</button>
-              </div>
+                      <div className="space-y-3">
+                        {/* Type */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <button onClick={() => setNewEvent({ ...newEvent, type: 'test' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'test' ? 'bg-red-50 border-red-500 text-red-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Prova</button>
+                          <button onClick={() => setNewEvent({ ...newEvent, type: 'work' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'work' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Trabalho</button>
+                        </div>
 
-              {/* Title */}
-              <div>
-                <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Assunto / Título</label>
-                <input type="text" value={newEvent.title} onChange={e => setNewEvent(prev => ({ ...prev, title: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm" placeholder="Ex: Prova Mensal de História" />
-              </div>
+                        {/* Title */}
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Assunto / Título</label>
+                          <input type="text" value={newEvent.title} onChange={e => setNewEvent(prev => ({ ...prev, title: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm" placeholder="Ex: Prova Mensal de História" />
+                        </div>
 
-              {/* School + Class */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Escola</label>
-                  <select value={newEvent.schoolId} onChange={e => setNewEvent(prev => ({ ...prev, schoolId: e.target.value, classId: '', slotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm">
-                    {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Turma</label>
-                  <select value={newEvent.classId} onChange={e => handleClassChange(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm" disabled={!activeSchool}>
-                    <option value="">Selecione...</option>
-                    {(activeSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map(c => {
-                      const cId = typeof c === 'string' ? c : c.id;
-                      const cName = typeof c === 'string' ? c : c.name;
-                      return <option key={cId} value={cId}>{cName}</option>;
-                    })}
-                  </select>
-                </div>
-              </div>
+                        {/* School + Class */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Escola</label>
+                            <select value={newEvent.schoolId} onChange={e => setNewEvent(prev => ({ ...prev, schoolId: e.target.value, classId: '', slotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm">
+                              {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Turma</label>
+                            <select value={newEvent.classId} onChange={e => handleClassChange(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm" disabled={!activeSchool}>
+                              <option value="">Selecione...</option>
+                              {(activeSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map(c => {
+                                const cId = typeof c === 'string' ? c : c.id;
+                                const cName = typeof c === 'string' ? c : c.name;
+                                return <option key={cId} value={cId}>{cName}</option>;
+                              })}
+                            </select>
+                          </div>
+                        </div>
 
-              {/* Date + Slot */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Data</label>
-                  <input type="date" value={newEvent.date} onChange={e => handleDateChange(e.target.value)} className={`w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm ${isInvalidDate ? 'ring-2 ring-pink-500' : ''}`} />
-                  {dateWarning && <p className="text-[8px] text-pink-600 font-black uppercase mt-0.5 ml-1">{dateWarning}</p>}
-                </div>
-                <div>
-                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Horário (Slot)</label>
-                  <select disabled={!newEvent.classId || isInvalidDate} value={newEvent.slotId} onChange={e => setNewEvent(prev => ({ ...prev, slotId: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white disabled:opacity-50 text-sm">
-                    <option value="">{restrictedAvailableSlots.length > 0 ? 'Escolha o horário...' : (newEvent.classId ? 'Nenhum horário' : 'Selecione a turma')}</option>
-                    {restrictedAvailableSlots.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
-                  </select>
-                </div>
-              </div>
+                        {/* Date + Slot */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Data</label>
+                            <input type="date" value={newEvent.date} onChange={e => handleDateChange(e.target.value)} className={`w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm ${isInvalidDate ? 'ring-2 ring-pink-500' : ''}`} />
+                            {dateWarning && <p className="text-[8px] text-pink-600 font-black uppercase mt-0.5 ml-1">{dateWarning}</p>}
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Horário (Slot)</label>
+                            <select disabled={!newEvent.classId || isInvalidDate} value={newEvent.slotId} onChange={e => setNewEvent(prev => ({ ...prev, slotId: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white disabled:opacity-50 text-sm">
+                              <option value="">{restrictedAvailableSlots.length > 0 ? 'Escolha o horário...' : (newEvent.classId ? 'Nenhum horário' : 'Selecione a turma')}</option>
+                              {restrictedAvailableSlots.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
+                            </select>
+                          </div>
+                        </div>
 
-              {/* Description */}
-              <div>
-                <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Descrição / Observações</label>
-                <textarea value={newEvent.description} onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))} rows={2} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm resize-none" placeholder="Capítulos, observações..." />
-              </div>
-            </div>
+                        {/* Description */}
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Descrição / Observações</label>
+                          <textarea value={newEvent.description} onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))} rows={2} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm resize-none" placeholder="Capítulos, observações..." />
+                        </div>
+                      </div>
 
-            <div className="mt-4 flex gap-3">
-              <button
-                onClick={() => setCopyData(prev => ({
-                  ...prev, isOpen: true,
-                  targetDate: newEvent.date || '',
-                  targetSchoolId: newEvent.schoolId || (data.schools[0]?.id || ''),
-                  targetClassId: newEvent.classId || '',
-                  targetSlotId: newEvent.slotId || '',
-                }))}
-                className="flex-none py-3 px-4 rounded-lg font-black uppercase text-[9px] tracking-tight bg-slate-50 text-blue-600 hover:bg-blue-50 transition-colors border-2 border-slate-100 hover:border-blue-100"
-                title="Copiar para outra turma"
-              >
-                <Copy size={16} />
-              </button>
-              <button onClick={() => setIsAdding(false)} className="flex-1 py-3 font-black text-slate-400 uppercase text-[9px]">Cancelar</button>
-              <button
-                onClick={handleSaveEvent}
-                disabled={!newEvent.title || !newEvent.slotId || isInvalidDate}
-                className={`flex-1 py-3 rounded-lg font-black uppercase text-[9px] tracking-tight transition-all duration-300 flex items-center justify-center gap-2
+                      <div className="mt-4 flex gap-3">
+                        <button
+                          onClick={() => setCopyData(prev => ({
+                            ...prev, isOpen: true,
+                            targetDate: newEvent.date || '',
+                            targetSchoolId: newEvent.schoolId || (data.schools[0]?.id || ''),
+                            targetClassId: newEvent.classId || '',
+                            targetSlotId: newEvent.slotId || '',
+                          }))}
+                          className="flex-none py-3 px-4 rounded-lg font-black uppercase text-[9px] tracking-tight bg-slate-50 text-blue-600 hover:bg-blue-50 transition-colors border-2 border-slate-100 hover:border-blue-100"
+                          title="Copiar para outra turma"
+                        >
+                          <Copy size={16} />
+                        </button>
+                        <button onClick={() => setIsAdding(false)} className="flex-1 py-3 font-black text-slate-400 uppercase text-[9px]">Cancelar</button>
+                        <button
+                          onClick={handleSaveEvent}
+                          disabled={!newEvent.title || !newEvent.slotId || isInvalidDate}
+                          className={`flex-1 py-3 rounded-lg font-black uppercase text-[9px] tracking-tight transition-all duration-300 flex items-center justify-center gap-2
                   ${saveSuccess
-                    ? 'bg-green-500 text-white shadow-lg shadow-green-200 scale-105'
-                    : (!newEvent.title || !newEvent.slotId || isInvalidDate)
-                      ? 'bg-slate-100 text-slate-300'
-                      : 'bg-blue-600 text-white shadow-xl shadow-blue-100 hover:brightness-110'
-                  }`}
-              >
-                {saveSuccess ? (<><CheckCircle2 size={14} className="animate-in zoom-in-50 duration-300" /> Salvo!</>) : 'Salvar Avaliação'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                              ? 'bg-green-500 text-white shadow-lg shadow-green-200 scale-105'
+                              : (!newEvent.title || !newEvent.slotId || isInvalidDate)
+                                ? 'bg-slate-100 text-slate-300'
+                                : 'bg-blue-600 text-white shadow-xl shadow-blue-100 hover:brightness-110'
+                            }`}
+                        >
+                          {saveSuccess ? (<><CheckCircle2 size={14} className="animate-in zoom-in-50 duration-300" /> Salvo!</>) : 'Salvar Avaliação'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              }
 
-      {/* ── Copy Modal ── */}
-      {isAdding && copyData.isOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl p-5">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="text-base font-black uppercase text-slate-800 dark:text-white flex items-center gap-2">
-                  <Copy className="text-blue-600" size={18} /> Copiar Avaliação
-                </h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">
-                  Copiando: <span className="text-blue-600">"{newEvent.title || 'Sem título'}"</span>
-                </p>
-              </div>
-              <button onClick={() => setCopyData(prev => ({ ...prev, isOpen: false }))} className="text-slate-300 hover:text-slate-600"><X /></button>
-            </div>
+              {/* ── Copy Modal ── */ }
+              {
+                isAdding && copyData.isOpen && (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl p-5">
+                      <div className="flex justify-between items-center mb-4">
+                        <div>
+                          <h3 className="text-base font-black uppercase text-slate-800 dark:text-white flex items-center gap-2">
+                            <Copy className="text-blue-600" size={18} /> Copiar Avaliação
+                          </h3>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">
+                            Copiando: <span className="text-blue-600">"{newEvent.title || 'Sem título'}"</span>
+                          </p>
+                        </div>
+                        <button onClick={() => setCopyData(prev => ({ ...prev, isOpen: false }))} className="text-slate-300 hover:text-slate-600"><X /></button>
+                      </div>
 
-            <div className="space-y-3">
-              {(data.schools || []).length > 1 && (
-                <div>
-                  <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Escola de Destino</label>
-                  <select value={copyData.targetSchoolId} onChange={e => setCopyData(prev => ({ ...prev, targetSchoolId: e.target.value, targetClassId: '', targetSlotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white">
-                    {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
-              )}
-              <div>
-                <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual turma?</label>
-                <select value={copyData.targetClassId} onChange={e => setCopyData(prev => ({ ...prev, targetClassId: e.target.value, targetSlotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white">
-                  <option value="">Selecione a turma...</option>
-                  {(copyTargetSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map(c => {
-                    const cId = typeof c === 'string' ? c : c.id;
-                    const cName = typeof c === 'string' ? c : c.name;
-                    return <option key={cId} value={cId}>{cName}</option>;
-                  })}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual dia?</label>
-                <input type="date" value={copyData.targetDate} onChange={e => setCopyData(prev => ({ ...prev, targetDate: e.target.value, targetSlotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white" />
-              </div>
-              <div>
-                <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Horário (Slot)</label>
-                <select value={copyData.targetSlotId} onChange={e => setCopyData(prev => ({ ...prev, targetSlotId: e.target.value }))} disabled={!copyData.targetDate || !copyData.targetClassId} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white disabled:opacity-50">
-                  <option value="">{availableSlotsForCopy.length > 0 ? 'Selecione o horário...' : (copyData.targetClassId && copyData.targetDate ? 'Nenhum horário disponível' : 'Aguardando seleção...')}</option>
-                  {availableSlotsForCopy.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
-                </select>
-              </div>
-            </div>
+                      <div className="space-y-3">
+                        {(data.schools || []).length > 1 && (
+                          <div>
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Escola de Destino</label>
+                            <select value={copyData.targetSchoolId} onChange={e => setCopyData(prev => ({ ...prev, targetSchoolId: e.target.value, targetClassId: '', targetSlotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white">
+                              {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                          </div>
+                        )}
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual turma?</label>
+                          <select value={copyData.targetClassId} onChange={e => setCopyData(prev => ({ ...prev, targetClassId: e.target.value, targetSlotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white">
+                            <option value="">Selecione a turma...</option>
+                            {(copyTargetSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map(c => {
+                              const cId = typeof c === 'string' ? c : c.id;
+                              const cName = typeof c === 'string' ? c : c.name;
+                              return <option key={cId} value={cId}>{cName}</option>;
+                            })}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual dia?</label>
+                          <input type="date" value={copyData.targetDate} onChange={e => setCopyData(prev => ({ ...prev, targetDate: e.target.value, targetSlotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Horário (Slot)</label>
+                          <select value={copyData.targetSlotId} onChange={e => setCopyData(prev => ({ ...prev, targetSlotId: e.target.value }))} disabled={!copyData.targetDate || !copyData.targetClassId} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white disabled:opacity-50">
+                            <option value="">{availableSlotsForCopy.length > 0 ? 'Selecione o horário...' : (copyData.targetClassId && copyData.targetDate ? 'Nenhum horário disponível' : 'Aguardando seleção...')}</option>
+                            {availableSlotsForCopy.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
+                          </select>
+                        </div>
+                      </div>
 
-            <div className="mt-5 flex gap-3">
-              <button onClick={() => setCopyData(prev => ({ ...prev, isOpen: false }))} className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-lg font-black uppercase text-[9px] tracking-tight hover:bg-slate-200 transition-all">Cancelar</button>
-              <button onClick={handleCopyAssessment} disabled={!copyData.targetSlotId || !newEvent.title} className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-black uppercase text-[9px] tracking-tight shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all">Confirmar Cópia</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+                      <div className="mt-5 flex gap-3">
+                        <button onClick={() => setCopyData(prev => ({ ...prev, isOpen: false }))} className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-lg font-black uppercase text-[9px] tracking-tight hover:bg-slate-200 transition-all">Cancelar</button>
+                        <button onClick={handleCopyAssessment} disabled={!copyData.targetSlotId || !newEvent.title} className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-black uppercase text-[9px] tracking-tight shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all">Confirmar Cópia</button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              }
+  </div>
+);
 };
 
 export default AssessmentManagement;

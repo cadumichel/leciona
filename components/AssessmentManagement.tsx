@@ -72,8 +72,10 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   const [groupByWeek, setGroupByWeek] = useState(false);
 
   // ── Copy State ───────────────────────────────────────────────────────────
+  const [isCopyOpen, setIsCopyOpen] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   const [copyData, setCopyData] = useState({
-    isOpen: false, targetDate: '', targetSchoolId: '', targetClassId: '', targetSlotId: '',
+    targetDate: '', targetSchoolId: '', targetClassId: '', targetSlotId: '',
   });
 
   // ── Derived: active school for the form ──────────────────────────────────
@@ -240,7 +242,9 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       !(l.date.split('T')[0] === copyData.targetDate && l.schoolId === event.schoolId && l.slotId === event.slotId)
     );
     onUpdateData({ events: [...data.events, event], logs: [...filteredLogs, newLog] });
-    setCopyData(prev => ({ ...prev, isOpen: false, targetDate: '', targetClassId: '', targetSlotId: '' }));
+    setCopyData(prev => ({ ...prev, targetClassId: '', targetSlotId: '' }));
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 2500);
   };
 
   // ── Filter options derived from data ──────────────────────────────────────
@@ -708,167 +712,200 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
         </div>
       )}
 
-            {/* ── Add / Edit Modal ── */ }
-              {
-                isAdding && (
-                  <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 w-full max-w-lg shadow-2xl animate-in zoom-in-95">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-base font-black uppercase">{newEvent.id ? 'Editar Avaliação' : 'Agendar Avaliação'}</h3>
-                        <button onClick={() => setIsAdding(false)} className="text-slate-300 hover:text-slate-600"><X /></button>
+      {/* ── Add / Edit Modal ── */}
+      {
+        isAdding && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 w-full max-w-lg shadow-2xl animate-in zoom-in-95">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-base font-black uppercase">{newEvent.id ? 'Editar Avaliação' : 'Agendar Avaliação'}</h3>
+                <button onClick={() => setIsAdding(false)} className="text-slate-300 hover:text-slate-600"><X /></button>
+              </div>
+
+              <div className="space-y-3">
+                {/* Type */}
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => setNewEvent({ ...newEvent, type: 'test' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'test' ? 'bg-red-50 border-red-500 text-red-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Prova</button>
+                  <button onClick={() => setNewEvent({ ...newEvent, type: 'work' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'work' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Trabalho</button>
+                </div>
+
+                {/* Title */}
+                <div>
+                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Assunto / Título</label>
+                  <input type="text" value={newEvent.title} onChange={e => setNewEvent(prev => ({ ...prev, title: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm" placeholder="Ex: Prova Mensal de História" />
+                </div>
+
+                {/* School + Class */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Escola</label>
+                    <select value={newEvent.schoolId} onChange={e => setNewEvent(prev => ({ ...prev, schoolId: e.target.value, classId: '', slotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm">
+                      {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Turma</label>
+                    <select value={newEvent.classId} onChange={e => handleClassChange(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm" disabled={!activeSchool}>
+                      <option value="">Selecione...</option>
+                      {(activeSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map(c => {
+                        const cId = typeof c === 'string' ? c : c.id;
+                        const cName = typeof c === 'string' ? c : c.name;
+                        return <option key={cId} value={cId}>{cName}</option>;
+                      })}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Date + Slot */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Data</label>
+                    <input type="date" value={newEvent.date} onChange={e => handleDateChange(e.target.value)} className={`w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm ${isInvalidDate ? 'ring-2 ring-pink-500' : ''}`} />
+                    {dateWarning && <p className="text-[8px] text-pink-600 font-black uppercase mt-0.5 ml-1">{dateWarning}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Horário (Slot)</label>
+                    <select disabled={!newEvent.classId || isInvalidDate} value={newEvent.slotId} onChange={e => setNewEvent(prev => ({ ...prev, slotId: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white disabled:opacity-50 text-sm">
+                      <option value="">{restrictedAvailableSlots.length > 0 ? 'Escolha o horário...' : (newEvent.classId ? 'Nenhum horário' : 'Selecione a turma')}</option>
+                      {restrictedAvailableSlots.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Descrição / Observações</label>
+                  <textarea value={newEvent.description} onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))} rows={2} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm resize-none" placeholder="Capítulos, observações..." />
+                </div>
+              </div>
+
+              {/* ── Inline Copy Accordion ── */}
+              <div className="border-t border-slate-100 dark:border-slate-800 pt-3 mt-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !isCopyOpen;
+                    setIsCopyOpen(next);
+                    if (next) {
+                      setCopySuccess(false);
+                      setCopyData({
+                        targetSchoolId: newEvent.schoolId || data.schools[0]?.id || '',
+                        targetDate: newEvent.date || '',
+                        targetClassId: '',
+                        targetSlotId: '',
+                      });
+                    }
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all ${isCopyOpen
+                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600'
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-blue-500 hover:bg-blue-50'
+                    }`}
+                >
+                  <span className="flex items-center gap-2"><Copy size={12} /> Criar Cópia (Replicar Avaliação)</span>
+                  <ChevronDown size={12} className={`transition-transform ${isCopyOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isCopyOpen && (
+                  <div className="mt-3 space-y-3 animate-in slide-in-from-top-2 duration-200">
+                    {copySuccess && (
+                      <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-3 py-2 rounded-lg">
+                        <CheckCircle2 size={14} className="shrink-0 animate-in zoom-in-50" />
+                        <span className="text-[9px] font-black uppercase">Cópia criada com sucesso!</span>
                       </div>
+                    )}
 
-                      <div className="space-y-3">
-                        {/* Type */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <button onClick={() => setNewEvent({ ...newEvent, type: 'test' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'test' ? 'bg-red-50 border-red-500 text-red-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Prova</button>
-                          <button onClick={() => setNewEvent({ ...newEvent, type: 'work' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'work' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Trabalho</button>
-                        </div>
-
-                        {/* Title */}
-                        <div>
-                          <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Assunto / Título</label>
-                          <input type="text" value={newEvent.title} onChange={e => setNewEvent(prev => ({ ...prev, title: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm" placeholder="Ex: Prova Mensal de História" />
-                        </div>
-
-                        {/* School + Class */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Escola</label>
-                            <select value={newEvent.schoolId} onChange={e => setNewEvent(prev => ({ ...prev, schoolId: e.target.value, classId: '', slotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm">
-                              {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Turma</label>
-                            <select value={newEvent.classId} onChange={e => handleClassChange(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm" disabled={!activeSchool}>
-                              <option value="">Selecione...</option>
-                              {(activeSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map(c => {
-                                const cId = typeof c === 'string' ? c : c.id;
-                                const cName = typeof c === 'string' ? c : c.name;
-                                return <option key={cId} value={cId}>{cName}</option>;
-                              })}
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* Date + Slot */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Data</label>
-                            <input type="date" value={newEvent.date} onChange={e => handleDateChange(e.target.value)} className={`w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm ${isInvalidDate ? 'ring-2 ring-pink-500' : ''}`} />
-                            {dateWarning && <p className="text-[8px] text-pink-600 font-black uppercase mt-0.5 ml-1">{dateWarning}</p>}
-                          </div>
-                          <div>
-                            <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Horário (Slot)</label>
-                            <select disabled={!newEvent.classId || isInvalidDate} value={newEvent.slotId} onChange={e => setNewEvent(prev => ({ ...prev, slotId: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white disabled:opacity-50 text-sm">
-                              <option value="">{restrictedAvailableSlots.length > 0 ? 'Escolha o horário...' : (newEvent.classId ? 'Nenhum horário' : 'Selecione a turma')}</option>
-                              {restrictedAvailableSlots.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* Description */}
-                        <div>
-                          <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Descrição / Observações</label>
-                          <textarea value={newEvent.description} onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))} rows={2} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm resize-none" placeholder="Capítulos, observações..." />
-                        </div>
-                      </div>
-
-                      <div className="mt-4 flex gap-3">
-                        <button
-                          onClick={() => setCopyData(prev => ({
-                            ...prev, isOpen: true,
-                            targetDate: newEvent.date || '',
-                            targetSchoolId: newEvent.schoolId || (data.schools[0]?.id || ''),
-                            targetClassId: newEvent.classId || '',
-                            targetSlotId: newEvent.slotId || '',
-                          }))}
-                          className="flex-none py-3 px-4 rounded-lg font-black uppercase text-[9px] tracking-tight bg-slate-50 text-blue-600 hover:bg-blue-50 transition-colors border-2 border-slate-100 hover:border-blue-100"
-                          title="Copiar para outra turma"
+                    {(data.schools || []).filter(s => !s.deleted).length > 1 && (
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Escola de Destino</label>
+                        <select
+                          value={copyData.targetSchoolId}
+                          onChange={e => setCopyData(prev => ({ ...prev, targetSchoolId: e.target.value, targetClassId: '', targetSlotId: '' }))}
+                          className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs font-bold dark:text-white"
                         >
-                          <Copy size={16} />
-                        </button>
-                        <button onClick={() => setIsAdding(false)} className="flex-1 py-3 font-black text-slate-400 uppercase text-[9px]">Cancelar</button>
-                        <button
-                          onClick={handleSaveEvent}
-                          disabled={!newEvent.title || !newEvent.slotId || isInvalidDate}
-                          className={`flex-1 py-3 rounded-lg font-black uppercase text-[9px] tracking-tight transition-all duration-300 flex items-center justify-center gap-2
+                          {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual turma?</label>
+                      <select
+                        value={copyData.targetClassId}
+                        onChange={e => setCopyData(prev => ({ ...prev, targetClassId: e.target.value, targetSlotId: '' }))}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs font-bold dark:text-white"
+                      >
+                        <option value="">Selecione a turma...</option>
+                        {(copyTargetSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted)
+                          .sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name))
+                          .map(c => {
+                            const cId = typeof c === 'string' ? c : c.id;
+                            const cName = typeof c === 'string' ? c : c.name;
+                            return <option key={cId} value={cId}>{cName}</option>;
+                          })}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual dia?</label>
+                      <input
+                        type="date"
+                        value={copyData.targetDate}
+                        onChange={e => setCopyData(prev => ({ ...prev, targetDate: e.target.value, targetSlotId: '' }))}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs font-bold dark:text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Horário (Slot)</label>
+                      <select
+                        value={copyData.targetSlotId}
+                        onChange={e => setCopyData(prev => ({ ...prev, targetSlotId: e.target.value }))}
+                        disabled={!copyData.targetDate || !copyData.targetClassId}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs font-bold dark:text-white disabled:opacity-50"
+                      >
+                        <option value="">
+                          {availableSlotsForCopy.length > 0
+                            ? 'Selecione o horário...'
+                            : (copyData.targetClassId && copyData.targetDate ? 'Nenhum horário disponível' : 'Aguardando seleção...')}
+                        </option>
+                        {availableSlotsForCopy.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={handleCopyAssessment}
+                      disabled={!copyData.targetSlotId || !newEvent.title}
+                      className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-black uppercase text-[9px] tracking-tight shadow-lg shadow-blue-100 hover:brightness-110 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
+                    >
+                      <Copy size={12} /> Salvar Cópia
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 flex gap-3">
+                <button onClick={() => { setIsAdding(false); setIsCopyOpen(false); }} className="flex-1 py-3 font-black text-slate-400 uppercase text-[9px]">Cancelar</button>
+                <button
+                  onClick={handleSaveEvent}
+                  disabled={!newEvent.title || !newEvent.slotId || isInvalidDate}
+                  className={`flex-1 py-3 rounded-lg font-black uppercase text-[9px] tracking-tight transition-all duration-300 flex items-center justify-center gap-2
                   ${saveSuccess
-                              ? 'bg-green-500 text-white shadow-lg shadow-green-200 scale-105'
-                              : (!newEvent.title || !newEvent.slotId || isInvalidDate)
-                                ? 'bg-slate-100 text-slate-300'
-                                : 'bg-blue-600 text-white shadow-xl shadow-blue-100 hover:brightness-110'
-                            }`}
-                        >
-                          {saveSuccess ? (<><CheckCircle2 size={14} className="animate-in zoom-in-50 duration-300" /> Salvo!</>) : 'Salvar Avaliação'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              }
+                      ? 'bg-green-500 text-white shadow-lg shadow-green-200 scale-105'
+                      : (!newEvent.title || !newEvent.slotId || isInvalidDate)
+                        ? 'bg-slate-100 text-slate-300'
+                        : 'bg-blue-600 text-white shadow-xl shadow-blue-100 hover:brightness-110'
+                    }`}
+                >
+                  {saveSuccess ? (<><CheckCircle2 size={14} className="animate-in zoom-in-50 duration-300" /> Salvo!</>) : 'Salvar Avaliação'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
 
-              {/* ── Copy Modal ── */ }
-              {
-                isAdding && copyData.isOpen && (
-                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl p-5">
-                      <div className="flex justify-between items-center mb-4">
-                        <div>
-                          <h3 className="text-base font-black uppercase text-slate-800 dark:text-white flex items-center gap-2">
-                            <Copy className="text-blue-600" size={18} /> Copiar Avaliação
-                          </h3>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">
-                            Copiando: <span className="text-blue-600">"{newEvent.title || 'Sem título'}"</span>
-                          </p>
-                        </div>
-                        <button onClick={() => setCopyData(prev => ({ ...prev, isOpen: false }))} className="text-slate-300 hover:text-slate-600"><X /></button>
-                      </div>
-
-                      <div className="space-y-3">
-                        {(data.schools || []).length > 1 && (
-                          <div>
-                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Escola de Destino</label>
-                            <select value={copyData.targetSchoolId} onChange={e => setCopyData(prev => ({ ...prev, targetSchoolId: e.target.value, targetClassId: '', targetSlotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white">
-                              {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                          </div>
-                        )}
-                        <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual turma?</label>
-                          <select value={copyData.targetClassId} onChange={e => setCopyData(prev => ({ ...prev, targetClassId: e.target.value, targetSlotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white">
-                            <option value="">Selecione a turma...</option>
-                            {(copyTargetSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map(c => {
-                              const cId = typeof c === 'string' ? c : c.id;
-                              const cName = typeof c === 'string' ? c : c.name;
-                              return <option key={cId} value={cId}>{cName}</option>;
-                            })}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual dia?</label>
-                          <input type="date" value={copyData.targetDate} onChange={e => setCopyData(prev => ({ ...prev, targetDate: e.target.value, targetSlotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white" />
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Horário (Slot)</label>
-                          <select value={copyData.targetSlotId} onChange={e => setCopyData(prev => ({ ...prev, targetSlotId: e.target.value }))} disabled={!copyData.targetDate || !copyData.targetClassId} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 text-xs font-bold outline-none dark:text-white disabled:opacity-50">
-                            <option value="">{availableSlotsForCopy.length > 0 ? 'Selecione o horário...' : (copyData.targetClassId && copyData.targetDate ? 'Nenhum horário disponível' : 'Aguardando seleção...')}</option>
-                            {availableSlotsForCopy.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="mt-5 flex gap-3">
-                        <button onClick={() => setCopyData(prev => ({ ...prev, isOpen: false }))} className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-lg font-black uppercase text-[9px] tracking-tight hover:bg-slate-200 transition-all">Cancelar</button>
-                        <button onClick={handleCopyAssessment} disabled={!copyData.targetSlotId || !newEvent.title} className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-black uppercase text-[9px] tracking-tight shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all">Confirmar Cópia</button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              }
-  </div>
-);
+    </div>
+  );
 };
 
 export default AssessmentManagement;

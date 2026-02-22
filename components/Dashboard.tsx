@@ -785,7 +785,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                         <span className="text-[7px] md:text-[8px] font-black uppercase leading-none mb-0.5">{getShortWeekDay(event.date)}</span>
                         <span className="text-[10px] md:text-xs font-black leading-none">{getDayMonth(event.date)}</span>
                       </div>
-                      <div className="flex-1 overflow-hidden">
+                      <div className="flex-1 overflow-hidden min-w-0">
                         <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
                         <div className="flex flex-col">
                           <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter truncate">
@@ -822,7 +822,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                         <span className="text-[7px] md:text-[8px] font-black uppercase leading-none mb-0.5">{getShortWeekDay(event.date)}</span>
                         <span className="text-[10px] md:text-xs font-black leading-none">{getDayMonth(event.date)}</span>
                       </div>
-                      <div className="flex-1 overflow-hidden">
+                      <div className="flex-1 overflow-hidden min-w-0">
                         <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">{EVENT_TYPE_LABELS[event.type] || event.type}</span>

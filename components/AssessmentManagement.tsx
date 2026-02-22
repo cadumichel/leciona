@@ -143,11 +143,11 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   };
 
   // ── Available slots for the form ─────────────────────────────────────────
-  const restrictedAvailableSlots = useMemo(() => {
-    if (!activeSchool || !newEvent.date || !newEvent.classId || isInvalidDate) return [];
+  const { restrictedAvailableSlots, isOutOfClassDay } = useMemo(() => {
+    if (!activeSchool || !newEvent.date || !newEvent.classId || isInvalidDate) return { restrictedAvailableSlots: [], isOutOfClassDay: false };
     const dow = getDayOfWeekFromDate(newEvent.date);
     const cls = activeSchool.classes.find(c => (typeof c === 'string' ? c : c.id) === newEvent.classId);
-    if (!cls) return [];
+    if (!cls) return { restrictedAvailableSlots: [], isOutOfClassDay: false };
     const cName = typeof cls === 'string' ? cls : cls.name;
     const cId = typeof cls === 'string' ? cls : cls.id;
     const entries = getSchedulesForDate(data, newEvent.date).filter(s =>
@@ -155,12 +155,23 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       (s.classId === cId || s.classId === cName)
     );
     const slots: TimeSlot[] = [];
-    entries.forEach(entry => {
-      const shift = activeSchool.shifts?.find(sh => sh.id === entry.shiftId);
-      const slot = shift?.slots.find(sl => sl.id === entry.slotId);
-      if (slot) slots.push(slot);
-    });
-    return slots;
+    let outOfClass = false;
+    if (entries.length > 0) {
+      entries.forEach(entry => {
+        const shift = activeSchool.shifts?.find(sh => sh.id === entry.shiftId);
+        const slot = shift?.slots.find(sl => sl.id === entry.slotId);
+        if (slot) slots.push(slot);
+      });
+    } else {
+      outOfClass = true;
+      activeSchool.shifts?.forEach(shift => {
+        shift.slots.forEach(slot => {
+          slots.push(slot);
+        });
+      });
+    }
+    const uniqueSlots = Array.from(new Map(slots.map(s => [s.id, s])).values());
+    return { restrictedAvailableSlots: uniqueSlots, isOutOfClassDay: outOfClass };
   }, [activeSchool, newEvent.date, newEvent.classId, data.schedules, isInvalidDate]);
 
   // ── Available slots for copy ──────────────────────────────────────────────
@@ -168,13 +179,13 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     () => (data.schools || []).find(s => s.id === copyData.targetSchoolId),
     [data.schools, copyData.targetSchoolId]
   );
-  const availableSlotsForCopy = useMemo(() => {
-    if (!copyTargetSchool || !copyData.targetDate || !copyData.targetClassId) return [];
+  const { availableSlotsForCopy, isCopyOutOfClassDay } = useMemo(() => {
+    if (!copyTargetSchool || !copyData.targetDate || !copyData.targetClassId) return { availableSlotsForCopy: [], isCopyOutOfClassDay: false };
     const { invalid } = validateDateLogic(copyData.targetDate, copyData.targetSchoolId, copyData.targetClassId);
-    if (invalid) return [];
+    if (invalid) return { availableSlotsForCopy: [], isCopyOutOfClassDay: false };
     const dow = getDayOfWeekFromDate(copyData.targetDate);
     const cls = copyTargetSchool.classes.find(c => (typeof c === 'string' ? c : c.id) === copyData.targetClassId);
-    if (!cls) return [];
+    if (!cls) return { availableSlotsForCopy: [], isCopyOutOfClassDay: false };
     const cName = typeof cls === 'string' ? cls : cls.name;
     const cId = typeof cls === 'string' ? cls : cls.id;
     const entries = getSchedulesForDate(data, copyData.targetDate).filter(s =>
@@ -182,12 +193,23 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       (s.classId === cId || s.classId === cName)
     );
     const slots: TimeSlot[] = [];
-    entries.forEach(entry => {
-      const shift = copyTargetSchool.shifts?.find(sh => sh.id === entry.shiftId);
-      const slot = shift?.slots.find(sl => sl.id === entry.slotId);
-      if (slot) slots.push(slot);
-    });
-    return slots;
+    let outOfClass = false;
+    if (entries.length > 0) {
+      entries.forEach(entry => {
+        const shift = copyTargetSchool.shifts?.find(sh => sh.id === entry.shiftId);
+        const slot = shift?.slots.find(sl => sl.id === entry.slotId);
+        if (slot) slots.push(slot);
+      });
+    } else {
+      outOfClass = true;
+      copyTargetSchool.shifts?.forEach(shift => {
+        shift.slots.forEach(slot => {
+          slots.push(slot);
+        });
+      });
+    }
+    const uniqueSlots = Array.from(new Map(slots.map(s => [s.id, s])).values());
+    return { availableSlotsForCopy: uniqueSlots, isCopyOutOfClassDay: outOfClass };
   }, [copyTargetSchool, copyData.targetDate, copyData.targetClassId, data.schedules]);
 
   // ── Save ──────────────────────────────────────────────────────────────────
@@ -220,7 +242,11 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     onUpdateData({ events: [...currentEvents, event], logs: [...currentLogs, newLog] });
     setSaveSuccess(true);
     if (!newEvent.id) setNewEvent(prev => ({ ...prev, id: eventId }));
-    setTimeout(() => setSaveSuccess(false), 2500);
+    setTimeout(() => {
+      setSaveSuccess(false);
+      setIsAdding(false);
+      setIsCopyOpen(false);
+    }, 1500);
   };
 
   // ── Copy ──────────────────────────────────────────────────────────────────
@@ -385,9 +411,9 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   const getStatusBadge = (event: SchoolEvent) => {
     const d = event.date.split('T')[0];
     const hasGrades = data.grades.some(g => g.assessmentId === event.id);
-    if (hasGrades) return { label: 'Notas Lançadas', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' };
-    if (d < today) return { label: 'Realizada', color: 'bg-amber-50 text-amber-600 border-amber-200' };
-    return { label: 'Agendada', color: 'bg-blue-50 text-blue-600 border-blue-200' };
+    if (hasGrades) return { label: 'Notas Lançadas', color: 'bg-blue-50 text-blue-600 border-blue-200', icon: <CheckCheck size={12} strokeWidth={3} /> };
+    if (d < today) return { label: 'Realizada', color: 'bg-emerald-50 text-emerald-600 border-emerald-200', icon: <CheckCircle2 size={12} strokeWidth={3} /> };
+    return { label: 'Agendada', color: 'bg-amber-50 text-amber-600 border-amber-200', icon: <Calendar size={12} strokeWidth={3} /> };
   };
 
   // ── Open form for new assessment ──────────────────────────────────────────
@@ -499,12 +525,12 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
           {/* Cards per row */}
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight shrink-0">Cards/linha:</span>
-            <div className="flex gap-1">
+            <div className="flex gap-1 overflow-x-auto custom-scrollbar pb-1">
               {[1, 2, 3, 4, 5, 6].map(n => (
                 <button
                   key={n}
                   onClick={() => setCardsPerRow(n)}
-                  className={`w-6 h-6 rounded text-[9px] font-black transition-all ${cardsPerRow === n
+                  className={`w-6 h-6 flex-shrink-0 flex items-center justify-center rounded text-[9px] font-black transition-all ${cardsPerRow === n
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
                     }`}
@@ -600,27 +626,28 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   key={event.id}
                   onClick={() => openEditForm(event)}
                   title={event.title}
-                  className="relative bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group overflow-hidden"
+                  data-compact={cardsPerRow >= 3}
+                  className="relative bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group overflow-hidden flex flex-col"
                 >
                   {/* Top strip: date badge + center info + right slot */}
-                  <div className="flex items-center gap-3 p-3">
+                  <div className="flex items-center gap-2 data-[compact=true]:p-2 p-3">
 
-                    {/* LEFT: Colored date badge (mirrors diary history card) */}
+                    {/* LEFT: Colored date badge */}
                     <div
-                      className="rounded-xl px-2.5 py-1.5 flex flex-col items-center justify-center shrink-0 min-w-[48px]"
+                      className="rounded-xl flex flex-col items-center justify-center shrink-0 data-[compact=true]:px-1.5 data-[compact=true]:py-1 px-2.5 py-1.5 data-[compact=true]:min-w-[40px] min-w-[48px]"
                       style={{ backgroundColor: color }}
                     >
-                      <span className="text-[8px] font-black text-white/80 uppercase tracking-widest leading-none">{dayAbbr}</span>
-                      <span className="text-[13px] font-black text-white leading-tight mt-0.5">{dayMonth}</span>
+                      <span className="data-[compact=true]:text-[6px] text-[8px] font-black text-white/80 uppercase tracking-widest leading-none">{dayAbbr}</span>
+                      <span className="data-[compact=true]:text-[10px] text-[13px] font-black text-white leading-tight mt-0.5">{dayMonth}</span>
                     </div>
 
                     {/* CENTER: Class name + assessment title */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-black text-slate-700 dark:text-white leading-tight truncate">{evtClassName}</p>
+                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                      <p className="data-[compact=true]:text-[10px] text-[13px] font-black text-slate-700 dark:text-white leading-tight truncate">{evtClassName}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate">{event.title}</p>
+                        <p className="data-[compact=true]:text-[8px] text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate">{event.title}</p>
                         <span
-                          className="text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0"
+                          className="data-[compact=true]:hidden text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0"
                           style={{ backgroundColor: color + `22`, color }}
                         >
                           {event.type === `test` ? `Prova` : `Trabalho`}
@@ -629,7 +656,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                     </div>
 
                     {/* RIGHT: Slot label + shift name */}
-                    <div className="shrink-0 text-right">
+                    <div className="shrink-0 text-right data-[compact=true]:hidden">
                       {shiftInfo.label && (
                         <p className="text-[9px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-tight">{shiftInfo.label}</p>
                       )}
@@ -658,16 +685,16 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
 
                   {/* Bottom strip: school name + status badge + optional description */}
                   <div className="border-t border-slate-50 dark:border-slate-800 px-3 py-1.5 flex items-center gap-2">
-                    <span className="text-[9px] font-bold truncate" style={{ color }}>{school?.name}</span>
+                    <span className="data-[compact=true]:text-[7px] text-[9px] font-black truncate max-w-[50%]" style={{ color }}>{school?.name}</span>
                     <div className="flex-1" />
                     {event.description && event.description.trim() && (
-                      <p className="text-[9px] text-slate-400 font-medium truncate flex items-center gap-1 max-w-[140px]">
+                      <p className="data-[compact=true]:hidden text-[9px] text-slate-400 font-medium truncate flex items-center gap-1 max-w-[140px]">
                         <BookOpen size={9} className="text-slate-300 shrink-0" />
                         {event.description}
                       </p>
                     )}
-                    <span className={`text-[7px] font-black uppercase tracking-tight px-1.5 py-0.5 rounded border shrink-0 ${status.color}`}>
-                      {status.label}
+                    <span title={status.label} className={`p-1 rounded-md border shrink-0 flex items-center justify-center cursor-help transition-colors ${status.color}`}>
+                      {status.icon}
                     </span>
                   </div>
                 </div>
@@ -694,7 +721,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                           <div className="flex-1 h-px bg-slate-100 dark:bg-slate-700" />
                           <span className="text-[8px] font-bold text-slate-300">{week.events.length} av.</span>
                         </div>
-                        <div style={{ display: `grid`, gridTemplateColumns: `repeat(${cardsPerRow}, minmax(0, 1fr))`, gap: `0.5rem` }}>
+                        <div className={`grid gap-2 ${cardsPerRow >= 3 ? 'grid-cols-3 max-sm:grid-cols-2' : ''}`} style={cardsPerRow < 3 ? { gridTemplateColumns: `repeat(${cardsPerRow}, minmax(0, 1fr))` } : {}}>
                           {week.events.map(renderCard)}
                         </div>
                       </div>
@@ -702,7 +729,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   </div>
                 ) : (
                   /* ── One flat grid for the whole month ── */
-                  <div style={{ display: `grid`, gridTemplateColumns: `repeat(${cardsPerRow}, minmax(0, 1fr))`, gap: `0.5rem` }}>
+                  <div className={`grid gap-2 ${cardsPerRow >= 3 ? 'grid-cols-3 max-sm:grid-cols-2' : ''}`} style={cardsPerRow < 3 ? { gridTemplateColumns: `repeat(${cardsPerRow}, minmax(0, 1fr))` } : {}}>
                     {allMonthEvents.map(renderCard)}
                   </div>
                 )}
@@ -716,188 +743,205 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       {
         isAdding && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 w-full max-w-lg shadow-2xl animate-in zoom-in-95">
-              <div className="flex justify-between items-center mb-4">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 w-full max-w-lg shadow-2xl animate-in zoom-in-95 max-h-[95vh] flex flex-col">
+              <div className="flex justify-between items-center mb-4 shrink-0">
                 <h3 className="text-base font-black uppercase">{newEvent.id ? 'Editar Avaliação' : 'Agendar Avaliação'}</h3>
                 <button onClick={() => setIsAdding(false)} className="text-slate-300 hover:text-slate-600"><X /></button>
               </div>
 
-              <div className="space-y-3">
-                {/* Type */}
-                <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => setNewEvent({ ...newEvent, type: 'test' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'test' ? 'bg-red-50 border-red-500 text-red-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Prova</button>
-                  <button onClick={() => setNewEvent({ ...newEvent, type: 'work' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'work' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Trabalho</button>
-                </div>
-
-                {/* Title */}
-                <div>
-                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Assunto / Título</label>
-                  <input type="text" value={newEvent.title} onChange={e => setNewEvent(prev => ({ ...prev, title: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm" placeholder="Ex: Prova Mensal de História" />
-                </div>
-
-                {/* School + Class */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Escola</label>
-                    <select value={newEvent.schoolId} onChange={e => setNewEvent(prev => ({ ...prev, schoolId: e.target.value, classId: '', slotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm">
-                      {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
+              <div className="overflow-y-auto flex-1 pr-1 pb-1 custom-scrollbar">
+                <div className="space-y-3">
+                  {/* Type */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={() => setNewEvent({ ...newEvent, type: 'test' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'test' ? 'bg-red-50 border-red-500 text-red-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Prova</button>
+                    <button onClick={() => setNewEvent({ ...newEvent, type: 'work' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'work' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Trabalho</button>
                   </div>
+
+                  {/* Title */}
                   <div>
-                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Turma</label>
-                    <select value={newEvent.classId} onChange={e => handleClassChange(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm" disabled={!activeSchool}>
-                      <option value="">Selecione...</option>
-                      {(activeSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map(c => {
-                        const cId = typeof c === 'string' ? c : c.id;
-                        const cName = typeof c === 'string' ? c : c.name;
-                        return <option key={cId} value={cId}>{cName}</option>;
-                      })}
-                    </select>
+                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Assunto / Título</label>
+                    <input type="text" value={newEvent.title} onChange={e => setNewEvent(prev => ({ ...prev, title: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm" placeholder="Ex: Prova Mensal de História" />
+                  </div>
+
+                  {/* School + Class */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Escola</label>
+                      <select value={newEvent.schoolId} onChange={e => setNewEvent(prev => ({ ...prev, schoolId: e.target.value, classId: '', slotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm">
+                        {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Turma</label>
+                      <select value={newEvent.classId} onChange={e => handleClassChange(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm" disabled={!activeSchool}>
+                        <option value="">Selecione...</option>
+                        {(activeSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map(c => {
+                          const cId = typeof c === 'string' ? c : c.id;
+                          const cName = typeof c === 'string' ? c : c.name;
+                          return <option key={cId} value={cId}>{cName}</option>;
+                        })}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Date + Slot */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Data</label>
+                      <input type="date" value={newEvent.date} onChange={e => handleDateChange(e.target.value)} className={`w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm ${isInvalidDate ? 'ring-2 ring-pink-500' : ''}`} />
+                      {dateWarning && <p className="text-[8px] text-pink-600 font-black uppercase mt-0.5 ml-1">{dateWarning}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Horário (Slot)</label>
+                      <select disabled={!newEvent.classId || isInvalidDate} value={newEvent.slotId} onChange={e => setNewEvent(prev => ({ ...prev, slotId: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white disabled:opacity-50 text-sm">
+                        <option value="">{restrictedAvailableSlots.length > 0 ? 'Escolha o horário...' : (newEvent.classId ? 'Nenhum horário' : 'Selecione a turma')}</option>
+                        {restrictedAvailableSlots.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Descrição / Observações</label>
+                    <textarea value={newEvent.description} onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))} rows={2} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm resize-none" placeholder="Capítulos, observações..." />
                   </div>
                 </div>
 
-                {/* Date + Slot */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Data</label>
-                    <input type="date" value={newEvent.date} onChange={e => handleDateChange(e.target.value)} className={`w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm ${isInvalidDate ? 'ring-2 ring-pink-500' : ''}`} />
-                    {dateWarning && <p className="text-[8px] text-pink-600 font-black uppercase mt-0.5 ml-1">{dateWarning}</p>}
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Horário (Slot)</label>
-                    <select disabled={!newEvent.classId || isInvalidDate} value={newEvent.slotId} onChange={e => setNewEvent(prev => ({ ...prev, slotId: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white disabled:opacity-50 text-sm">
-                      <option value="">{restrictedAvailableSlots.length > 0 ? 'Escolha o horário...' : (newEvent.classId ? 'Nenhum horário' : 'Selecione a turma')}</option>
-                      {restrictedAvailableSlots.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Descrição / Observações</label>
-                  <textarea value={newEvent.description} onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))} rows={2} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm resize-none" placeholder="Capítulos, observações..." />
-                </div>
-              </div>
-
-              {/* ── Inline Copy Accordion ── */}
-              <div className="border-t border-slate-100 dark:border-slate-800 pt-3 mt-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !isCopyOpen;
-                    setIsCopyOpen(next);
-                    if (next) {
-                      setCopySuccess(false);
-                      setCopyData({
-                        targetSchoolId: newEvent.schoolId || data.schools[0]?.id || '',
-                        targetDate: newEvent.date || '',
-                        targetClassId: '',
-                        targetSlotId: '',
-                      });
-                    }
-                  }}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all ${isCopyOpen
+                {/* ── Inline Copy Accordion ── */}
+                <div className="border-t border-slate-100 dark:border-slate-800 pt-3 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !isCopyOpen;
+                      setIsCopyOpen(next);
+                      if (next) {
+                        setCopySuccess(false);
+                        setCopyData({
+                          targetSchoolId: newEvent.schoolId || data.schools[0]?.id || '',
+                          targetDate: newEvent.date || '',
+                          targetClassId: '',
+                          targetSlotId: '',
+                        });
+                      }
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all ${isCopyOpen
                       ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600'
                       : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-blue-500 hover:bg-blue-50'
-                    }`}
-                >
-                  <span className="flex items-center gap-2"><Copy size={12} /> Criar Cópia (Replicar Avaliação)</span>
-                  <ChevronDown size={12} className={`transition-transform ${isCopyOpen ? 'rotate-180' : ''}`} />
-                </button>
+                      }`}
+                  >
+                    <span className="flex items-center gap-2"><Copy size={12} /> Criar Cópia (Replicar Avaliação)</span>
+                    <ChevronDown size={12} className={`transition-transform ${isCopyOpen ? 'rotate-180' : ''}`} />
+                  </button>
 
-                {isCopyOpen && (
-                  <div className="mt-3 space-y-3 animate-in slide-in-from-top-2 duration-200">
-                    {copySuccess && (
-                      <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-3 py-2 rounded-lg">
-                        <CheckCircle2 size={14} className="shrink-0 animate-in zoom-in-50" />
-                        <span className="text-[9px] font-black uppercase">Cópia criada com sucesso!</span>
-                      </div>
-                    )}
+                  {isCopyOpen && (
+                    <div className="mt-3 space-y-3 animate-in slide-in-from-top-2 duration-200">
+                      {copySuccess && (
+                        <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-3 py-2 rounded-lg">
+                          <CheckCircle2 size={14} className="shrink-0 animate-in zoom-in-50" />
+                          <span className="text-[9px] font-black uppercase">Cópia criada com sucesso!</span>
+                        </div>
+                      )}
 
-                    {(data.schools || []).filter(s => !s.deleted).length > 1 && (
+                      {(data.schools || []).filter(s => !s.deleted).length > 1 && (
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Escola de Destino</label>
+                          <select
+                            value={copyData.targetSchoolId}
+                            onChange={e => setCopyData(prev => ({ ...prev, targetSchoolId: e.target.value, targetClassId: '', targetSlotId: '' }))}
+                            className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs font-bold dark:text-white"
+                          >
+                            {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </select>
+                        </div>
+                      )}
+
                       <div>
-                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Escola de Destino</label>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual turma?</label>
                         <select
-                          value={copyData.targetSchoolId}
-                          onChange={e => setCopyData(prev => ({ ...prev, targetSchoolId: e.target.value, targetClassId: '', targetSlotId: '' }))}
+                          value={copyData.targetClassId}
+                          onChange={e => setCopyData(prev => ({ ...prev, targetClassId: e.target.value, targetSlotId: '' }))}
                           className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs font-bold dark:text-white"
                         >
-                          {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          <option value="">Selecione a turma...</option>
+                          {(copyTargetSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted)
+                            .sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name))
+                            .map(c => {
+                              const cId = typeof c === 'string' ? c : c.id;
+                              const cName = typeof c === 'string' ? c : c.name;
+                              return <option key={cId} value={cId}>{cName}</option>;
+                            })}
                         </select>
                       </div>
-                    )}
 
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual turma?</label>
-                      <select
-                        value={copyData.targetClassId}
-                        onChange={e => setCopyData(prev => ({ ...prev, targetClassId: e.target.value, targetSlotId: '' }))}
-                        className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs font-bold dark:text-white"
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual dia?</label>
+                        <input
+                          type="date"
+                          value={copyData.targetDate}
+                          onChange={e => setCopyData(prev => ({ ...prev, targetDate: e.target.value, targetSlotId: '' }))}
+                          className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs font-bold dark:text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Horário (Slot)</label>
+                        <select
+                          value={copyData.targetSlotId}
+                          onChange={e => setCopyData(prev => ({ ...prev, targetSlotId: e.target.value }))}
+                          disabled={!copyData.targetDate || !copyData.targetClassId}
+                          className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs font-bold dark:text-white disabled:opacity-50"
+                        >
+                          <option value="">
+                            {availableSlotsForCopy.length > 0
+                              ? 'Selecione o horário...'
+                              : (copyData.targetClassId && copyData.targetDate ? 'Nenhum horário disponível' : 'Aguardando seleção...')}
+                          </option>
+                          {availableSlotsForCopy.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
+                        </select>
+                      </div>
+
+                      {isCopyOutOfClassDay && (
+                        <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 p-2.5 rounded-lg text-[10px] font-bold uppercase mb-2">
+                          <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                          <span className="leading-tight text-left">A data selecionada não é um dia de aula regular da turma! A cópia será criada assim mesmo.</span>
+                        </div>
+                      )}
+                      <button
+                        onClick={handleCopyAssessment}
+                        disabled={!copyData.targetSlotId || !newEvent.title}
+                        className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-black uppercase text-[9px] tracking-tight shadow-lg shadow-blue-100 hover:brightness-110 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
                       >
-                        <option value="">Selecione a turma...</option>
-                        {(copyTargetSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted)
-                          .sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name))
-                          .map(c => {
-                            const cId = typeof c === 'string' ? c : c.id;
-                            const cName = typeof c === 'string' ? c : c.name;
-                            return <option key={cId} value={cId}>{cName}</option>;
-                          })}
-                      </select>
+                        <Copy size={12} /> Salvar Cópia
+                      </button>
                     </div>
+                  )}
+                </div>
 
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual dia?</label>
-                      <input
-                        type="date"
-                        value={copyData.targetDate}
-                        onChange={e => setCopyData(prev => ({ ...prev, targetDate: e.target.value, targetSlotId: '' }))}
-                        className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs font-bold dark:text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Horário (Slot)</label>
-                      <select
-                        value={copyData.targetSlotId}
-                        onChange={e => setCopyData(prev => ({ ...prev, targetSlotId: e.target.value }))}
-                        disabled={!copyData.targetDate || !copyData.targetClassId}
-                        className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs font-bold dark:text-white disabled:opacity-50"
-                      >
-                        <option value="">
-                          {availableSlotsForCopy.length > 0
-                            ? 'Selecione o horário...'
-                            : (copyData.targetClassId && copyData.targetDate ? 'Nenhum horário disponível' : 'Aguardando seleção...')}
-                        </option>
-                        {availableSlotsForCopy.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
-                      </select>
-                    </div>
-
-                    <button
-                      onClick={handleCopyAssessment}
-                      disabled={!copyData.targetSlotId || !newEvent.title}
-                      className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-black uppercase text-[9px] tracking-tight shadow-lg shadow-blue-100 hover:brightness-110 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
-                    >
-                      <Copy size={12} /> Salvar Cópia
-                    </button>
-                  </div>
-                )}
               </div>
 
-              <div className="mt-3 flex gap-3">
-                <button onClick={() => { setIsAdding(false); setIsCopyOpen(false); }} className="flex-1 py-3 font-black text-slate-400 uppercase text-[9px]">Cancelar</button>
-                <button
-                  onClick={handleSaveEvent}
-                  disabled={!newEvent.title || !newEvent.slotId || isInvalidDate}
-                  className={`flex-1 py-3 rounded-lg font-black uppercase text-[9px] tracking-tight transition-all duration-300 flex items-center justify-center gap-2
+              <div className="mt-4 flex flex-col gap-3 shrink-0 pt-3 border-t border-slate-100 dark:border-slate-800">
+                {isOutOfClassDay && (
+                  <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 p-2.5 rounded-lg text-[10px] font-bold uppercase">
+                    <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                    <span className="leading-tight text-left">A data selecionada não é um dia de aula regular da turma! A avaliação será agendada assim mesmo.</span>
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <button onClick={() => { setIsAdding(false); setIsCopyOpen(false); }} className="flex-1 py-3 font-black text-slate-400 uppercase text-[9px]">Cancelar</button>
+                  <button
+                    onClick={handleSaveEvent}
+                    disabled={!newEvent.title || !newEvent.slotId || isInvalidDate}
+                    className={`flex-1 py-3 rounded-lg font-black uppercase text-[9px] tracking-tight transition-all duration-300 flex items-center justify-center gap-2
                   ${saveSuccess
-                      ? 'bg-green-500 text-white shadow-lg shadow-green-200 scale-105'
-                      : (!newEvent.title || !newEvent.slotId || isInvalidDate)
-                        ? 'bg-slate-100 text-slate-300'
-                        : 'bg-blue-600 text-white shadow-xl shadow-blue-100 hover:brightness-110'
-                    }`}
-                >
-                  {saveSuccess ? (<><CheckCircle2 size={14} className="animate-in zoom-in-50 duration-300" /> Salvo!</>) : 'Salvar Avaliação'}
-                </button>
+                        ? 'bg-green-500 text-white shadow-lg shadow-green-200 scale-105'
+                        : (!newEvent.title || !newEvent.slotId || isInvalidDate)
+                          ? 'bg-slate-100 text-slate-300'
+                          : 'bg-blue-600 text-white shadow-xl shadow-blue-100 hover:brightness-110'
+                      }`}
+                  >
+                    {saveSuccess ? (<><CheckCircle2 size={14} className="animate-in zoom-in-50 duration-300" /> Salvo!</>) : 'Salvar Avaliação'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

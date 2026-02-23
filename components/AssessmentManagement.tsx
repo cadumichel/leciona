@@ -249,6 +249,27 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     }, 1500);
   };
 
+  // ── Delete ──────────────────────────────────────────────────────────────────
+  const handleDeleteEvent = () => {
+    if (!newEvent.id) return;
+    const eventId = newEvent.id;
+    const event = data.events.find(e => e.id === eventId);
+    if (!event) return;
+
+    const currentEvents = data.events.filter(e => e.id !== eventId);
+    const currentGrades = data.grades.filter(g => g.assessmentId !== eventId);
+
+    // Remover o registro de diário (LessonLog) que foi gerado automaticamente para esta avaliação
+    const safeDateStr = event.date.split('T')[0];
+    const currentLogs = data.logs.filter(l =>
+      !(l.date.split('T')[0] === safeDateStr && l.schoolId === event.schoolId && l.slotId === event.slotId && l.subject.startsWith('Avaliação:'))
+    );
+
+    onUpdateData({ events: currentEvents, grades: currentGrades, logs: currentLogs });
+    setDeletingEventId(null);
+    setIsAdding(false);
+  };
+
   // ── Copy ──────────────────────────────────────────────────────────────────
   const handleCopyAssessment = () => {
     if (!newEvent.title || !copyData.targetDate || !copyData.targetClassId || !copyData.targetSlotId) return;
@@ -666,22 +687,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                     </div>
                   </div>
 
-                  {/* Action buttons — absolute top-right, no layout impact */}
-                  <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                    <button onClick={e => { e.stopPropagation(); openEditForm(event); }} className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Editar">
-                      <Pencil size={12} />
-                    </button>
-                    {deletingEventId === event.id ? (
-                      <div className="flex items-center gap-1">
-                        <button onClick={e => { e.stopPropagation(); onUpdateData({ events: data.events.filter(ev => ev.id !== event.id) }); setDeletingEventId(null); }} className="bg-red-500 text-white px-2 py-1 rounded text-[8px] font-bold">Sim</button>
-                        <button onClick={e => { e.stopPropagation(); setDeletingEventId(null); }} className="bg-slate-200 text-slate-600 px-2 py-1 rounded text-[8px] font-bold">Não</button>
-                      </div>
-                    ) : (
-                      <button onClick={e => { e.stopPropagation(); setDeletingEventId(event.id); }} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all" title="Excluir">
-                        <Trash2 size={12} />
-                      </button>
-                    )}
-                  </div>
+                  {/* Removed Action Buttons */}
 
                   {/* Bottom strip: school name + status badge + optional description */}
                   <div className="border-t border-slate-50 dark:border-slate-800 px-3 py-1.5 flex items-center gap-2">
@@ -744,9 +750,24 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
         isAdding && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 w-full max-w-lg shadow-2xl animate-in zoom-in-95 max-h-[95vh] flex flex-col">
-              <div className="flex justify-between items-center mb-4 shrink-0">
-                <h3 className="text-base font-black uppercase">{newEvent.id ? 'Editar Avaliação' : 'Agendar Avaliação'}</h3>
-                <button onClick={() => setIsAdding(false)} className="text-slate-300 hover:text-slate-600"><X /></button>
+              <div className="flex justify-between items-center mb-4 shrink-0 gap-2">
+                <h3 className="text-base font-black uppercase truncate">{newEvent.id ? 'Editar Avaliação' : 'Agendar Avaliação'}</h3>
+                <div className="flex items-center gap-2 shrink-0">
+                  {newEvent.id && (
+                    deletingEventId === newEvent.id ? (
+                      <div className="flex items-center gap-1 mr-2">
+                        <span className="text-[10px] text-red-500 font-bold uppercase mr-1">Excluir?</span>
+                        <button onClick={handleDeleteEvent} className="bg-red-500 text-white px-2 py-1 rounded text-[10px] font-bold">Sim</button>
+                        <button onClick={() => setDeletingEventId(null)} className="bg-slate-200 text-slate-600 px-2 py-1 rounded text-[10px] font-bold">Não</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setDeletingEventId(newEvent.id!)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-all" title="Excluir">
+                        <Trash2 size={16} />
+                      </button>
+                    )
+                  )}
+                  <button onClick={() => { setIsAdding(false); setDeletingEventId(null); }} className="text-slate-400 hover:text-slate-600 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 p-1.5 rounded-full transition-colors"><X size={16} /></button>
+                </div>
               </div>
 
               <div className="overflow-y-auto flex-1 pr-1 pb-1 custom-scrollbar">

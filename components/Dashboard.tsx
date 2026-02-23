@@ -750,11 +750,11 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                       <Calendar size={10} className="md:w-3 md:h-3" /> Próximo Compromisso: <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 px-2 py-0.5 rounded-lg">{nextGlobalActivity.dateLabel}</span>
                     </p>
                     <div className="flex flex-col items-center gap-2">
-                      <div className="inline-flex items-center gap-3 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700">
-                        <span className="text-[10px] md:text-xs font-black text-slate-700 dark:text-slate-200">{nextGlobalActivity.startTime}</span>
-                        <div className="w-1 h-1 bg-slate-300 rounded-full" />
-                        <div className="text-left">
-                          <p className="text-[9px] md:text-[10px] font-black uppercase text-primary">
+                      <div className="inline-flex items-center gap-3 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 max-w-full min-w-0">
+                        <span className="text-[10px] md:text-xs font-black text-slate-700 dark:text-slate-200 shrink-0">{nextGlobalActivity.startTime}</span>
+                        <div className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />
+                        <div className="text-left min-w-0 overflow-hidden">
+                          <p className="text-[9px] md:text-[10px] font-black uppercase text-primary truncate">
                             {nextGlobalActivity.type === 'school'
                               ? (nextGlobalActivity.schedule.classId === 'window' ? 'Janela' : nextGlobalActivity.schedule.classId)
                               : nextGlobalActivity.student.name}
@@ -787,7 +787,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                       </div>
                       <div className="flex-1 overflow-hidden min-w-0">
                         <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
-                        <div className="flex flex-col">
+                        <div className="flex flex-col min-w-0">
                           <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter truncate">
                             {event.type === 'test' ? 'Prova' : 'Trabalho'} • {(() => {
                               // Lookup class name from ID
@@ -824,9 +824,9 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                       </div>
                       <div className="flex-1 overflow-hidden min-w-0">
                         <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">{EVENT_TYPE_LABELS[event.type] || event.type}</span>
-                          <span className="text-[7px] font-black uppercase" style={{ color: color }}>• {school?.name}</span>
+                        <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter shrink-0">{EVENT_TYPE_LABELS[event.type] || event.type}</span>
+                          <span className="text-[7px] font-black uppercase truncate" style={{ color: color }}>• {school?.name}</span>
                         </div>
                       </div>
                     </div>

@@ -197,7 +197,7 @@ function groupLogsByWeek(
  * Get week identifier for a date
  */
 function getWeekKey(dateString: string, activeFrom: string): string {
-    const date = new Date(dateString);
+    const date = new Date(dateString.split('T')[0] + 'T00:00:00');
     const fromDate = new Date(activeFrom + 'T00:00:00');
     const diffDays = Math.floor((date.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24));
     const weekNumber = Math.floor(diffDays / 7);
@@ -213,7 +213,7 @@ function findLogPosition(log: LessonLog, schedules: ScheduleEntry[]): number {
     if (bySlotId !== -1) return bySlotId;
 
     // Fallback: match by day of week and approximate time
-    const logDate = new Date(log.date);
+    const logDate = new Date(log.date.split('T')[0] + 'T00:00:00');
     const logDay = logDate.getDay() as DayOfWeek;
 
     const candidatesOnSameDay = schedules
@@ -236,7 +236,7 @@ function calculateNewDate(
     newDayOfWeek: DayOfWeek,
     activeFrom: string
 ): string {
-    const old = new Date(oldDate);
+    const old = new Date(oldDate.split('T')[0] + 'T00:00:00');
     const weekStart = new Date(activeFrom + 'T00:00:00');
 
     // Find which week this log belongs to

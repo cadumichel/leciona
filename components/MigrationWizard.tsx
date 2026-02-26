@@ -9,7 +9,7 @@ import {
     CalendarPlus,
     ArrowLeftRight
 } from 'lucide-react';
-import { LessonLog, ScheduleEntry, School, AffectedLog } from '../types';
+import { LessonLog, ScheduleEntry, School, AffectedLog, SchoolEvent } from '../types';
 import { DAYS_OF_WEEK_NAMES } from '../constants';
 
 // CONSTANTS & HELPERS
@@ -55,6 +55,7 @@ interface MigrationWizardProps {
     onClose: () => void;
     onConfirm: (decisions: MigrationDecision[]) => void;
     orphans: LessonLog[];
+    orphanEvents?: SchoolEvent[];
     newSchedules: ScheduleEntry[];
     schools: School[];
     activeFrom: string;
@@ -77,17 +78,23 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
     onClose,
     onConfirm,
     orphans,
+    orphanEvents = [],
     newSchedules,
     schools,
     activeFrom
 }) => {
     const [decisions, setDecisions] = useState<Map<string, MigrationDecision>>(new Map());
 
+    // Merge orphans and orphanEvents for a single generic unified list
+    const unifiedOrphans: (LessonLog | SchoolEvent)[] = useMemo(() => {
+        return [...orphans, ...orphanEvents].sort((a, b) => a.date.localeCompare(b.date));
+    }, [orphans, orphanEvents]);
+
     // Smart Matching Logic: Run once on mount or when orphans change
     useEffect(() => {
         const initialDecisions = new Map<string, MigrationDecision>();
 
-        orphans.forEach(log => {
+        unifiedOrphans.forEach(log => {
             // 1. Find potential slots in the new schedule for this class
             const classSlots = newSchedules
                 .filter(s => s.schoolId === log.schoolId && s.classId === log.classId)
@@ -97,7 +104,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                 // Smart Suggestion: Try to find a slot in the same week
                 // Preference: Same day > Next available day in same week > First day of week
 
-                const logDate = new Date(log.date);
+                const logDate = new Date(log.date.split('T')[0] + 'T00:00:00');
                 const logDay = logDate.getDay();
 
                 // Try to match same day first
@@ -146,11 +153,11 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
         });
 
         setDecisions(initialDecisions);
-    }, [orphans, newSchedules, schools]);
+    }, [unifiedOrphans, newSchedules, schools]);
 
 
     const handleDecisionChange = (logId: string, type: MigrationDecisionType, targetSlot?: ScheduleEntry, isCustom?: boolean, customDate?: string) => {
-        const log = orphans.find(l => l.id === logId);
+        const log = unifiedOrphans.find(l => l.id === logId);
         if (!log) return;
 
         const newDecisions = new Map(decisions);
@@ -194,7 +201,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
             if (finalType === 'MOVE' && finalTargetSlot) {
                 // Refined Smart Snap: Only snap to the dropdown (turn off custom) if the date matches the DEFAULT calculated date
                 // Otherwise, keep it as custom so the indentation/input remains visible, avoiding confusion
-                const logDate = new Date(log.date);
+                const logDate = new Date(log.date.split('T')[0] + 'T00:00:00');
                 const defaultDate = calculateNewDate(log.date, logDate.getDay(), finalTargetSlot.dayOfWeek);
                 const isExactMatch = defaultDate === customDate;
 
@@ -217,7 +224,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
             }
 
         } else if (type === 'MOVE' && targetSlot) {
-            const logDate = new Date(log.date);
+            const logDate = new Date(log.date.split('T')[0] + 'T00:00:00');
             const logDay = logDate.getDay();
             const newDate = calculateNewDate(log.date, logDay, targetSlot.dayOfWeek);
 
@@ -256,7 +263,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                     <div className="flex-1">
                         <h3 className="text-xl font-black text-slate-800 dark:text-white">Ajustar Planejamento Futuro</h3>
                         <p className="text-sm text-slate-500 mt-1">
-                            Identificamos <strong className="text-violet-600">{orphans.length} aulas planejadas</strong> que precisam ser realocadas na nova grade.
+                            Identificamos <strong className="text-violet-600">{unifiedOrphans.length} registros (aulas/eventos)</strong> que precisam ser realocados na nova grade.
                         </p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
@@ -267,9 +274,10 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-slate-900">
                     <div className="space-y-4">
-                        {orphans.sort((a, b) => a.date.localeCompare(b.date)).map(log => {
+                        {unifiedOrphans.map(log => {
+                            const isEvent = 'title' in log;
                             const decision = decisions.get(log.id);
-                            const logDate = new Date(log.date);
+                            const logDate = new Date(log.date.split('T')[0] + 'T00:00:00');
                             const school = schools.find(s => s.id === log.schoolId);
 
                             // Available slots for this class
@@ -286,9 +294,14 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                                             <span className="text-[10px] font-black bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
                                                 {log.classId}
                                             </span>
+                                            {isEvent && (
+                                                <span className="text-[10px] font-black bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">
+                                                    Evento
+                                                </span>
+                                            )}
                                         </div>
                                         <h4 className="font-bold text-slate-700 dark:text-slate-200 text-sm">
-                                            {log.content || log.subject || log.homework || log.notes || 'Sem conteúdo registrado'}
+                                            {isEvent ? (log as SchoolEvent).title : ((log as LessonLog).content || (log as LessonLog).subject || (log as LessonLog).homework || (log as LessonLog).notes || 'Sem conteúdo registrado')}
                                         </h4>
                                         <p className="text-xs text-slate-500 mt-0.5">
                                             Original: {new Date(log.date.split('T')[0] + 'T00:00:00').toLocaleDateString()} ({DAYS_OF_WEEK_NAMES[new Date(log.date.split('T')[0] + 'T00:00:00').getDay()]})

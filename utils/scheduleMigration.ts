@@ -26,6 +26,12 @@ export interface AffectedLog {
     suggestedNewTime: { startTime: string; endTime: string };
 }
 
+export interface AffectedEvent {
+    event: SchoolEvent;
+    suggestedNewDate: string;
+    suggestedNewSlotId?: string;
+}
+
 /**
  * Detect which classes changed slots between two schedule versions
  */
@@ -142,7 +148,7 @@ export const calculateNewDate = (originalDate: string, oldDay: number, newDay: n
     }
 
     // Month is 0-indexed for Date constructor
-    const date = new Date(y, m - 1, d);
+    const date = new Date(`${year}-${month}-${day}T00:00:00`);
 
     // Safety check
     if (isNaN(date.getTime())) return new Date().toISOString().split('T')[0];
@@ -190,7 +196,7 @@ export function findAffectedLogs(
 
         // Find all future logs for this class
         const classLogs = logs.filter(log =>
-            log.date >= activeFrom &&
+            log.date.split('T')[0] >= activeFrom &&
             log.schoolId === schoolId &&
             log.classId === classId &&
             log.status !== 'removed' &&
@@ -221,7 +227,7 @@ export function findAffectedLogs(
             // Map each log sequentially to corresponding new slot
             sortedLogs.forEach((log, index) => {
                 // Find which old slot this log belongs to
-                const logDayOfWeek = new Date(log.date).getDay() as DayOfWeek;
+                const logDayOfWeek = new Date(log.date.split('T')[0] + 'T00:00:00').getDay() as DayOfWeek;
                 const matchingChange = classChanges.find(c =>
                     c.oldSlot.dayOfWeek === logDayOfWeek &&
                     (c.oldSlot.slotId === log.slotId || c.oldSlot.startTime === log.startTime)
@@ -267,14 +273,14 @@ export function findAffectedLogs(
  * Group logs by week number relative to activeFrom
  */
 function groupLogsByWeek(
-    logs: LessonLog[],
+    logs: (LessonLog | SchoolEvent)[],
     activeFrom: string
-): Map<string, LessonLog[]> {
-    const weekGroups = new Map<string, LessonLog[]>();
-    const fromDate = new Date(activeFrom);
+): Map<string, (LessonLog | SchoolEvent)[]> {
+    const weekGroups = new Map<string, (LessonLog | SchoolEvent)[]>();
+    const fromDate = new Date(activeFrom + 'T00:00:00');
 
     logs.forEach(log => {
-        const logDate = new Date(log.date);
+        const logDate = new Date(log.date.split('T')[0] + 'T00:00:00');
         const diffDays = Math.floor((logDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24));
         const weekNumber = Math.floor(diffDays / 7);
         const weekKey = `week_${weekNumber}`;
@@ -297,7 +303,7 @@ function findOrphanLogs(
     activeFrom: string
 ): LessonLog[] {
     return logs.filter(log => {
-        if (log.date < activeFrom) return false;
+        if (log.date.split('T')[0] < activeFrom) return false;
         if (log.status === 'removed') return false;
         if (log.type === 'extra') return false;
 
@@ -306,7 +312,31 @@ function findOrphanLogs(
             s.schoolId === log.schoolId &&
             s.classId === log.classId &&
             s.slotId === log.slotId &&
-            Number(s.dayOfWeek) === new Date(log.date).getDay()
+            Number(s.dayOfWeek) === new Date(log.date.split('T')[0] + 'T00:00:00').getDay()
+        );
+
+        return !matchesSchedule;
+    });
+}
+
+/**
+ * Find events that don't match any slot in the current schedule (orphans)
+ */
+function findOrphanEvents(
+    events: SchoolEvent[],
+    schedules: ScheduleEntry[],
+    activeFrom: string
+): SchoolEvent[] {
+    return events.filter(event => {
+        if (!event.classId || !event.slotId) return false; // Global events or all-day events don't get migrated
+        if (event.date.split('T')[0] < activeFrom) return false;
+
+        // Check if event matches any schedule entry
+        const matchesSchedule = schedules.some(s =>
+            s.schoolId === event.schoolId &&
+            s.classId === event.classId &&
+            s.slotId === event.slotId &&
+            Number(s.dayOfWeek) === new Date(event.date.split('T')[0] + 'T00:00:00').getDay()
         );
 
         return !matchesSchedule;
@@ -321,18 +351,21 @@ export function analyzeMigration(
     currentSchedules: ScheduleEntry[], // The state BEFORE this update (not used for diff anymore, but for context if needed)
     newSchedules: ScheduleEntry[],     // The state AFTER this update
     logs: LessonLog[],
+    events: SchoolEvent[],
     activeFrom: string,
     schools: School[]
-): { changes: ScheduleChange[]; affectedLogs: AffectedLog[]; orphans: LessonLog[] } {
+): { changes: ScheduleChange[]; affectedLogs: AffectedLog[]; affectedEvents: AffectedEvent[]; orphans: LessonLog[]; orphanEvents: SchoolEvent[] } {
 
     // 1. Find all future logs that are improperly scheduled according to newSchedules
     const orphans = findOrphanLogs(logs, newSchedules, activeFrom);
+    const orphanEvents = findOrphanEvents(events, newSchedules, activeFrom);
 
-    if (orphans.length === 0) {
-        return { changes: [], affectedLogs: [], orphans: [] };
+    if (orphans.length === 0 && orphanEvents.length === 0) {
+        return { changes: [], affectedLogs: [], affectedEvents: [], orphans: [], orphanEvents: [] };
     }
 
     const affectedLogs: AffectedLog[] = [];
+    const affectedEvents: AffectedEvent[] = [];
     const changes: ScheduleChange[] = []; // We construct synthetic changes for UI display
 
     // 2. Group orphans by class
@@ -378,7 +411,7 @@ export function analyzeMigration(
 
                 // Calculate NEW DATE for this specific target slot
                 // We need to find the date in the same week as the log, but on the target day
-                const logDay = new Date(log.date).getDay();
+                const logDay = new Date(log.date.split('T')[0] + 'T00:00:00').getDay();
                 const targetDay = targetSlot.dayOfWeek;
 
                 const newDate = calculateNewDate(log.date, logDay, targetDay);
@@ -433,6 +466,54 @@ export function analyzeMigration(
         });
     });
 
+    // 4. Do the exact same for Orphan Events
+    const orphanEventsByClass = new Map<string, SchoolEvent[]>();
+    orphanEvents.forEach(event => {
+        if (!event.classId) return;
+        const key = `${event.schoolId}:${event.classId}`;
+        if (!orphanEventsByClass.has(key)) orphanEventsByClass.set(key, []);
+        orphanEventsByClass.get(key)!.push(event);
+    });
+
+    orphanEventsByClass.forEach((classEvents, key) => {
+        const [schoolId, classId] = key.split(':');
+
+        const newClassSlots = newSchedules
+            .filter(s => s.schoolId === schoolId && s.classId === classId && s.classId !== 'window')
+            .sort((a, b) => {
+                if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
+                return (a.slotId || '').localeCompare(b.slotId || '');
+            });
+
+        if (newClassSlots.length === 0) return;
+
+        const weekGroups = groupLogsByWeek(classEvents, activeFrom);
+
+        weekGroups.forEach((weekEvents, weekKey) => {
+            const sortedEvents = (weekEvents as SchoolEvent[]).sort((a, b) => {
+                return a.date.localeCompare(b.date);
+            });
+
+            const matchCount = Math.min(sortedEvents.length, newClassSlots.length);
+
+            for (let i = 0; i < matchCount; i++) {
+                const event = sortedEvents[i];
+                const targetSlot = newClassSlots[i];
+
+                const eventDay = new Date(event.date.split('T')[0] + 'T00:00:00').getDay();
+                const targetDay = targetSlot.dayOfWeek;
+
+                const newDate = calculateNewDate(event.date, eventDay, targetDay);
+
+                affectedEvents.push({
+                    event,
+                    suggestedNewDate: newDate,
+                    suggestedNewSlotId: targetSlot.slotId,
+                });
+            }
+        });
+    });
+
     console.log('--- Orphan Migration Analysis ---');
     console.log('Orphans Found:', orphans.length);
     console.log('Migratable Logs:', affectedLogs.length);
@@ -440,6 +521,8 @@ export function analyzeMigration(
     return {
         changes,
         affectedLogs,
-        orphans // <--- Export orphans for manual migration UI
+        affectedEvents,
+        orphans, // <--- Export orphans for manual migration UI
+        orphanEvents
     };
 }

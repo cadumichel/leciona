@@ -4,7 +4,7 @@ import { DAYS_OF_WEEK_NAMES } from '../constants';
 import { Plus, Trash2, LayoutGrid, Calendar as CalendarIcon, Save, Info, AlertCircle, User, Clock, ShieldAlert, Layers, ChevronDown, Check, ArrowRight, PackageX } from 'lucide-react';
 import { MigrationWizard, MigrationDecision } from './MigrationWizard';
 import { checkTimeOverlap } from '../utils';
-import { analyzeMigration, ScheduleChange, AffectedLog } from '../utils/scheduleMigration';
+import { analyzeMigration, ScheduleChange, AffectedLog, AffectedEvent } from '../utils/scheduleMigration';
 
 interface ScheduleManagementProps {
   data: AppData;
@@ -24,6 +24,9 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
   const [migrationData, setMigrationData] = useState<{
     changes: ScheduleChange[];
     affectedLogs: AffectedLog[];
+    affectedEvents: AffectedEvent[];
+    orphans: LessonLog[];
+    orphanEvents: SchoolEvent[];
     pendingVersion?: ScheduleVersion;
   } | null>(null);
   const [showMigrationModal, setShowMigrationModal] = useState(false);
@@ -167,12 +170,13 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
       baseSchedules,
       baseSchedules, // Same for now, changes happen during editing
       data.logs || [],
+      data.events || [],
       newVersionDate,
       data.schools || []
     );
 
     // Store pending version for later
-    if (analysis.affectedLogs.length > 0) {
+    if (analysis.affectedLogs.length > 0 || analysis.affectedEvents.length > 0) {
       setMigrationData({ ...analysis, pendingVersion: newVersion });
       setShowMigrationModal(true);
       setIsVersionModalOpen(false);
@@ -241,6 +245,37 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
       // No changes needed to logs array.
     }
 
+    let updatedEvents = data.events || [];
+    // If migrate is true and we have EVENT decisions from Wizard (TBD)
+    // For now, if events are affected, we might just leave them as orphans or auto-migrate
+    // The MigrationWizard doesn't yet support events, but we'll apply them if they exist in decisions
+    if (migrate && decisions && decisions.length > 0) {
+      updatedEvents = updatedEvents.map(event => {
+        const decision = decisions.find(d => d.logId === event.id); // Reusing logId for event.id
+        if (!decision) return event;
+
+        if (decision.type === 'DELETE') {
+          return { ...event, title: event.title + ' (Cancelado)', status: 'removed' } as any; // hacky way, maybe add status to SchoolEvent
+        }
+        if (decision.type === 'MOVE' && decision.targetDate && decision.targetSlotId) {
+          return {
+            ...event,
+            date: decision.targetDate,
+            slotId: decision.targetSlotId,
+          };
+        }
+        if (decision.type === 'EXTRA') {
+          const { slotId, ...rest } = event;
+          return {
+            ...rest,
+            date: decision.targetDate || event.date,
+            slotId: undefined
+          };
+        }
+        return event;
+      });
+    }
+
     // ... save version logic
     const existingVersionIndex = data.scheduleVersions?.findIndex(v => v.id === migrationData.pendingVersion.id);
     let updatedVersions;
@@ -255,7 +290,8 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
 
     onUpdateData({
       scheduleVersions: updatedVersions,
-      logs: updatedLogs
+      logs: updatedLogs,
+      events: updatedEvents
     });
 
     // If we just saved the current version edits, we need to reset changes flag
@@ -280,6 +316,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
       currentVersion.schedules, // Original state (old)
       editedSchedules,          // New state (new)
       data.logs || [],
+      data.events || [],
       currentVersion.activeFrom,
       data.schools || []
     );
@@ -291,7 +328,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
     };
 
     // 3. If migration needed -> Show Wizard
-    if (analysis.affectedLogs.length > 0) {
+    if (analysis.affectedLogs.length > 0 || analysis.affectedEvents.length > 0) {
       setMigrationData({ ...analysis, pendingVersion: pendingUpdate });
       setShowMigrationModal(true);
       return;
@@ -499,7 +536,6 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
         </div>
       )}
 
-      {/* --- MIGRATION WIZARD MODAL --- */}
       <MigrationWizard
         isOpen={showMigrationModal && !!migrationData}
         onClose={() => {
@@ -507,7 +543,8 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
           setMigrationData(null);
         }}
         onConfirm={(decisions) => executeMigration(true, decisions)}
-        orphans={migrationData?.orphans || []}
+        orphans={migrationData?.orphans || []} // We will need to merge orphan logs and orphan events in Wizard
+        orphanEvents={migrationData?.orphanEvents || []}
         newSchedules={migrationData?.pendingVersion?.schedules || []}
         activeFrom={migrationData?.pendingVersion?.activeFrom || ''}
         schools={data.schools || []}

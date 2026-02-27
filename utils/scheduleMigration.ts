@@ -1,4 +1,4 @@
-import { LessonLog, ScheduleEntry, DayOfWeek, School, AppData } from '../types';
+import { LessonLog, ScheduleEntry, DayOfWeek, School, AppData, SchoolEvent } from '../types';
 
 export interface ScheduleChange {
     classId: string;
@@ -214,7 +214,7 @@ export function findAffectedLogs(
         // For each week, map logs sequentially to new schedule
         weekGroups.forEach((weekLogs, weekKey) => {
             // Sort logs by date and time within the week
-            const sortedLogs = weekLogs.sort((a, b) => {
+            const sortedLogs = (weekLogs as LessonLog[]).sort((a, b) => {
                 if (a.date !== b.date) return a.date.localeCompare(b.date);
                 return (a.startTime || '').localeCompare(b.startTime || '');
             });
@@ -359,9 +359,46 @@ export function analyzeMigration(
     schools: School[]
 ): { changes: ScheduleChange[]; affectedLogs: AffectedLog[]; affectedEvents: AffectedEvent[]; orphans: LessonLog[]; orphanEvents: SchoolEvent[] } {
 
+    // 0. Figure out which schools actually had schedule changes
+    const modifiedSchoolIds = new Set<string>();
+    const allSchoolIds = new Set([...currentSchedules.map(s => s.schoolId), ...newSchedules.map(s => s.schoolId)]);
+
+    allSchoolIds.forEach(schoolId => {
+        const oldForSchool = currentSchedules.filter(s => s.schoolId === schoolId);
+        const newForSchool = newSchedules.filter(s => s.schoolId === schoolId);
+
+        // Simple check: if lengths differ, it's modified
+        if (oldForSchool.length !== newForSchool.length) {
+            modifiedSchoolIds.add(schoolId);
+            return;
+        }
+
+        // Deep check: any slot changed?
+        const hasChanges = oldForSchool.some(oldSlot => {
+            const matchingNewSlot = newForSchool.find(newSlot =>
+                newSlot.dayOfWeek === oldSlot.dayOfWeek &&
+                newSlot.shiftId === oldSlot.shiftId &&
+                newSlot.slotId === oldSlot.slotId &&
+                newSlot.classId === oldSlot.classId
+            );
+            return !matchingNewSlot;
+        });
+
+        if (hasChanges) {
+            modifiedSchoolIds.add(schoolId);
+        }
+    });
+
+    console.log('[MigrationAnalyzer] Modified schools:', Array.from(modifiedSchoolIds));
+
+    // Filter logs and events to ONLY those belonging to schools that were modified
+    const filteredLogs = logs.filter(log => modifiedSchoolIds.has(log.schoolId));
+    const filteredEvents = events.filter(event => modifiedSchoolIds.has(event.schoolId!));
+
     // 1. Find all future logs that are improperly scheduled according to newSchedules
-    const orphans = findOrphanLogs(logs, newSchedules, activeFrom);
-    const orphanEvents = findOrphanEvents(events, newSchedules, activeFrom);
+    // ONLY among the schools that were actually touched
+    const orphans = findOrphanLogs(filteredLogs, newSchedules, activeFrom);
+    const orphanEvents = findOrphanEvents(filteredEvents, newSchedules, activeFrom);
 
     if (orphans.length === 0 && orphanEvents.length === 0) {
         return { changes: [], affectedLogs: [], affectedEvents: [], orphans: [], orphanEvents: [] };
@@ -398,7 +435,7 @@ export function analyzeMigration(
 
         weekGroups.forEach((weekLogs, weekKey) => {
             // Sort logs chronologically
-            const sortedLogs = weekLogs.sort((a, b) => {
+            const sortedLogs = (weekLogs as LessonLog[]).sort((a, b) => {
                 if (a.date !== b.date) return a.date.localeCompare(b.date);
                 return (a.startTime || '').localeCompare(b.startTime || '');
             });

@@ -167,7 +167,6 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
         subject: newStudent.subject!,
         color: newStudent.color || COLORS[0],
         startDate: newStudent.startDate || new Date().toISOString().split('T')[0],
-        startDate: newStudent.startDate || new Date().toISOString().split('T')[0],
         schedules: newStudent.schedules || [],
         paymentConfig: newStudent.paymentConfig, // Include payment config
         payments: newStudent.payments || [] // Include payments if any

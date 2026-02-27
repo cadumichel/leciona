@@ -9,8 +9,8 @@ export const migrateNamesToIds = (data: AppData): AppData => {
     // AND Build a Mapping of "SchoolID + ClassName" -> "ClassID"
     const nameToIdMap: Record<string, string> = {}; // key: `${schoolId}:${className}` -> value: classId
 
-    updatedData.schools = updatedData.schools.map(school => {
-        const updatedClasses: (string | SchoolClass)[] = [];
+    updatedData.schools = updatedData.schools.map((school: any) => {
+        const updatedClasses: SchoolClass[] = [];
 
         (school.classes || []).forEach(cls => {
             let classObj: SchoolClass;

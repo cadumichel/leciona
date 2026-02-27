@@ -119,17 +119,19 @@ export interface AppData {
   scheduleVersions: ScheduleVersion[]; // NEW: Source of Truth
   logs: LessonLog[];
   events: SchoolEvent[];
-  calendars: SchoolCalendar[];
+  calendars: AcademicCalendar[];
   reminders: Reminder[];
   grades: GradeEntry[];
   customAssessments: CustomAssessment[];
   gradingConfigs: GradingConfig[];
   settings: AppSettings;
 }
-id: string;
-type: string;
-description: string;
-studentIds ?: string[]; // IDs dos alunos envolvidos na ocorrência
+
+export interface Occurrence {
+  id: string;
+  type: string;
+  description: string;
+  studentIds?: string[]; // IDs dos alunos envolvidos na ocorrência
 }
 
 export type AttendanceStatus = 'present' | 'absent' | 'justified';

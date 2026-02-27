@@ -2147,7 +2147,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          {
             activeSubTab === 'privatestudents' && data.settings.isPrivateTeacher && (
                <div className="animate-in fade-in slide-in-from-right-4">
-                  <StudentManagement data={data} onUpdateData={onUpdateData} />
+                  <StudentManagement data={data} onUpdateData={onUpdateData} onNavigateToLesson={() => { }} />
                </div>
             )
          }

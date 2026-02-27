@@ -147,8 +147,11 @@ export const calculateNewDate = (originalDate: string, oldDay: number, newDay: n
         return new Date().toISOString().split('T')[0];
     }
 
-    // Month is 0-indexed for Date constructor
-    const date = new Date(`${year}-${month}-${day}T00:00:00`);
+    // Format strings securely for ISO 8601
+    const yearStr = String(y);
+    const monthStr = String(m).padStart(2, '0');
+    const dayStr = String(d).padStart(2, '0');
+    const date = new Date(`${yearStr}-${monthStr}-${dayStr}T00:00:00`);
 
     // Safety check
     if (isNaN(date.getTime())) return new Date().toISOString().split('T')[0];
@@ -161,11 +164,11 @@ export const calculateNewDate = (originalDate: string, oldDay: number, newDay: n
     const newDateObj = new Date(date);
     newDateObj.setDate(date.getDate() + diff);
 
-    const year = newDateObj.getFullYear();
-    const month = String(newDateObj.getMonth() + 1).padStart(2, '0');
-    const day = String(newDateObj.getDate()).padStart(2, '0');
+    const yearOut = newDateObj.getFullYear();
+    const monthOut = String(newDateObj.getMonth() + 1).padStart(2, '0');
+    const dayOut = String(newDateObj.getDate()).padStart(2, '0');
 
-    return `${year}-${month}-${day}`;
+    return `${yearOut}-${monthOut}-${dayOut}`;
 };
 
 /**

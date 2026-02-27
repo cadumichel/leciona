@@ -309,38 +309,43 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
   };
 
   const handleSaveVersion = () => {
-    if (!currentVersion) return;
+    try {
+      if (!currentVersion) return;
 
-    // 1. Analyze for migrations between ORIGINAL and EDITED
-    const analysis = analyzeMigration(
-      currentVersion.schedules, // Original state (old)
-      editedSchedules,          // New state (new)
-      data.logs || [],
-      data.events || [],
-      currentVersion.activeFrom,
-      data.schools || []
-    );
+      // 1. Analyze for migrations between ORIGINAL and EDITED
+      const analysis = analyzeMigration(
+        currentVersion.schedules, // Original state (old)
+        editedSchedules,          // New state (new)
+        data.logs || [],
+        data.events || [],
+        currentVersion.activeFrom,
+        data.schools || []
+      );
 
-    // 2. Prepare pending update
-    const pendingUpdate = {
-      ...currentVersion,
-      schedules: editedSchedules
-    };
+      // 2. Prepare pending update
+      const pendingUpdate = {
+        ...currentVersion,
+        schedules: editedSchedules
+      };
 
-    // 3. If migration needed -> Show Wizard
-    if (analysis.affectedLogs.length > 0 || analysis.affectedEvents.length > 0) {
-      setMigrationData({ ...analysis, pendingVersion: pendingUpdate });
-      setShowMigrationModal(true);
-      return;
+      // 3. If migration needed -> Show Wizard
+      if (analysis.affectedLogs.length > 0 || analysis.affectedEvents.length > 0 || analysis.orphans.length > 0 || analysis.orphanEvents.length > 0) {
+        setMigrationData({ ...analysis, pendingVersion: pendingUpdate });
+        setShowMigrationModal(true);
+        return;
+      }
+
+      // 4. No migration needed -> Commit immediately
+      const updatedVersions = data.scheduleVersions.map(v =>
+        v.id === currentVersion.id ? pendingUpdate : v
+      );
+
+      onUpdateData({ scheduleVersions: updatedVersions });
+      setHasChanges(false);
+    } catch (err: any) {
+      alert("Erro ao salvar: " + err.message);
+      console.error(err);
     }
-
-    // 4. No migration needed -> Commit immediately
-    const updatedVersions = data.scheduleVersions.map(v =>
-      v.id === currentVersion.id ? pendingUpdate : v
-    );
-
-    onUpdateData({ scheduleVersions: updatedVersions });
-    setHasChanges(false);
   };
 
   const handleUpdateSchedule = (shiftId: string, slotId: string, classId: string) => {

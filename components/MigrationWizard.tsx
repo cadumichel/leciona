@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { LessonLog, ScheduleEntry, School, AffectedLog, SchoolEvent } from '../types';
 import { DAYS_OF_WEEK_NAMES } from '../constants';
+import { isSameClass } from '../utils/scheduleMigration';
 
 // CONSTANTS & HELPERS
 const calculateNewDate = (originalDate: string, oldDay: number, newDay: number): string => {
@@ -97,7 +98,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
         unifiedOrphans.forEach(log => {
             // 1. Find potential slots in the new schedule for this class
             const classSlots = newSchedules
-                .filter(s => s.schoolId === log.schoolId && s.classId === log.classId)
+                .filter(s => s.schoolId === log.schoolId && isSameClass(s.classId, log.classId, log.schoolId, schools))
                 .sort((a, b) => a.dayOfWeek - b.dayOfWeek);
 
             if (classSlots.length > 0) {
@@ -282,7 +283,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
 
                             // Available slots for this class
                             const classSlots = newSchedules
-                                .filter(s => s.schoolId === log.schoolId && s.classId === log.classId)
+                                .filter(s => s.schoolId === log.schoolId && isSameClass(s.classId, log.classId, log.schoolId, schools))
                                 .sort((a, b) => a.dayOfWeek - b.dayOfWeek);
 
                             return (

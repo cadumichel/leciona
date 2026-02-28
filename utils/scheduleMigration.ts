@@ -298,12 +298,33 @@ function groupLogsByWeek(
 }
 
 /**
+ * Helper to check if two class identifiers (ID or name) refer to the same class in a school.
+ */
+export function isSameClass(id1: string | undefined, id2: string | undefined, schoolId: string, schools: School[]): boolean {
+    if (!id1 || !id2) return false;
+    if (id1 === id2) return true;
+
+    const school = schools.find(s => s.id === schoolId);
+    if (!school) return false;
+
+    const cls1 = school.classes?.find(c => (typeof c === 'string' ? c : c.id) === id1 || (typeof c === 'string' ? c : c.name) === id1);
+    const cls2 = school.classes?.find(c => (typeof c === 'string' ? c : c.id) === id2 || (typeof c === 'string' ? c : c.name) === id2);
+
+    if (!cls1 || !cls2) return false;
+
+    const c1Name = typeof cls1 === 'string' ? cls1 : cls1.name;
+    const c2Name = typeof cls2 === 'string' ? cls2 : cls2.name;
+    return c1Name === c2Name;
+}
+
+/**
  * Find logs that don't match any slot in the current schedule (orphans)
  */
 function findOrphanLogs(
     logs: LessonLog[],
     schedules: ScheduleEntry[],
-    activeFrom: string
+    activeFrom: string,
+    schools: School[]
 ): LessonLog[] {
     return logs.filter(log => {
         if (log.date.split('T')[0] < activeFrom) return false;
@@ -313,7 +334,7 @@ function findOrphanLogs(
         // Check if log matches any schedule entry
         const matchesSchedule = schedules.some(s =>
             s.schoolId === log.schoolId &&
-            s.classId === log.classId &&
+            isSameClass(s.classId, log.classId, log.schoolId, schools) &&
             s.slotId === log.slotId &&
             Number(s.dayOfWeek) === new Date(log.date.split('T')[0] + 'T00:00:00').getDay()
         );
@@ -328,7 +349,8 @@ function findOrphanLogs(
 function findOrphanEvents(
     events: SchoolEvent[],
     schedules: ScheduleEntry[],
-    activeFrom: string
+    activeFrom: string,
+    schools: School[]
 ): SchoolEvent[] {
     return events.filter(event => {
         if (!event.classId || !event.slotId) return false; // Global events or all-day events don't get migrated
@@ -337,7 +359,7 @@ function findOrphanEvents(
         // Check if event matches any schedule entry
         const matchesSchedule = schedules.some(s =>
             s.schoolId === event.schoolId &&
-            s.classId === event.classId &&
+            isSameClass(s.classId, event.classId, event.schoolId, schools) &&
             s.slotId === event.slotId &&
             Number(s.dayOfWeek) === new Date(event.date.split('T')[0] + 'T00:00:00').getDay()
         );
@@ -379,7 +401,7 @@ export function analyzeMigration(
                 newSlot.dayOfWeek === oldSlot.dayOfWeek &&
                 newSlot.shiftId === oldSlot.shiftId &&
                 newSlot.slotId === oldSlot.slotId &&
-                newSlot.classId === oldSlot.classId
+                isSameClass(newSlot.classId, oldSlot.classId, schoolId, schools)
             );
             return !matchingNewSlot;
         });
@@ -397,8 +419,8 @@ export function analyzeMigration(
 
     // 1. Find all future logs that are improperly scheduled according to newSchedules
     // ONLY among the schools that were actually touched
-    const orphans = findOrphanLogs(filteredLogs, newSchedules, activeFrom);
-    const orphanEvents = findOrphanEvents(filteredEvents, newSchedules, activeFrom);
+    const orphans = findOrphanLogs(filteredLogs, newSchedules, activeFrom, schools);
+    const orphanEvents = findOrphanEvents(filteredEvents, newSchedules, activeFrom, schools);
 
     if (orphans.length === 0 && orphanEvents.length === 0) {
         return { changes: [], affectedLogs: [], affectedEvents: [], orphans: [], orphanEvents: [] };
@@ -422,7 +444,7 @@ export function analyzeMigration(
 
         // Find slots for this class in the NEW schedule
         const newClassSlots = newSchedules
-            .filter(s => s.schoolId === schoolId && s.classId === classId && s.classId !== 'window')
+            .filter(s => s.schoolId === schoolId && isSameClass(s.classId, classId, schoolId, schools) && s.classId !== 'window')
             .sort((a, b) => {
                 if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
                 return (a.slotId || '').localeCompare(b.slotId || '');

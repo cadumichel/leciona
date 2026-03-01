@@ -1,5 +1,6 @@
 import { LessonLog, ScheduleEntry, DayOfWeek, School, AppData, SchoolEvent } from '../types';
-
+import { isHoliday } from '../utils';
+import { isLessonBlocked } from '../utils/lessonStats';
 export interface ScheduleChange {
     classId: string;
     schoolId: string;
@@ -169,6 +170,33 @@ export const calculateNewDate = (originalDate: string, oldDay: number, newDay: n
     const dayOut = String(newDateObj.getDate()).padStart(2, '0');
 
     return `${yearOut}-${monthOut}-${dayOut}`;
+};
+
+/**
+ * Validates and calculates a new date sticking only to the same week.
+ * If the resulting date is blocked (holiday, recess, or event), it returns null.
+ */
+export const calculateSameWeekValidDate = (
+    originalDate: string,
+    oldDay: number,
+    newDay: number,
+    appData: AppData,
+    schoolId: string,
+    shiftId: string,
+    classId: string
+): string | null => {
+    const projectedDate = calculateNewDate(originalDate, oldDay, newDay);
+    const dateObj = new Date(projectedDate + 'T00:00:00');
+
+    // 1. Check if it's a holiday
+    if (isHoliday(dateObj)) return null;
+
+    // 2. Check if it's blocked by school calendar (recess) or events
+    if (isLessonBlocked(appData, projectedDate, schoolId, shiftId, classId)) {
+        return null;
+    }
+
+    return projectedDate;
 };
 
 /**
@@ -378,7 +406,8 @@ export function analyzeMigration(
     logs: LessonLog[],
     events: SchoolEvent[],
     activeFrom: string,
-    schools: School[]
+    schools: School[],
+    appData?: AppData // Make optional for backwards compat, but required for valid skips
 ): { changes: ScheduleChange[]; affectedLogs: AffectedLog[]; affectedEvents: AffectedEvent[]; orphans: LessonLog[]; orphanEvents: SchoolEvent[] } {
 
     // 0. Figure out which schools actually had schedule changes
@@ -476,7 +505,15 @@ export function analyzeMigration(
                 const logDay = new Date(log.date.split('T')[0] + 'T00:00:00').getDay();
                 const targetDay = targetSlot.dayOfWeek;
 
-                const newDate = calculateNewDate(log.date, logDay, targetDay);
+                let newDate = calculateNewDate(log.date, logDay, targetDay);
+                if (appData) {
+                    const validDate = calculateSameWeekValidDate(log.date, logDay, targetDay, appData, schoolId, targetSlot.shiftId, targetSlot.classId);
+                    if (!validDate) {
+                        // If it's blocked, we don't automatically map it here
+                        continue;
+                    }
+                    newDate = validDate;
+                }
 
                 // Get time details
                 const school = schools.find(s => s.id === schoolId);
@@ -565,7 +602,14 @@ export function analyzeMigration(
                 const eventDay = new Date(event.date.split('T')[0] + 'T00:00:00').getDay();
                 const targetDay = targetSlot.dayOfWeek;
 
-                const newDate = calculateNewDate(event.date, eventDay, targetDay);
+                let newDate = calculateNewDate(event.date, eventDay, targetDay);
+                if (appData) {
+                    const validDate = calculateSameWeekValidDate(event.date, eventDay, targetDay, appData, schoolId, targetSlot.shiftId, targetSlot.classId);
+                    if (!validDate) {
+                        continue;
+                    }
+                    newDate = validDate;
+                }
 
                 affectedEvents.push({
                     event,

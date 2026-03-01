@@ -11,45 +11,9 @@ import {
 } from 'lucide-react';
 import { LessonLog, ScheduleEntry, School, AffectedLog, SchoolEvent } from '../types';
 import { DAYS_OF_WEEK_NAMES } from '../constants';
-import { isSameClass } from '../utils/scheduleMigration';
+import { isSameClass, calculateNewDate, calculateSameWeekValidDate } from '../utils/scheduleMigration';
 
 // CONSTANTS & HELPERS
-const calculateNewDate = (originalDate: string, oldDay: number, newDay: number): string => {
-    let y, m, d;
-
-    // Handle DD/MM/YYYY (common in Brazil/User Locale)
-    if (originalDate.includes('/')) {
-        [d, m, y] = originalDate.split('/').map(Number);
-    } else {
-        // Handle YYYY-MM-DD or ISO
-        const datePart = originalDate.split('T')[0];
-        [y, m, d] = datePart.split('-').map(Number);
-    }
-
-    // Validate parsing
-    if (!y || !m || !d || isNaN(y) || isNaN(m) || isNaN(d)) {
-        console.error("Invalid date format:", originalDate);
-        return new Date().toISOString().split('T')[0]; // Fallback to today
-    }
-
-    // Month is 0-indexed
-    const date = new Date(y, m - 1, d);
-
-    if (isNaN(date.getTime())) return new Date().toISOString().split('T')[0];
-
-    const currentDay = date.getDay();
-    const diff = newDay - currentDay;
-
-    // Create new date instance
-    const newDateObj = new Date(date);
-    newDateObj.setDate(date.getDate() + diff);
-
-    const year = newDateObj.getFullYear();
-    const month = String(newDateObj.getMonth() + 1).padStart(2, '0');
-    const day = String(newDateObj.getDate()).padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
-};
 
 interface MigrationWizardProps {
     isOpen: boolean;
@@ -60,6 +24,7 @@ interface MigrationWizardProps {
     newSchedules: ScheduleEntry[];
     schools: School[];
     activeFrom: string;
+    appData: AppData;
 }
 
 export type MigrationDecisionType = 'MOVE' | 'EXTRA' | 'DELETE';
@@ -82,7 +47,8 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
     orphanEvents = [],
     newSchedules,
     schools,
-    activeFrom
+    activeFrom,
+    appData
 }) => {
     const [decisions, setDecisions] = useState<Map<string, MigrationDecision>>(new Map());
 
@@ -125,24 +91,29 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                 }
 
                 if (bestSlot) {
-                    const newDate = calculateNewDate(log.date, logDay, bestSlot.dayOfWeek);
+                    const validDate = calculateSameWeekValidDate(log.date, logDay, bestSlot.dayOfWeek, appData, log.schoolId, bestSlot.shiftId, bestSlot.classId);
 
-                    // Get time info
-                    const school = schools.find(s => s.id === log.schoolId);
-                    const shift = school?.shifts?.find(sh => sh.id === bestSlot.shiftId);
-                    const slotDetails = shift?.slots?.find(sl => sl.id === bestSlot.slotId);
+                    if (validDate) {
+                        // Get time info
+                        const school = schools.find(s => s.id === log.schoolId);
+                        const shift = school?.shifts?.find(sh => sh.id === bestSlot?.shiftId);
+                        const slotDetails = shift?.slots?.find(sl => sl.id === bestSlot?.slotId);
 
-                    initialDecisions.set(log.id, {
-                        logId: log.id,
-                        type: 'MOVE',
-                        targetDate: newDate,
-                        targetSlotId: bestSlot.slotId,
-                        targetTime: {
-                            startTime: slotDetails?.startTime || '',
-                            endTime: slotDetails?.endTime || ''
-                        },
-                        targetSlot: bestSlot
-                    });
+                        initialDecisions.set(log.id, {
+                            logId: log.id,
+                            type: 'MOVE',
+                            targetDate: validDate,
+                            targetSlotId: bestSlot.slotId,
+                            targetTime: {
+                                startTime: slotDetails?.startTime || '',
+                                endTime: slotDetails?.endTime || ''
+                            },
+                            targetSlot: bestSlot
+                        });
+                    } else {
+                        // Blocked in the same week, fallback to EXTRA
+                        initialDecisions.set(log.id, { logId: log.id, type: 'EXTRA' });
+                    }
                 } else {
                     // No slots found for this class? Suggest Extra
                     initialDecisions.set(log.id, { logId: log.id, type: 'EXTRA' });
@@ -227,23 +198,27 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
         } else if (type === 'MOVE' && targetSlot) {
             const logDate = new Date(log.date.split('T')[0] + 'T00:00:00');
             const logDay = logDate.getDay();
-            const newDate = calculateNewDate(log.date, logDay, targetSlot.dayOfWeek);
+            const validDate = calculateSameWeekValidDate(log.date, logDay, targetSlot.dayOfWeek, appData, log.schoolId, targetSlot.shiftId, targetSlot.classId);
 
-            const school = schools.find(s => s.id === log.schoolId);
-            const shift = school?.shifts?.find(sh => sh.id === targetSlot.shiftId);
-            const slotDetails = shift?.slots?.find(sl => sl.id === targetSlot.slotId);
+            if (validDate) {
+                const school = schools.find(s => s.id === log.schoolId);
+                const shift = school?.shifts?.find(sh => sh.id === targetSlot.shiftId);
+                const slotDetails = shift?.slots?.find(sl => sl.id === targetSlot.slotId);
 
-            newDecisions.set(logId, {
-                logId,
-                type: 'MOVE',
-                targetDate: newDate,
-                targetSlotId: targetSlot.slotId,
-                targetTime: {
-                    startTime: slotDetails?.startTime || '',
-                    endTime: slotDetails?.endTime || ''
-                },
-                targetSlot
-            });
+                newDecisions.set(logId, {
+                    logId,
+                    type: 'MOVE',
+                    targetDate: validDate,
+                    targetSlotId: targetSlot.slotId,
+                    targetTime: {
+                        startTime: slotDetails?.startTime || '',
+                        endTime: slotDetails?.endTime || ''
+                    },
+                    targetSlot
+                });
+            } else {
+                newDecisions.set(logId, { logId, type: 'EXTRA', targetDate: log.date });
+            }
         }
 
         setDecisions(newDecisions);
@@ -281,6 +256,8 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                             const logDate = new Date(log.date.split('T')[0] + 'T00:00:00');
                             const school = schools.find(s => s.id === log.schoolId);
 
+                            const className = school?.classes.find(c => c.id === log.classId)?.name || log.classId;
+
                             // Available slots for this class
                             const classSlots = newSchedules
                                 .filter(s => s.schoolId === log.schoolId && isSameClass(s.classId, log.classId, log.schoolId, schools))
@@ -293,7 +270,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="text-[10px] font-black uppercase text-slate-400">{school?.name}</span>
                                             <span className="text-[10px] font-black bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-                                                {log.classId}
+                                                {className}
                                             </span>
                                             {isEvent && (
                                                 <span className="text-[10px] font-black bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">
@@ -316,7 +293,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                                         <div className="flex flex-col gap-2">
                                             <select
                                                 className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm px-3 py-2 font-medium outline-none focus:ring-2 ring-violet-500/20"
-                                                value={decision?.isCustomDate ? 'CUSTOM' : (decision?.type === 'MOVE' ? decision?.targetSlot?.slotId : decision?.type)}
+                                                value={decision?.isCustomDate ? 'CUSTOM' : (decision?.type === 'MOVE' ? decision?.targetSlot?.id : decision?.type)}
                                                 onChange={(e) => {
                                                     const val = e.target.value;
                                                     if (val === 'EXTRA') {
@@ -326,22 +303,30 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                                                     } else if (val === 'CUSTOM') {
                                                         handleDecisionChange(log.id, 'EXTRA', undefined, true);
                                                     } else {
-                                                        const slot = classSlots.find(s => s.slotId === val);
+                                                        const slot = classSlots.find(s => s.id === val);
                                                         if (slot) handleDecisionChange(log.id, 'MOVE', slot);
                                                     }
                                                 }}
                                             >
                                                 <optgroup label="Mover para nova grade">
                                                     {classSlots.map((slot, idx) => {
-                                                        // Preview the projected date
-                                                        const newDate = calculateNewDate(log.date, logDate.getDay(), slot.dayOfWeek);
+                                                        // Preview the projected valid date
+                                                        const validDate = calculateSameWeekValidDate(log.date, logDate.getDay(), slot.dayOfWeek, appData, log.schoolId, slot.shiftId, slot.classId);
                                                         const slotTime = school?.shifts?.find(sh => sh.id === slot.shiftId)?.slots?.find(sl => sl.id === slot.slotId);
-                                                        const isSmartMatch = decision?.type === 'MOVE' && decision.targetSlotId === slot.slotId; // Visual cue?
+                                                        const isSmartMatch = decision?.type === 'MOVE' && decision.targetSlot?.id === slot.id; // Visual cue?
+
+                                                        if (!validDate) {
+                                                            return (
+                                                                <option key={slot.id} value={slot.id} disabled className="text-slate-400 bg-slate-100">
+                                                                    🚫 {DAYS_OF_WEEK_NAMES[slot.dayOfWeek]} - Bloqueado (Feriado/Evento)
+                                                                </option>
+                                                            );
+                                                        }
 
                                                         return (
-                                                            <option key={slot.slotId} value={slot.slotId}>
+                                                            <option key={slot.id} value={slot.id}>
                                                                 {isSmartMatch ? '✨ ' : ''}
-                                                                {DAYS_OF_WEEK_NAMES[slot.dayOfWeek]} - {new Date(newDate + 'T00:00:00').toLocaleDateString()} ({slotTime?.startTime})
+                                                                {DAYS_OF_WEEK_NAMES[slot.dayOfWeek]} - {new Date(validDate + 'T00:00:00').toLocaleDateString()} ({slotTime?.startTime})
                                                             </option>
                                                         );
                                                     })}

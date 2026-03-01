@@ -172,7 +172,8 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
       data.logs || [],
       data.events || [],
       newVersionDate,
-      data.schools || []
+      data.schools || [],
+      data
     );
 
     // Store pending version for later
@@ -319,7 +320,8 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
         data.logs || [],
         data.events || [],
         currentVersion.activeFrom,
-        data.schools || []
+        data.schools || [],
+        data
       );
 
       // 2. Prepare pending update
@@ -553,6 +555,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
         newSchedules={migrationData?.pendingVersion?.schedules || []}
         activeFrom={migrationData?.pendingVersion?.activeFrom || ''}
         schools={data.schools || []}
+        appData={data}
       />
 
 

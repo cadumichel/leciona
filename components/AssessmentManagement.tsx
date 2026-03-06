@@ -642,13 +642,26 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                 return { label: null, shiftName: null };
               })();
 
+              const handleTogglePrepared = (e: React.MouseEvent) => {
+                e.stopPropagation();
+
+                const updatedEvents = data.events.map(ev =>
+                  ev.id === event.id ? { ...ev, prepared: !ev.prepared } : ev
+                );
+
+                onUpdateData({ events: updatedEvents });
+              };
+
               return (
                 <div
                   key={event.id}
                   onClick={() => openEditForm(event)}
                   title={event.title}
                   data-compact={cardsPerRow >= 3}
-                  className="relative bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group overflow-hidden flex flex-col"
+                  className={`relative rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group overflow-hidden flex flex-col ${event.prepared
+                      ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800'
+                      : 'bg-white border-slate-100 dark:bg-slate-900 dark:border-slate-800'
+                    }`}
                 >
                   {/* Top strip: date badge + center info + right slot */}
                   <div className="flex items-center gap-2 data-[compact=true]:p-2 p-3">
@@ -693,6 +706,22 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   <div className="border-t border-slate-50 dark:border-slate-800 px-3 py-1.5 flex items-center gap-2">
                     <span className="data-[compact=true]:text-[7px] text-[9px] font-black truncate max-w-[50%]" style={{ color }}>{school?.name}</span>
                     <div className="flex-1" />
+
+                    {/* Prepared Checkbox */}
+                    <div
+                      className="flex items-center gap-1.5 cursor-pointer z-10"
+                      onClick={handleTogglePrepared}
+                      title={event.prepared ? "Prova elaborada (clique para desmarcar)" : "Marcar como elaborada"}
+                    >
+                      <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${event.prepared
+                          ? 'bg-emerald-500 border-emerald-500 text-white'
+                          : 'bg-white border-slate-300 dark:bg-slate-800 dark:border-slate-600'
+                        }`}>
+                        {event.prepared && <CheckCheck size={10} strokeWidth={3} />}
+                      </div>
+                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight data-[compact=true]:hidden">Pronta</span>
+                    </div>
+
                     {event.description && event.description.trim() && (
                       <p className="data-[compact=true]:hidden text-[9px] text-slate-400 font-medium truncate flex items-center gap-1 max-w-[140px]">
                         <BookOpen size={9} className="text-slate-300 shrink-0" />

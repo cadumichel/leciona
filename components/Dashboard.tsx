@@ -646,8 +646,8 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
       )
       }
 
-      <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
-        <div className="lg:col-span-2 space-y-4 md:space-y-6">
+      <div className="grid lg:grid-cols-3 gap-4 md:gap-6 overflow-hidden">
+        <div className="lg:col-span-2 space-y-4 md:space-y-6 w-full max-w-full min-w-0">
           <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
             <h3 className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight mb-4 md:mb-6 flex items-center gap-2"><Clock className="text-primary w-3 h-3 md:w-[14px] md:h-[14px]" /> Atividade Agora</h3>
             {activityInfo ? (

@@ -542,7 +542,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
         </div>
 
         {/* Layout row */}
-        <div className="flex items-center gap-3 pt-1 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-slate-100 dark:border-slate-800">
           {/* Cards per row */}
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight shrink-0">Cards/linha:</span>
@@ -551,9 +551,10 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                 <button
                   key={n}
                   onClick={() => setCardsPerRow(n)}
-                  className={`w-6 h-6 flex-shrink-0 flex items-center justify-center rounded text-[9px] font-black transition-all ${cardsPerRow === n
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
+                  className={`w-6 h-6 flex-shrink-0 flex items-center justify-center rounded text-[9px] font-black transition-all ${n > 3 ? 'max-sm:hidden ' : ''
+                    }${cardsPerRow === n
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
                     }`}
                 >
                   {n}
@@ -659,8 +660,8 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   title={event.title}
                   data-compact={cardsPerRow >= 3}
                   className={`relative rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group overflow-hidden flex flex-col ${event.prepared
-                      ? 'bg-emerald-100 border-emerald-300 dark:bg-emerald-900/40 dark:border-emerald-700'
-                      : 'bg-white border-slate-100 dark:bg-slate-900 dark:border-slate-800'
+                    ? 'bg-emerald-100 border-emerald-300 dark:bg-emerald-900/40 dark:border-emerald-700'
+                    : 'bg-white border-slate-100 dark:bg-slate-900 dark:border-slate-800'
                     }`}
                 >
                   {/* Top strip: date badge + center info + right slot */}

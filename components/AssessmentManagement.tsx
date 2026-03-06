@@ -659,7 +659,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   title={event.title}
                   data-compact={cardsPerRow >= 3}
                   className={`relative rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group overflow-hidden flex flex-col ${event.prepared
-                      ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800'
+                      ? 'bg-emerald-100 border-emerald-300 dark:bg-emerald-900/40 dark:border-emerald-700'
                       : 'bg-white border-slate-100 dark:bg-slate-900 dark:border-slate-800'
                     }`}
                 >
@@ -714,8 +714,8 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                       title={event.prepared ? "Prova elaborada (clique para desmarcar)" : "Marcar como elaborada"}
                     >
                       <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${event.prepared
-                          ? 'bg-emerald-500 border-emerald-500 text-white'
-                          : 'bg-white border-slate-300 dark:bg-slate-800 dark:border-slate-600'
+                        ? 'bg-emerald-500 border-emerald-500 text-white'
+                        : 'bg-white border-slate-300 dark:bg-slate-800 dark:border-slate-600'
                         }`}>
                         {event.prepared && <CheckCheck size={10} strokeWidth={3} />}
                       </div>

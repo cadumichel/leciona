@@ -433,18 +433,41 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     return null;
   }, [activityInfo, sortedTodaySchedules, currentTime, data]);
 
-  const upcomingAssessments = useMemo(() => {
+  const { thisWeekAssessments, nextWeekAssessments } = useMemo(() => {
     const now = new Date();
+    // Start of today (midnight)
     now.setHours(0, 0, 0, 0);
     const limit = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
 
-    return data.events
+    // Calculate the end of the current week (Sunday at 23:59:59)
+    const dayOfWeek = now.getDay(); // 0 (Sun) to 6 (Sat)
+    const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+    const endOfWeek = new Date(now);
+    endOfWeek.setDate(now.getDate() + daysUntilSunday);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const upcoming = data.events
       .filter(e => {
         const eDate = new Date(e.date);
         const school = data.schools.find(s => s.id === e.schoolId);
         return (e.type === 'test' || e.type === 'work') && eDate >= now && eDate <= limit && school && !school.deleted;
       })
       .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Split into this week and next week
+    const thisWeek: SchoolEvent[] = [];
+    const nextWeek: SchoolEvent[] = [];
+
+    upcoming.forEach(e => {
+      const eDate = new Date(e.date);
+      if (eDate <= endOfWeek) {
+        thisWeek.push(e);
+      } else {
+        nextWeek.push(e);
+      }
+    });
+
+    return { thisWeekAssessments: thisWeek, nextWeekAssessments: nextWeek };
   }, [data.events]);
 
   const upcomingEvents = useMemo(() => {
@@ -775,35 +798,75 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
             <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col">
               <h3 className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight mb-3 md:mb-4 flex items-center gap-2"><FileCheck className="text-primary w-3 h-3 md:w-[14px] md:h-[14px]" /> Avaliações (15d)</h3>
               <div className="space-y-2 md:space-y-3 flex-1">
-                {upcomingAssessments.length > 0 ? upcomingAssessments.map((event, idx) => {
-                  const school = data.schools.find(s => s.id === event.schoolId);
-                  const color = school?.color || '#3b82f6';
+                {(thisWeekAssessments.length > 0 || nextWeekAssessments.length > 0) ? (
+                  <div className="space-y-4">
+                    {/* Esta Semana */}
+                    {thisWeekAssessments.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-[8px] font-black uppercase text-slate-400 tracking-widest pl-1">Esta Semana</h4>
+                        {thisWeekAssessments.map((event, idx) => {
+                          const school = data.schools.find(s => s.id === event.schoolId);
+                          const color = school?.color || '#3b82f6';
+                          return (
+                            <div key={`this-week-${idx}`} onClick={onNavigateToAssessments} className="flex items-center gap-3 p-2.5 md:p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800 cursor-pointer hover:scale-[1.02] transition-transform" style={{ borderColor: color + '30', backgroundColor: color + '05' }}>
+                              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg flex flex-col items-center justify-center shrink-0 border-b-2" style={{ backgroundColor: color + '15', color: color, borderColor: color + '30' }}>
+                                <span className="text-[7px] md:text-[8px] font-black uppercase leading-none mb-0.5">{getShortWeekDay(event.date)}</span>
+                                <span className="text-[10px] md:text-xs font-black leading-none">{getDayMonth(event.date)}</span>
+                              </div>
+                              <div className="flex-1 overflow-hidden min-w-0">
+                                <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
+                                <div className="flex flex-col min-w-0">
+                                  <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter truncate">
+                                    {event.type === 'test' ? 'Prova' : 'Trabalho'} • {(() => {
+                                      const schoolClass = school?.classes.find(c => (typeof c === 'string' ? c : c.id) === event.classId || (typeof c === 'string' ? c : c.name) === event.classId);
+                                      return schoolClass ? (typeof schoolClass === 'string' ? schoolClass : schoolClass.name) : event.classId;
+                                    })()}
+                                  </p>
+                                  <p className="text-[7px] font-black uppercase truncate mt-0.5" style={{ color: color }}>{school?.name}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
-                  return (
-                    <div key={idx} onClick={onNavigateToAssessments} className="flex items-center gap-3 p-2.5 md:p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800 cursor-pointer hover:scale-[1.02] transition-transform" style={{ borderColor: color + '30', backgroundColor: color + '05' }}>
-                      <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg flex flex-col items-center justify-center shrink-0 border-b-2" style={{ backgroundColor: color + '15', color: color, borderColor: color + '30' }}>
-                        <span className="text-[7px] md:text-[8px] font-black uppercase leading-none mb-0.5">{getShortWeekDay(event.date)}</span>
-                        <span className="text-[10px] md:text-xs font-black leading-none">{getDayMonth(event.date)}</span>
-                      </div>
-                      <div className="flex-1 overflow-hidden min-w-0">
-                        <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
-                        <div className="flex flex-col min-w-0">
-                          <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter truncate">
-                            {event.type === 'test' ? 'Prova' : 'Trabalho'} • {(() => {
-                              // Lookup class name from ID
-                              const schoolClass = school?.classes.find(c =>
-                                (typeof c === 'string' ? c : c.id) === event.classId ||
-                                (typeof c === 'string' ? c : c.name) === event.classId
-                              );
-                              return schoolClass ? (typeof schoolClass === 'string' ? schoolClass : schoolClass.name) : event.classId;
-                            })()}
-                          </p>
-                          <p className="text-[7px] font-black uppercase truncate mt-0.5" style={{ color: color }}>{school?.name}</p>
+                    {/* Próxima Semana */}
+                    {nextWeekAssessments.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 mb-1 mt-2">
+                          <div className="h-px bg-slate-100 dark:bg-slate-800 flex-1"></div>
+                          <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest bg-white dark:bg-slate-900 px-2 rounded-full border border-slate-100 dark:border-slate-800">Próxima Semana</span>
+                          <div className="h-px bg-slate-100 dark:bg-slate-800 flex-1"></div>
                         </div>
+                        {nextWeekAssessments.map((event, idx) => {
+                          const school = data.schools.find(s => s.id === event.schoolId);
+                          const color = school?.color || '#3b82f6';
+                          return (
+                            <div key={`next-week-${idx}`} onClick={onNavigateToAssessments} className="flex items-center gap-3 p-2.5 md:p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800 cursor-pointer hover:scale-[1.02] transition-transform opacity-80" style={{ borderColor: color + '30', backgroundColor: color + '05' }}>
+                              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg flex flex-col items-center justify-center shrink-0 border-b-2" style={{ backgroundColor: color + '15', color: color, borderColor: color + '30' }}>
+                                <span className="text-[7px] md:text-[8px] font-black uppercase leading-none mb-0.5">{getShortWeekDay(event.date)}</span>
+                                <span className="text-[10px] md:text-xs font-black leading-none">{getDayMonth(event.date)}</span>
+                              </div>
+                              <div className="flex-1 overflow-hidden min-w-0">
+                                <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
+                                <div className="flex flex-col min-w-0">
+                                  <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter truncate">
+                                    {event.type === 'test' ? 'Prova' : 'Trabalho'} • {(() => {
+                                      const schoolClass = school?.classes.find(c => (typeof c === 'string' ? c : c.id) === event.classId || (typeof c === 'string' ? c : c.name) === event.classId);
+                                      return schoolClass ? (typeof schoolClass === 'string' ? schoolClass : schoolClass.name) : event.classId;
+                                    })()}
+                                  </p>
+                                  <p className="text-[7px] font-black uppercase truncate mt-0.5" style={{ color: color }}>{school?.name}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </div>
-                  );
-                }) : (
+                    )}
+                  </div>
+                ) : (
                   <div className="py-6 md:py-8 text-center flex flex-col items-center justify-center h-full"><p className="text-[8px] md:text-[9px] font-black uppercase tracking-tight text-slate-500">Sem avaliações próximas</p></div>
                 )}
               </div>

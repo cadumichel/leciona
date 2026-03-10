@@ -687,7 +687,17 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         const now = new Date();
         now.setHours(0, 0, 0, 0);
         const daysLeft = Math.ceil((eDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        const daysText = daysLeft === 0 ? 'Prova hoje' : daysLeft === 1 ? 'Prova amanhã' : `Prova daqui a ${daysLeft} dias`;
+        const daysText = daysLeft === 0 ? 'Para hoje' : daysLeft === 1 ? 'Para amanhã' : `Daqui a ${daysLeft} dias`;
+
+        const school = data.schools.find(s => s.id === nextAssessment.schoolId);
+        const cls = school?.classes.find(c =>
+          (typeof c === 'string' ? c : c.id) === nextAssessment.classId ||
+          (typeof c === 'string' ? c : c.name) === nextAssessment.classId
+        );
+        const className = cls ? (typeof cls === 'string' ? cls : cls.name) : nextAssessment.classId;
+
+        const total = upcomingUnpreparedAssessments.length;
+        const totalText = total > 1 ? ` (+${total - 1} nos próximos 7 dias)` : '';
 
         return (
           <button onClick={onNavigateToAssessments} className="w-full flex items-center justify-between p-3 md:p-4 rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-200 dark:shadow-amber-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4">
@@ -696,8 +706,8 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                 <FileCheck size={18} className="md:w-[20px] md:h-[20px]" />
               </div>
               <div className="text-left">
-                <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/80">Elaboração Pendente</span>
-                <p className="text-[10px] md:text-xs font-black uppercase text-white">{daysText} ({nextAssessment.title})</p>
+                <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/80">Elaboração Pendente{totalText}</span>
+                <p className="text-[10px] md:text-xs font-black uppercase text-white">{daysText}: {nextAssessment.title} ({className})</p>
               </div>
             </div>
             <ChevronRight size={18} className="md:w-[20px] md:h-[20px]" />

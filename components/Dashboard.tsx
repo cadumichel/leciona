@@ -494,7 +494,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         if (e.type !== 'test' && e.type !== 'work') return false;
         if (e.prepared) return false;
 
-        const eDate = new Date(e.date + 'T00:00:00');
+        const eDate = new Date(e.date.split('T')[0] + 'T00:00:00');
         eDate.setHours(0, 0, 0, 0);
 
         const school = data.schools.find(s => s.id === e.schoolId);
@@ -682,7 +682,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
       {upcomingUnpreparedAssessments.length > 0 && (() => {
         const nextAssessment = upcomingUnpreparedAssessments[0];
-        const eDate = new Date(nextAssessment.date + 'T00:00:00');
+        const eDate = new Date(nextAssessment.date.split('T')[0] + 'T00:00:00');
         eDate.setHours(0, 0, 0, 0);
         const now = new Date();
         now.setHours(0, 0, 0, 0);

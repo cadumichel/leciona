@@ -484,6 +484,25 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [data.events]);
 
+  const upcomingUnpreparedAssessments = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const limit = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
+
+    return data.events
+      .filter(e => {
+        if (e.type !== 'test' && e.type !== 'work') return false;
+        if (e.prepared) return false;
+
+        const eDate = new Date(e.date + 'T00:00:00');
+        eDate.setHours(0, 0, 0, 0);
+
+        const school = data.schools.find(s => s.id === e.schoolId);
+        return eDate >= now && eDate <= limit && !!school && !school.deleted;
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [data.events, data.schools]);
+
   const renderDashboardCalendar = () => {
     const year = dashMonth.getFullYear();
     const month = dashMonth.getMonth();
@@ -660,6 +679,31 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
           <ChevronRight size={18} className="md:w-[20px] md:h-[20px]" />
         </div>
       )}
+
+      {upcomingUnpreparedAssessments.length > 0 && (() => {
+        const nextAssessment = upcomingUnpreparedAssessments[0];
+        const eDate = new Date(nextAssessment.date + 'T00:00:00');
+        eDate.setHours(0, 0, 0, 0);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const daysLeft = Math.ceil((eDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const daysText = daysLeft === 0 ? 'Prova hoje' : daysLeft === 1 ? 'Prova amanhã' : `Prova daqui a ${daysLeft} dias`;
+
+        return (
+          <button onClick={onNavigateToAssessments} className="w-full flex items-center justify-between p-3 md:p-4 rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-200 dark:shadow-amber-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4">
+            <div className="flex items-center gap-3 md:gap-4">
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/20">
+                <FileCheck size={18} className="md:w-[20px] md:h-[20px]" />
+              </div>
+              <div className="text-left">
+                <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/80">Elaboração Pendente</span>
+                <p className="text-[10px] md:text-xs font-black uppercase text-white">{daysText} ({nextAssessment.title})</p>
+              </div>
+            </div>
+            <ChevronRight size={18} className="md:w-[20px] md:h-[20px]" />
+          </button>
+        );
+      })()}
 
       {data.settings.showDailyQuote && (
         <div className="bg-primary/5 dark:bg-primary/10 border-2 border-dashed border-primary/20 p-4 md:p-5 rounded-xl relative overflow-hidden">

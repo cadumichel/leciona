@@ -2721,7 +2721,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     // Check if we can find the log in the CURRENT data (in case existingLog prop is stale)
     const freshLog = data.logs.find(l =>
       l.id === logIdToUpdate ||
-      (l.date === date && l.slotId === schedule.slotId && (l.schoolId === schedule.schoolId || l.studentId === schedule.schoolId) && l.status !== 'removed')
+      (l.date.startsWith(date) && l.slotId === schedule.slotId && (l.schoolId === schedule.schoolId || l.studentId === schedule.schoolId) && l.status !== 'removed')
     );
 
     if (freshLog) {
@@ -3040,7 +3040,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                   <div className="space-y-0.5 md:space-y-1 p-0.5">
                     {integratedPanoramicColumns.groupedShifts[key].map((item, idx) => (
                       <div
-                        key={idx}
+                        key={`${item.schedule?.schoolId || item.inst?.id || idx}-${item.slot?.id || idx}-${item.schedule?.classId || idx}`}
                         role="button"
                         tabIndex={item.slot.type === 'break' || item.isFree ? -1 : 0}
                         style={{ cursor: (item.slot.type === 'break' || item.isFree) ? 'default' : 'pointer' }}
@@ -3374,7 +3374,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
                         return (
                           <button
-                            key={idx}
+                            key={`${item.date}-${item.schedule.schoolId}-${item.schedule.slotId}-${item.schedule.classId}`}
                             onClick={() => handleOpenLog(item.schedule, item.date)}
                             className={`bg-white dark:bg-slate-900 p-5 rounded-xl border-2 transition-all text-left hover:shadow-lg relative overflow-hidden min-w-0 ${item.log ? 'border-purple-200 dark:border-purple-800' : 'border-blue-100 dark:border-blue-900/20 hover:border-blue-200'}`}
                           >
@@ -3537,7 +3537,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
                           return (
                             <div
-                              key={idx}
+                              key={`${item.date}-${item.schedule.schoolId}-${item.schedule.slotId}-${item.schedule.classId}`}
                               role="button"
                               tabIndex={0}
                               onClick={() => handleOpenLog(item.schedule as any, item.date)}

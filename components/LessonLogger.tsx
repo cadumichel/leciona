@@ -895,15 +895,33 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
         const dateDiff = b.date.localeCompare(a.date);
         if (dateDiff !== 0) return dateDiff;
 
-        // If same date, we ideally sort by time, but logs don't have explicit time easily accessible without lookup.
-        // However, since we filtered strictly earlier stuff, the order might not matter heavily for just "the last one", 
-        // BUT if we have period 1 and period 2, and we are in period 3, we want period 2.
-        // Period 2 likely created AFTER period 1. So 'created_at' or simply ID?
-        // We don't have created_at.
-        // We can rely on insertion order or try to sort by slot time if possible.
-        // For now, let's assume the filter is robust enough and Date sort handles the bulk. 
-        // For same-day multiple previous lessons, sorting might be unstable without time lookup.
-        return 0;
+        // If same date, sort by start time descending
+        let startA = 0;
+        let startB = 0;
+
+        const schoolA = data.schools.find(s => s.id === a.schoolId);
+        if (schoolA) {
+          for (const shift of schoolA.shifts) {
+            const slot = shift.slots.find(s => s.id === a.slotId);
+            if (slot && slot.startTime) {
+              startA = parseTimeToMinutes(slot.startTime);
+              break;
+            }
+          }
+        }
+
+        const schoolB = data.schools.find(s => s.id === b.schoolId);
+        if (schoolB) {
+          for (const shift of schoolB.shifts) {
+            const slot = shift.slots.find(s => s.id === b.slotId);
+            if (slot && slot.startTime) {
+              startB = parseTimeToMinutes(slot.startTime);
+              break;
+            }
+          }
+        }
+
+        return startB - startA;
       })[0];
   }, [activeLesson, data.logs, data.schools]);
 

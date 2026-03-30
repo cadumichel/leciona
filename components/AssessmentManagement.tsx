@@ -757,7 +757,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                           <div className="flex-1 h-px bg-slate-100 dark:bg-slate-700" />
                           <span className="text-[8px] font-bold text-slate-300">{week.events.length} av.</span>
                         </div>
-                        <div className={`grid gap-2 ${cardsPerRow >= 3 ? 'grid-cols-3 max-sm:grid-cols-2' : ''}`} style={cardsPerRow < 3 ? { gridTemplateColumns: `repeat(${cardsPerRow}, minmax(0, 1fr))` } : {}}>
+                        <div className={`grid gap-2 ${cardsPerRow === 1 ? 'grid-cols-1' : cardsPerRow === 2 ? 'grid-cols-2' : cardsPerRow === 3 ? 'grid-cols-3' : cardsPerRow === 4 ? 'grid-cols-4' : cardsPerRow === 5 ? 'grid-cols-5' : 'grid-cols-6'} ${cardsPerRow >= 3 ? 'max-sm:grid-cols-2' : ''}`}>
                           {week.events.map(renderCard)}
                         </div>
                       </div>
@@ -765,7 +765,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   </div>
                 ) : (
                   /* ── One flat grid for the whole month ── */
-                  <div className={`grid gap-2 ${cardsPerRow >= 3 ? 'grid-cols-3 max-sm:grid-cols-2' : ''}`} style={cardsPerRow < 3 ? { gridTemplateColumns: `repeat(${cardsPerRow}, minmax(0, 1fr))` } : {}}>
+                  <div className={`grid gap-2 ${cardsPerRow === 1 ? 'grid-cols-1' : cardsPerRow === 2 ? 'grid-cols-2' : cardsPerRow === 3 ? 'grid-cols-3' : cardsPerRow === 4 ? 'grid-cols-4' : cardsPerRow === 5 ? 'grid-cols-5' : 'grid-cols-6'} ${cardsPerRow >= 3 ? 'max-sm:grid-cols-2' : ''}`}>
                     {allMonthEvents.map(renderCard)}
                   </div>
                 )}

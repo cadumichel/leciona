@@ -64,12 +64,12 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   const [filterSchoolId, setFilterSchoolId] = useState('all');
   const [filterClassId, setFilterClassId] = useState('all');
   const [filterTermIdx, setFilterTermIdx] = useState('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'scheduled' | 'done'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'scheduled' | 'done'>('scheduled');
   const [searchQuery, setSearchQuery] = useState('');
 
   // ── Layout/Grouping State ────────────────────────────────────────────────
   const [cardsPerRow, setCardsPerRow] = useState(4);
-  const [groupByWeek, setGroupByWeek] = useState(false);
+  const [groupByWeek, setGroupByWeek] = useState(true);
 
   // ── Copy State ───────────────────────────────────────────────────────────
   const [isCopyOpen, setIsCopyOpen] = useState(false);

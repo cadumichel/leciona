@@ -700,8 +700,8 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         const totalText = total > 1 ? ` (+${total - 1} nos próximos 7 dias)` : '';
 
         return (
-          <div className={daysLeft <= 3 ? 'animate-pulse' : ''}>
-            <button onClick={onNavigateToAssessments} className="w-full flex items-center justify-between p-3 md:p-4 rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-200 dark:shadow-amber-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4">
+          <div className="relative">
+            <button onClick={onNavigateToAssessments} className="relative z-10 w-full flex items-center justify-between p-3 md:p-4 rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-200 dark:shadow-amber-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4">
               <div className="flex items-center gap-3 md:gap-4">
                 <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/20">
                   <FileCheck size={18} className="md:w-[20px] md:h-[20px]" />
@@ -713,6 +713,9 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
               </div>
               <ChevronRight size={18} className="md:w-[20px] md:h-[20px]" />
             </button>
+            {daysLeft <= 3 && (
+              <div className="absolute -inset-[2px] z-20 rounded-[14px] border-[3px] border-red-500 shadow-[0_0_20px_rgba(239,68,68,1)] animate-pulse pointer-events-none" />
+            )}
           </div>
         );
       })()}

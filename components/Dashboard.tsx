@@ -634,11 +634,11 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
   return (
     <div className="space-y-4 md:space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 md:gap-4">
-        <div>
-          <h1 className="text-lg md:text-3xl font-black text-slate-800 dark:text-white tracking-tight leading-none">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg md:text-3xl font-black text-slate-800 dark:text-white tracking-tight leading-none truncate block w-full">
             Olá, {data.profile.title || 'Prof.'} {data.profile.name || 'Docente'}!
           </h1>
-          <p className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-1 md:mt-2">
+          <p className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-1 md:mt-2 truncate w-full">
             {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
           </p>
         </div>
@@ -650,13 +650,9 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
       {pendingCount > 0 && !data.settings.hideUnregisteredClassesOnDashboard && (
         <button onClick={onNavigateToPendencies} className="w-full flex items-center justify-between p-3 md:p-4 rounded-xl bg-red-600 text-white shadow-lg shadow-red-200 dark:shadow-red-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4">
-          <div className="flex items-center gap-3 md:gap-4">
-            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/20">
+          <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/20 shrink-0">
               <AlertTriangle size={18} className="md:w-[20px] md:h-[20px]" />
-            </div>
-            <div className="text-left">
-              <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/80">Atenção Necessária</span>
-              <p className="text-[10px] md:text-xs font-black uppercase text-white">Você tem {pendingCount} registros pendentes.</p>
             </div>
           </div>
           <ChevronRight size={18} className="md:w-[20px] md:h-[20px]" />
@@ -665,18 +661,18 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
       {overduePayments.length > 0 && (
         <div className="w-full flex items-center justify-between p-3 md:p-4 rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4 cursor-pointer">
-          <div className="flex items-center gap-3 md:gap-4">
-            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/20">
+          <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/20 shrink-0">
               <DollarSign size={18} className="md:w-[20px] md:h-[20px]" />
             </div>
-            <div className="text-left">
-              <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/80">Financeiro</span>
-              <p className="text-[10px] md:text-xs font-black uppercase text-white">
+            <div className="text-left flex-1 min-w-0">
+              <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/80 truncate">Financeiro</span>
+              <p className="text-[10px] md:text-xs font-black uppercase text-white truncate">
                 {overduePayments.length} pagamentos em atraso ({overduePayments[0].studentName}...)
               </p>
             </div>
           </div>
-          <ChevronRight size={18} className="md:w-[20px] md:h-[20px]" />
+          <ChevronRight size={18} className="md:w-[20px] md:h-[20px] shrink-0" />
         </div>
       )}
 
@@ -700,33 +696,36 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         const totalText = total > 1 ? ` (+${total - 1} nos próximos 7 dias)` : '';
 
         return (
-          <div className="relative">
-            <button onClick={onNavigateToAssessments} className="relative z-10 w-full flex items-center justify-between p-3 md:p-4 rounded-xl bg-amber-500 text-white shadow-lg shadow-amber-200 dark:shadow-amber-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4">
-              <div className="flex items-center gap-3 md:gap-4">
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/20">
-                  <FileCheck size={18} className="md:w-[20px] md:h-[20px]" />
+          <div className="relative group">
+            <button onClick={onNavigateToAssessments} className={`relative z-10 w-full overflow-hidden p-3 md:p-4 rounded-xl text-white shadow-lg hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4 ${daysLeft <= 3 ? 'bg-red-600 shadow-red-300 dark:shadow-red-900/30 ring-2 ring-red-500 ring-offset-2 dark:ring-offset-slate-900' : 'bg-amber-500 shadow-amber-200 dark:shadow-amber-900/20'}`}>
+              
+              {daysLeft <= 3 && (
+                <div className="absolute inset-0 bg-white/20 animate-pulse pointer-events-none duration-700" />
+              )}
+              
+              <div className="relative z-10 flex items-center justify-between w-full">
+                <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/30 shrink-0">
+                    <FileCheck size={18} className="md:w-[20px] md:h-[20px]" />
+                  </div>
+                  <div className="text-left flex-1 min-w-0">
+                    <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/90 truncate border-none outline-none">Elaboração Pendente{totalText}</span>
+                    <p className="text-[10px] md:text-xs font-black uppercase text-white truncate border-none outline-none">{daysText}: {nextAssessment.title} ({className})</p>
+                  </div>
                 </div>
-                <div className="text-left">
-                  <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/80">Elaboração Pendente{totalText}</span>
-                  <p className="text-[10px] md:text-xs font-black uppercase text-white">{daysText}: {nextAssessment.title} ({className})</p>
-                </div>
+                <ChevronRight size={18} className="md:w-[20px] md:h-[20px] shrink-0" />
               </div>
-              <ChevronRight size={18} className="md:w-[20px] md:h-[20px]" />
             </button>
-            {daysLeft <= 3 && (
-              <div className="absolute -inset-[2px] z-20 rounded-[14px] border-[3px] border-red-500 shadow-[0_0_20px_rgba(239,68,68,1)] animate-pulse pointer-events-none" />
-            )}
           </div>
         );
       })()}
 
       {data.settings.showDailyQuote && (
-        <div className="bg-primary/5 dark:bg-primary/10 border-2 border-dashed border-primary/20 p-4 md:p-5 rounded-xl relative overflow-hidden">
+        <div className="bg-primary/5 dark:bg-primary/10 border-2 border-dashed border-primary/20 p-4 md:p-5 rounded-xl relative overflow-hidden break-words min-w-0">
           <div className="absolute -top-4 -left-4 md:-top-6 md:-left-6 opacity-5 pointer-events-none"><QuoteIcon size={60} className="md:w-[80px] md:h-[80px]" /></div>
           <p className="text-xs md:text-base font-bold text-primary dark:text-primary-light italic leading-relaxed relative z-10">"{dailyQuote}"</p>
         </div>
-      )
-      }
+      )}
 
       <div className="grid lg:grid-cols-3 gap-4 md:gap-6 overflow-hidden">
         <div className="lg:col-span-2 space-y-4 md:space-y-6 w-full max-w-full min-w-0">
@@ -743,21 +742,21 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                   </div>
 
                   <div className="relative z-10">
-                    <div className="flex items-center gap-3 mb-2 md:mb-4">
-                      <div className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-lg md:rounded-xl bg-white dark:bg-slate-800 shadow-sm text-sm md:text-lg font-black" style={{ color: activityInfo.current.type === 'school' ? activityInfo.current.school?.color : activityInfo.current.student?.color }}>
+                    <div className="flex items-center gap-3 mb-2 md:mb-4 pr-12 md:pr-16 w-full">
+                      <div className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 shrink-0 rounded-lg md:rounded-xl bg-white dark:bg-slate-800 shadow-sm text-sm md:text-lg font-black" style={{ color: activityInfo.current.type === 'school' ? activityInfo.current.school?.color : activityInfo.current.student?.color }}>
                         {activityInfo.current.type === 'school' ? activityInfo.current.school?.name[0] : <BookOpen size={16} />}
                       </div>
-                      <div>
-                        <p className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5 truncate">
                           {activityInfo.current.type === 'school' ? activityInfo.current.school?.name : 'Aula Particular'}
                         </p>
-                        <p className="text-[9px] md:text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                        <p className="text-[9px] md:text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">
                           {activityInfo.current.startTime} - {activityInfo.current.endTime}
                         </p>
                       </div>
                     </div>
 
-                    <h4 className="text-2xl md:text-4xl font-black text-slate-900 dark:text-white uppercase leading-none tracking-tighter mb-3 md:mb-4">
+                    <h4 className="text-2xl md:text-4xl font-black text-slate-900 dark:text-white uppercase leading-none tracking-tighter mb-3 md:mb-4 truncate">
                       {activityInfo.current.type === 'school'
                         ? (activityInfo.current.schedule.classId === 'window' ? 'Janela / Livre' : activityInfo.current.schedule.classId)
                         : activityInfo.current.student.name}

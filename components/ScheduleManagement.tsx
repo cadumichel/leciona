@@ -204,7 +204,23 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
     // If migrate is true and we have decisions from Wizard
     if (migrate && decisions && decisions.length > 0) {
       updatedLogs = updatedLogs.map(log => {
-        const decision = decisions.find(d => d.logId === log.id);
+        let decision = decisions.find(d => d.logId === log.id);
+
+        // FALLBACK: If user moved the SchoolEvent but ignored the LessonLog
+        if (!decision || decision.type !== 'MOVE') {
+           const associatedEvent = (data.events || []).find(e => 
+             log.date.startsWith(e.date.split('T')[0]) && 
+             log.schoolId === e.schoolId && 
+             log.slotId === e.slotId && 
+             log.subject?.includes(e.title)
+           );
+           if (associatedEvent) {
+              const eventDecision = decisions.find(d => d.logId === associatedEvent.id);
+              if (eventDecision && eventDecision.type === 'MOVE') {
+                 decision = eventDecision;
+              }
+           }
+        }
 
         if (!decision) return log;
 
@@ -247,12 +263,28 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
     }
 
     let updatedEvents = data.events || [];
-    // If migrate is true and we have EVENT decisions from Wizard (TBD)
-    // For now, if events are affected, we might just leave them as orphans or auto-migrate
-    // The MigrationWizard doesn't yet support events, but we'll apply them if they exist in decisions
+    // If migrate is true and we have EVENT decisions from Wizard
     if (migrate && decisions && decisions.length > 0) {
       updatedEvents = updatedEvents.map(event => {
-        const decision = decisions.find(d => d.logId === event.id); // Reusing logId for event.id
+        let decision = decisions.find(d => d.logId === event.id);
+
+        // FALLBACK: If the user didn't explicitly move this event, but they MOVED its associated LessonLog
+        // we should inherit that move to prevent split-brain issues.
+        if (!decision || decision.type !== 'MOVE') {
+          const associatedLog = (data.logs || []).find(l => 
+             l.date.startsWith(event.date.split('T')[0]) && 
+             l.schoolId === event.schoolId && 
+             l.slotId === event.slotId && 
+             l.subject?.includes(event.title)
+          );
+          if (associatedLog) {
+             const logDecision = decisions.find(d => d.logId === associatedLog.id);
+             if (logDecision && logDecision.type === 'MOVE') {
+                 decision = logDecision;
+             }
+          }
+        }
+        
         if (!decision) return event;
 
         if (decision.type === 'DELETE') {

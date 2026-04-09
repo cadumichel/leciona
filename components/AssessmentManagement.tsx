@@ -223,7 +223,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       const orig = data.events.find(e => e.id === newEvent.id);
       if (orig) {
         currentEvents = currentEvents.filter(e => e.id !== newEvent.id);
-        currentLogs = currentLogs.filter(l => !(l.date === orig.date && l.schoolId === orig.schoolId && l.slotId === orig.slotId));
+        currentLogs = currentLogs.filter(l => !(l.date.split('T')[0] === orig.date.split('T')[0] && l.schoolId === orig.schoolId && l.slotId === orig.slotId));
       }
     }
     const event: SchoolEvent = {
@@ -643,15 +643,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                 return { label: null, shiftName: null };
               })();
 
-              const handleTogglePrepared = (e: React.MouseEvent) => {
-                e.stopPropagation();
 
-                const updatedEvents = data.events.map(ev =>
-                  ev.id === event.id ? { ...ev, prepared: !ev.prepared } : ev
-                );
-
-                onUpdateData({ events: updatedEvents });
-              };
 
               return (
                 <div
@@ -661,7 +653,9 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   data-compact={cardsPerRow >= 3}
                   className={`relative rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group overflow-hidden flex flex-col ${event.prepared
                     ? 'bg-emerald-100 border-emerald-300 dark:bg-emerald-900/40 dark:border-emerald-700'
-                    : 'bg-white border-slate-100 dark:bg-slate-900 dark:border-slate-800'
+                    : event.scheduled
+                      ? 'bg-orange-100 border-orange-300 dark:bg-orange-900/40 dark:border-orange-700'
+                      : 'bg-white border-slate-100 dark:bg-slate-900 dark:border-slate-800'
                     }`}
                 >
                   {/* Top strip: date badge + center info + right slot */}
@@ -708,19 +702,31 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                     <span className="data-[compact=true]:text-[7px] text-[9px] font-black truncate max-w-[50%]" style={{ color }}>{school?.name}</span>
                     <div className="flex-1" />
 
-                    {/* Prepared Checkbox */}
-                    <div
-                      className="flex items-center gap-1.5 cursor-pointer z-10"
-                      onClick={handleTogglePrepared}
-                      title={event.prepared ? "Prova elaborada (clique para desmarcar)" : "Marcar como elaborada"}
-                    >
-                      <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${event.prepared
-                        ? 'bg-emerald-500 border-emerald-500 text-white'
-                        : 'bg-white border-slate-300 dark:bg-slate-800 dark:border-slate-600'
-                        }`}>
-                        {event.prepared && <CheckCheck size={10} strokeWidth={3} />}
-                      </div>
-                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight data-[compact=true]:hidden">Pronta</span>
+                    {/* Status Dropdown */}
+                    <div className="flex items-center z-10" onClick={e => e.stopPropagation()}>
+                       <select
+                         value={event.prepared ? 'ready' : event.scheduled ? 'scheduled' : 'pending'}
+                         onChange={(e) => {
+                            const val = e.target.value;
+                            const updatedEvents = data.events.map(ev =>
+                               ev.id === event.id ? {
+                                  ...ev,
+                                  prepared: val === 'ready',
+                                  scheduled: val === 'scheduled'
+                               } : ev
+                            );
+                            onUpdateData({ events: updatedEvents });
+                         }}
+                         className={`text-[9px] font-bold uppercase tracking-tight outline-none border rounded-lg px-2 py-1 cursor-pointer transition-colors max-md:appearance-none text-center min-w-[70px] ${
+                            event.prepared ? 'bg-emerald-500 border-emerald-600 text-white' :
+                            event.scheduled ? 'bg-orange-500 border-orange-600 text-white' :
+                            'bg-slate-100 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
+                         }`}
+                       >
+                         <option value="pending">Pendente</option>
+                         <option value="scheduled">Agendada</option>
+                         <option value="ready">Pronta</option>
+                       </select>
                     </div>
 
                     {event.description && event.description.trim() && (

@@ -176,6 +176,7 @@ export interface SchoolEvent {
   blocksShift?: boolean;
   weight?: number; // Peso da avaliação para o cálculo de média
   maxGrade?: number; // Nota máxima (default: 10)
+  scheduled?: boolean; // Se a avaliação já foi comunicada/agendada com os alunos
   prepared?: boolean; // Se a avaliação já foi elaborada/enviada para impressão
 }
 

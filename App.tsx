@@ -831,7 +831,7 @@ const App: React.FC = () => {
   ];
 
   return (
-    <div className={`flex flex-col lg:flex-row min-h-screen transition-colors duration-300 bg-slate-100 dark:bg-slate-950 w-full max-w-[100vw] overflow-x-hidden`}>
+    <div className={`flex flex-col lg:flex-row min-h-screen transition-colors duration-300 bg-slate-100 dark:bg-slate-950 w-full`}>
       <style>{`
         :root {
           --primary-color: ${data.settings.themeColor};
@@ -897,16 +897,17 @@ const App: React.FC = () => {
         </aside>
       )}
 
-      <main className="flex-1 min-w-0 w-full pb-24 lg:pb-0 overflow-x-hidden">
-        <header className="bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-4 py-3 lg:px-6 lg:py-4 flex justify-between items-center sticky top-0 z-40 transition-colors shadow-sm lg:shadow-none gap-3">
-
-          {/* Esquerda: Título da Seção */}
-          <h2 className="text-lg lg:text-xl font-black text-slate-800 dark:text-white truncate">
-            {navItems.find(i => i.id === activeTab)?.label}
-          </h2>
-
-          {/* Direita: Status + Branding */}
-          <div className="flex items-center gap-3 shrink-0">
+      <main className="flex-1 min-w-0 w-full pb-24 lg:pb-0">
+        <div className="w-full max-w-[100vw] overflow-x-hidden min-h-screen flex flex-col">
+          <header className="bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-4 py-3 lg:px-6 lg:py-4 flex justify-between items-center sticky top-0 z-40 transition-colors shadow-sm lg:shadow-none gap-3">
+  
+            {/* Esquerda: Título da Seção */}
+            <h2 className="text-lg lg:text-xl font-black text-slate-800 dark:text-white truncate">
+              {navItems.find(i => i.id === activeTab)?.label}
+            </h2>
+  
+            {/* Direita: Status + Branding */}
+            <div className="flex items-center gap-3 shrink-0">
             {user && (
               <div className="shrink-0">
                 <SyncStatus
@@ -980,6 +981,7 @@ const App: React.FC = () => {
               onNavigateToLesson={(s, d) => { setPreSelectedLesson({ schedule: s, date: d }); setActiveTab('lessons'); }}
             />
           )}
+          </div>
         </div>
       </main>
 

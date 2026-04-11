@@ -632,7 +632,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
   }, [sortedTodaySchedules, currentTime]);
 
   return (
-    <div className="space-y-4 md:space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-4 md:space-y-6 animate-in fade-in duration-500 w-full max-w-full min-w-0 overflow-x-hidden">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 md:gap-4">
         <div className="flex-1 min-w-0">
           <h1 className="text-lg md:text-3xl font-black text-slate-800 dark:text-white tracking-tight leading-none truncate block w-full">
@@ -649,13 +649,19 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
       </div>
 
       {pendingCount > 0 && !data.settings.hideUnregisteredClassesOnDashboard && (
-        <button onClick={onNavigateToPendencies} className="w-full flex items-center justify-between p-3 md:p-4 rounded-xl bg-red-600 text-white shadow-lg shadow-red-200 dark:shadow-red-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4">
-          <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/20 shrink-0">
-              <AlertTriangle size={18} className="md:w-[20px] md:h-[20px]" />
+        <button onClick={onNavigateToPendencies} className="relative block text-left w-full overflow-hidden p-3 md:p-4 rounded-xl bg-red-600 text-white shadow-lg shadow-red-200 dark:shadow-red-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4">
+          <div className="relative z-10 flex items-center justify-between w-full min-w-0">
+            <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/20 shrink-0">
+                <AlertTriangle size={18} className="md:w-[20px] md:h-[20px]" />
+              </div>
+              <div className="text-left flex-1 min-w-0">
+                <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/80 border-none outline-none truncate">Atenção Necessária</span>
+                <p className="text-[10px] md:text-xs font-black uppercase text-white border-none outline-none truncate">Você tem {pendingCount} registros pendentes.</p>
+              </div>
             </div>
+            <ChevronRight size={18} className="md:w-[20px] md:h-[20px] shrink-0" />
           </div>
-          <ChevronRight size={18} className="md:w-[20px] md:h-[20px]" />
         </button>
       )}
 
@@ -697,11 +703,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
         return (
           <div className="relative group">
-            <button onClick={onNavigateToAssessments} className={`relative z-10 w-full overflow-hidden p-3 md:p-4 rounded-xl text-white shadow-lg hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4 ${daysLeft <= 3 ? 'bg-red-600 shadow-red-300 dark:shadow-red-900/30 ring-2 ring-red-500 ring-offset-2 dark:ring-offset-slate-900' : 'bg-amber-500 shadow-amber-200 dark:shadow-amber-900/20'}`}>
-              
-              {daysLeft <= 3 && (
-                <div className="absolute inset-0 bg-white/20 animate-pulse pointer-events-none duration-700" />
-              )}
+            <button onClick={onNavigateToAssessments} className={`relative z-10 w-full overflow-hidden p-3 md:p-4 rounded-xl text-white shadow-lg transition-transform animate-in slide-in-from-top-4 ${daysLeft <= 3 ? 'bg-red-600 shadow-red-300 dark:shadow-red-900/30 animate-pulse ring-2 ring-red-400 ring-offset-1 dark:ring-offset-slate-900' : 'bg-amber-500 shadow-amber-200 dark:shadow-amber-900/20 hover:scale-[1.01]'}`}>
               
               <div className="relative z-10 flex items-center justify-between w-full">
                 <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
@@ -721,20 +723,20 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
       })()}
 
       {data.settings.showDailyQuote && (
-        <div className="bg-primary/5 dark:bg-primary/10 border-2 border-dashed border-primary/20 p-4 md:p-5 rounded-xl relative overflow-hidden break-words min-w-0">
+        <div className="bg-primary/5 dark:bg-primary/10 border-2 border-dashed border-primary/20 p-4 md:p-5 rounded-xl relative overflow-hidden break-words min-w-0 w-full max-w-full">
           <div className="absolute -top-4 -left-4 md:-top-6 md:-left-6 opacity-5 pointer-events-none"><QuoteIcon size={60} className="md:w-[80px] md:h-[80px]" /></div>
-          <p className="text-xs md:text-base font-bold text-primary dark:text-primary-light italic leading-relaxed relative z-10">"{dailyQuote}"</p>
+          <p className="text-xs md:text-base font-bold text-primary dark:text-primary-light italic leading-relaxed relative z-10 w-full">"{dailyQuote}"</p>
         </div>
       )}
 
-      <div className="grid lg:grid-cols-3 gap-4 md:gap-6 overflow-hidden">
+      <div className="grid lg:grid-cols-3 gap-4 md:gap-6 overflow-hidden w-full max-w-full min-w-0">
         <div className="lg:col-span-2 space-y-4 md:space-y-6 w-full max-w-full min-w-0">
           <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
             <h3 className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight mb-4 md:mb-6 flex items-center gap-2"><Clock className="text-primary w-3 h-3 md:w-[14px] md:h-[14px]" /> Atividade Agora</h3>
             {activityInfo ? (
               <div className="space-y-3 md:space-y-4">
                 {/* CARTÃO PRINCIPAL DA AULA ATUAL */}
-                <button onClick={() => onNavigateToLesson(activityInfo.current.schedule, todayDateStr)} className="w-full text-left p-4 md:p-6 rounded-xl transition-all hover:scale-[1.01] shadow-xl border-2 relative overflow-hidden group" style={{ backgroundColor: (activityInfo.current.type === 'school' ? activityInfo.current.school?.color : activityInfo.current.student?.color) + '15', borderColor: (activityInfo.current.type === 'school' ? activityInfo.current.school?.color : activityInfo.current.student?.color) + '40' }}>
+                <button onClick={() => onNavigateToLesson(activityInfo.current.schedule, todayDateStr)} className="block w-full text-left p-4 md:p-6 rounded-xl transition-all hover:scale-[1.01] shadow-xl border-2 relative overflow-hidden group" style={{ backgroundColor: (activityInfo.current.type === 'school' ? activityInfo.current.school?.color : activityInfo.current.student?.color) + '15', borderColor: (activityInfo.current.type === 'school' ? activityInfo.current.school?.color : activityInfo.current.student?.color) + '40' }}>
                   <div className="absolute top-0 right-0 bg-white/50 dark:bg-black/20 px-3 py-1.5 md:px-4 md:py-2 rounded-bl-lg backdrop-blur-sm border-l border-b border-white/20">
                     <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest" style={{ color: activityInfo.current.type === 'school' ? activityInfo.current.school?.color : activityInfo.current.student?.color }}>
                       {activityInfo.current.slot?.label || 'Em andamento'}
@@ -823,7 +825,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
               <div className="bg-slate-50 dark:bg-slate-800/30 p-4 md:p-6 rounded-xl text-center border-4 border-dashed border-slate-200 dark:border-slate-800">
                 <activityContent.icon className="mx-auto text-slate-400 mb-2 md:mb-3" size={24} />
                 <p className="text-slate-500 font-black uppercase text-[9px] md:text-[10px] tracking-tight">{activityContent.title}</p>
-                <p className="text-slate-500 font-bold text-[8px] md:text-[9px] uppercase mt-1">{activityContent.subtitle}</p>
+                <p className="text-slate-500 font-bold text-[8px] md:text-[9px] uppercase mt-1 break-words w-full px-2">{activityContent.subtitle}</p>
 
                 {nextGlobalActivity && (
                   <div className="mt-4 md:mt-5 pt-4 md:pt-5 border-t border-slate-200 dark:border-slate-700">

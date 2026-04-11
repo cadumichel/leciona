@@ -897,7 +897,7 @@ const App: React.FC = () => {
         </aside>
       )}
 
-      <main className="flex-1 pb-24 lg:pb-0 overflow-x-hidden">
+      <main className="flex-1 min-w-0 w-full max-w-[100vw] pb-24 lg:pb-0 overflow-x-hidden">
         <header className="bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-4 py-3 lg:px-6 lg:py-4 flex justify-between items-center sticky top-0 z-40 transition-colors shadow-sm lg:shadow-none gap-3">
 
           {/* Esquerda: Título da Seção */}

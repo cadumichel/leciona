@@ -831,7 +831,7 @@ const App: React.FC = () => {
   ];
 
   return (
-    <div className={`flex flex-col lg:flex-row min-h-screen transition-colors duration-300 bg-slate-100 dark:bg-slate-950`}>
+    <div className={`flex flex-col lg:flex-row min-h-screen transition-colors duration-300 bg-slate-100 dark:bg-slate-950 w-full max-w-[100vw] overflow-x-hidden`}>
       <style>{`
         :root {
           --primary-color: ${data.settings.themeColor};

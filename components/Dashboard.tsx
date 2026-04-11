@@ -829,10 +829,10 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
                 {nextGlobalActivity && (
                   <div className="mt-4 md:mt-5 pt-4 md:pt-5 border-t border-slate-200 dark:border-slate-700">
-                    <p className="text-[8px] md:text-[9px] font-black text-blue-500 uppercase tracking-tight mb-2 md:mb-3 flex items-center justify-center gap-2">
-                      <Calendar size={10} className="md:w-3 md:h-3" /> Próximo Compromisso: <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 px-2 py-0.5 rounded-lg">{nextGlobalActivity.dateLabel}</span>
+                    <p className="text-[8px] md:text-[9px] font-black text-blue-500 uppercase tracking-tight mb-2 md:mb-3 flex flex-wrap items-center justify-center gap-1 md:gap-2">
+                      <Calendar size={10} className="md:w-3 md:h-3 shrink-0" /> <span className="shrink-0">Próximo Compromisso:</span> <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 px-2 py-0.5 rounded-lg shrink-0">{nextGlobalActivity.dateLabel}</span>
                     </p>
-                    <div className="flex flex-col items-center gap-2">
+                    <div className="flex flex-col items-center gap-2 w-full min-w-0">
                       <div className="inline-flex items-center gap-2 md:gap-3 px-3 py-1.5 md:px-4 md:py-2 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 max-w-full min-w-0">
                         <span className="text-[10px] md:text-xs font-black text-slate-700 dark:text-slate-200 shrink-0">{nextGlobalActivity.startTime}</span>
                         <div className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />

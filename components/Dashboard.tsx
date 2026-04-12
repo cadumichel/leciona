@@ -649,7 +649,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
       </div>
 
       {pendingCount > 0 && !data.settings.hideUnregisteredClassesOnDashboard && (
-        <button onClick={onNavigateToPendencies} className="relative block text-left w-full overflow-hidden p-3 md:p-4 rounded-xl text-amber-900 shadow-lg shadow-amber-200 dark:shadow-amber-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4" style={{ backgroundColor: '#fef08a', border: '2px solid #fbbf24' }}>
+        <button onClick={onNavigateToPendencies} className="relative block text-left w-full overflow-hidden p-3 md:p-4 rounded-xl text-amber-900 shadow-lg shadow-amber-100 dark:shadow-amber-900/10 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4" style={{ backgroundColor: '#fffbeb', border: '2px solid #fde68a' }}>
           <div className="relative z-10 flex items-center justify-between w-full min-w-0">
             <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
               <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#fbbf24' }}>

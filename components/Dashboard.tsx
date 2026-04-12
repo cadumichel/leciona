@@ -541,20 +541,20 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     }
 
     return (
-      <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm">
-        <div className="flex justify-between items-center mb-4 md:mb-6">
-          <div className="flex items-center gap-2">
-            <CalendarIcon className="text-primary" size={16} />
-            <h4 className="text-[10px] md:text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight">{dashMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h4>
+      <div className="bg-white dark:bg-slate-900 p-2 md:p-6 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm w-full min-w-0 overflow-hidden">
+        <div className="flex justify-between items-center mb-2 md:mb-6">
+          <div className="flex items-center gap-1.5">
+            <CalendarIcon className="text-primary" size={14} />
+            <h4 className="text-[9px] md:text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight">{dashMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h4>
           </div>
           <div className="flex gap-1">
-            <button onClick={() => setDashMonth(new Date(year, month - 1))} className="p-1 md:p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-all border border-slate-100 dark:border-slate-800"><ChevronLeft size={14} /></button>
-            <button onClick={() => setDashMonth(new Date(year, month + 1))} className="p-1 md:p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-all border border-slate-100 dark:border-slate-800"><ChevronRight size={14} /></button>
+            <button onClick={() => setDashMonth(new Date(year, month - 1))} className="p-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-all border border-slate-100 dark:border-slate-800"><ChevronLeft size={12} /></button>
+            <button onClick={() => setDashMonth(new Date(year, month + 1))} className="p-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-all border border-slate-100 dark:border-slate-800"><ChevronRight size={12} /></button>
           </div>
         </div>
-        <div className="grid grid-cols-7 gap-1">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '2px' }}>
           {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => (
-            <div key={`${d}-${i}`} className="text-center text-[7px] md:text-[8px] font-black text-slate-400 py-1 uppercase tracking-tight">{d}</div>
+            <div key={`${d}-${i}`} className="text-center text-[7px] font-black text-slate-400 py-0.5 uppercase tracking-tight">{d}</div>
           ))}
           {days.map((d, i) => {
             if (!d) return <div key={i} />;
@@ -565,16 +565,16 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
             if (d.holidayName || d.recessInfo) cellBg = 'bg-pink-50 dark:bg-pink-900/10 border-pink-100 dark:border-pink-900/20';
 
             return (
-              <div key={i} className={`aspect-square rounded-lg flex flex-col items-center justify-center relative border transition-all ${cellBg}`}>
-                <span className={`text-[9px] md:text-[10px] font-black ${isToday ? 'text-primary' : (d.holidayName || d.recessInfo) ? 'text-pink-600' : 'text-slate-500'}`}>{d.day}</span>
-                <div className="flex gap-[1px] md:gap-0.5 mt-0.5">
-                  {d.events.slice(0, 3).map((ev, idx) => {
+              <div key={i} className={`aspect-square rounded flex flex-col items-center justify-center relative border transition-all ${cellBg}`}>
+                <span className={`text-[8px] font-black leading-none ${isToday ? 'text-primary' : (d.holidayName || d.recessInfo) ? 'text-pink-600' : 'text-slate-500'}`}>{d.day}</span>
+                <div className="flex gap-px mt-0.5">
+                  {d.events.slice(0, 2).map((ev, idx) => {
                     const school = data.schools.find(s => s.id === ev.schoolId);
                     return (
-                      <div key={idx} className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full" style={{ backgroundColor: school ? school.color : '#f97316' }} />
+                      <div key={idx} className="w-1 h-1 rounded-full" style={{ backgroundColor: school ? school.color : '#f97316' }} />
                     );
                   })}
-                  {hasReminder && <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-amber-400" />}
+                  {hasReminder && <div className="w-1 h-1 rounded-full bg-amber-400" />}
                 </div>
               </div>
             );
@@ -962,7 +962,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
           </div>
         </div>
 
-        <div className="space-y-4 md:space-y-6">
+        <div className="space-y-4 md:space-y-6 w-full min-w-0 overflow-hidden">
           {renderDashboardCalendar()}
           <div className="bg-amber-50 dark:bg-amber-900/10 p-4 md:p-6 rounded-xl border border-amber-100 dark:border-amber-900/20">
             <div onClick={onNavigateToReminders} className="flex items-center justify-between mb-3 md:mb-4 cursor-pointer group">

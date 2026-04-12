@@ -649,18 +649,18 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
       </div>
 
       {pendingCount > 0 && !data.settings.hideUnregisteredClassesOnDashboard && (
-        <button onClick={onNavigateToPendencies} className="relative block text-left w-full overflow-hidden p-3 md:p-4 rounded-xl bg-red-600 text-white shadow-lg shadow-red-200 dark:shadow-red-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4">
+        <button onClick={onNavigateToPendencies} className="relative block text-left w-full overflow-hidden p-3 md:p-4 rounded-xl text-amber-900 shadow-lg shadow-amber-200 dark:shadow-amber-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4" style={{ backgroundColor: '#fef08a', border: '2px solid #fbbf24' }}>
           <div className="relative z-10 flex items-center justify-between w-full min-w-0">
             <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-              <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/20 shrink-0">
-                <AlertTriangle size={18} className="md:w-[20px] md:h-[20px]" />
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#fbbf24' }}>
+                <AlertTriangle size={18} className="md:w-[20px] md:h-[20px] text-amber-800" />
               </div>
               <div className="text-left flex-1 min-w-0">
-                <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/80 border-none outline-none truncate">Atenção Necessária</span>
-                <p className="text-[10px] md:text-xs font-black uppercase text-white border-none outline-none truncate">Você tem {pendingCount} registros pendentes.</p>
+                <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-amber-700 border-none outline-none truncate">Atenção Necessária</span>
+                <p className="text-[10px] md:text-xs font-black uppercase text-amber-900 border-none outline-none truncate">Você tem {pendingCount} registros pendentes.</p>
               </div>
             </div>
-            <ChevronRight size={18} className="md:w-[20px] md:h-[20px] shrink-0" />
+            <ChevronRight size={18} className="md:w-[20px] md:h-[20px] shrink-0 text-amber-700" />
           </div>
         </button>
       )}
@@ -703,8 +703,14 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
         return (
           <div className="relative group">
-            <button onClick={onNavigateToAssessments} className={`relative z-10 w-full overflow-hidden p-3 md:p-4 rounded-xl text-white shadow-lg transition-transform animate-in slide-in-from-top-4 ${daysLeft <= 3 ? 'bg-red-600 shadow-red-300 dark:shadow-red-900/30 animate-pulse ring-2 ring-red-400 ring-offset-1 dark:ring-offset-slate-900' : 'bg-amber-500 shadow-amber-200 dark:shadow-amber-900/20 hover:scale-[1.01]'}`}>
-              
+            <button
+              onClick={onNavigateToAssessments}
+              className={`relative z-10 w-full overflow-hidden p-3 md:p-4 rounded-xl text-white shadow-lg transition-transform animate-in slide-in-from-top-4 ${
+                daysLeft <= 3
+                  ? 'animate-siren ring-2 ring-offset-1 ring-red-400 dark:ring-offset-slate-900'
+                  : 'bg-red-600 shadow-red-300 dark:shadow-red-900/30 hover:scale-[1.01]'
+              }`}
+            >
               <div className="relative z-10 flex items-center justify-between w-full">
                 <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
                   <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/30 shrink-0">

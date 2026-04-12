@@ -46,6 +46,20 @@
       overflow-x: clip;
     }
 
+    @keyframes siren {
+      0%, 100% {
+        background-color: #dc2626; /* red-600 */
+        box-shadow: 0 10px 25px -5px rgba(220,38,38,0.5), 0 0 0 3px rgba(220,38,38,0.4);
+      }
+      50% {
+        background-color: #d97706; /* amber-600 */
+        box-shadow: 0 10px 25px -5px rgba(217,119,6,0.5), 0 0 0 3px rgba(217,119,6,0.4);
+      }
+    }
+    .animate-siren {
+      animation: siren 0.8s ease-in-out infinite;
+    }
+
     .dark body {
       background-color: #020617;
       color: #f8fafc;

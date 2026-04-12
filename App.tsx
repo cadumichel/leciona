@@ -897,8 +897,7 @@ const App: React.FC = () => {
         </aside>
       )}
 
-      <main className="flex-1 min-w-0 w-full pb-24 lg:pb-0">
-        <div className="w-full max-w-[100vw] overflow-x-hidden min-h-screen flex flex-col">
+      <main className="flex-1 min-w-0 w-full pb-24 lg:pb-0" style={{ overflowX: 'clip' }}>
           <header className="bg-white dark:bg-slate-900 border-b dark:border-slate-800 px-4 py-3 lg:px-6 lg:py-4 flex justify-between items-center sticky top-0 z-40 transition-colors shadow-sm lg:shadow-none gap-3">
   
             {/* Esquerda: Título da Seção */}
@@ -925,7 +924,7 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <div className="p-3 lg:p-8 max-w-6xl mx-auto">
+        <div className="px-3 py-3 lg:px-8 lg:py-8 max-w-6xl mx-auto w-full">
           {activeTab === 'dashboard' && (
             <>
               {data.settings.showQuickStartGuide && (
@@ -982,7 +981,6 @@ const App: React.FC = () => {
             />
           )}
           </div>
-        </div>
       </main>
 
       {/* GLOBAL NOTIFICATION POPUP */}

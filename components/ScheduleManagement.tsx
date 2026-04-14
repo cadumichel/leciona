@@ -160,7 +160,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
     const newVersion: ScheduleVersion = {
       id: crypto.randomUUID(),
       activeFrom: newVersionDate,
-      createdAt: new Date().toISOString(),
+      createdAt: new Date().toLocaleDateString('en-CA'),
       name: `Versão ${new Date(newVersionDate + 'T00:00:00').getFullYear()}`,
       schedules: baseSchedules
     };

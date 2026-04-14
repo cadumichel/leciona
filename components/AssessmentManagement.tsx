@@ -5,7 +5,7 @@ import {
   School as SchoolIcon, Search, ChevronRight, ChevronDown, SlidersHorizontal,
   Clock, AlertTriangle, CheckCheck, BookOpen
 } from 'lucide-react';
-import { isHoliday, getHolidayName, getDayOfWeekFromDate, getSafeDate } from '../utils';
+import { isHoliday, getHolidayName, getDayOfWeekFromDate, getSafeDate, toSafeISO } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 
 interface AssessmentManagementProps {
@@ -31,14 +31,14 @@ function getMondayOfWeek(dateStr: string): string {
   const dow = d.getDay(); // 0=Sun … 6=Sat
   const diff = dow === 0 ? -6 : 1 - dow;
   d.setDate(d.getDate() + diff);
-  return d.toISOString().split('T')[0];
+  return d.toLocaleDateString('en-CA');
 }
 
 // Return the Friday (YYYY-MM-DD) of the week starting on mondayStr
 function getFridayOfWeek(mondayStr: string): string {
   const d = new Date(mondayStr + 'T12:00:00');
   d.setDate(d.getDate() + 4);
-  return d.toISOString().split('T')[0];
+  return d.toLocaleDateString('en-CA');
 }
 
 function fmtShort(dateStr: string): string {
@@ -52,7 +52,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   // ── Modal State ──────────────────────────────────────────────────────────
   const [isAdding, setIsAdding] = useState(false);
   const [newEvent, setNewEvent] = useState<Partial<SchoolEvent>>({
-    type: 'test', title: '', date: new Date().toISOString().split('T')[0],
+    type: 'test', title: '', date: new Date().toLocaleDateString('en-CA'),
     schoolId: '', classId: '', slotId: '', description: ''
   });
   const [dateWarning, setDateWarning] = useState('');
@@ -215,7 +215,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSaveEvent = () => {
     if (!newEvent.title || !newEvent.classId || !newEvent.slotId || isInvalidDate) return;
-    const safeDateISO = getSafeDate(newEvent.date!).toISOString();
+    const safeDateISO = toSafeISO(newEvent.date!);
     const eventId = newEvent.id || crypto.randomUUID();
     let currentLogs = [...data.logs];
     let currentEvents = [...data.events];
@@ -273,7 +273,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   // ── Copy ──────────────────────────────────────────────────────────────────
   const handleCopyAssessment = () => {
     if (!newEvent.title || !copyData.targetDate || !copyData.targetClassId || !copyData.targetSlotId) return;
-    const safeDateISO = getSafeDate(copyData.targetDate).toISOString();
+    const safeDateISO = toSafeISO(copyData.targetDate);
     const eventId = crypto.randomUUID();
     const event: SchoolEvent = {
       id: eventId, title: newEvent.title, date: safeDateISO,
@@ -335,7 +335,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   }, [filterSchoolId, data.calendars]);
 
   // ── Filtered list ─────────────────────────────────────────────────────────
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA');
 
   const filteredEvents = useMemo(() => {
     let list = assessmentEvents;
@@ -441,7 +441,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   const openNewForm = () => {
     setSaveSuccess(false);
     setNewEvent({
-      type: 'test', title: '', date: new Date().toISOString().split('T')[0],
+      type: 'test', title: '', date: new Date().toLocaleDateString('en-CA'),
       schoolId: (data.schools || [])[0]?.id || '', classId: '', slotId: '', description: ''
     });
     setDateWarning(''); setIsInvalidDate(false);
@@ -690,7 +690,12 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                         <p className="text-[9px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-tight">{shiftInfo.label}</p>
                       )}
                       {shiftInfo.shiftName && (
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tight mt-0.5">{shiftInfo.shiftName}</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tight mt-0.5">
+                          {shiftInfo.shiftName.toUpperCase().startsWith('MAT') ? 'MAT' :
+                           shiftInfo.shiftName.toUpperCase().startsWith('VES') ? 'VESP' :
+                           shiftInfo.shiftName.toUpperCase().startsWith('NOT') ? 'NOT' :
+                           shiftInfo.shiftName}
+                        </p>
                       )}
                     </div>
                   </div>

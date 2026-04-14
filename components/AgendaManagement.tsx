@@ -16,7 +16,7 @@ import {
   SlidersHorizontal,
   LayoutGrid,
 } from 'lucide-react';
-import { getDayOfWeekFromDate, getShortWeekDay, getDayMonth } from '../utils';
+import { getDayOfWeekFromDate, getShortWeekDay, getDayMonth, toSafeISO } from '../utils';
 
 interface AgendaManagementProps {
   data: AppData;
@@ -76,7 +76,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
     schoolId: '',
     type: 'meeting',
     title: '',
-    date: new Date().toISOString().split('T')[0],
+    date: new Date().toLocaleDateString('en-CA'),
     blocksClasses: false,
     cancelScope: 'all',
     shiftId: '',
@@ -253,6 +253,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
       }
     }
 
+    const safeDateISO = toSafeISO(eventForm.date!);
     const newEvent: SchoolEvent = {
       id: crypto.randomUUID(),
       schoolId: eventForm.schoolId,
@@ -295,7 +296,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
     setEventForm({
       schoolId: filterSchoolId === 'all' ? (data.schools[0]?.id || '') : filterSchoolId,
       type: 'meeting', title: '',
-      date: new Date().toISOString().split('T')[0],
+      date: new Date().toLocaleDateString('en-CA'),
       blocksClasses: false, cancelScope: 'all', shiftId: '', classId: '', description: ''
     });
   };

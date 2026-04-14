@@ -39,7 +39,7 @@ import {
   Eye
 } from 'lucide-react';
 import { DAYS_OF_WEEK_NAMES } from '../constants';
-import { parseTimeToMinutes, getCurrentTimeInMinutes, getHolidayName, isHoliday, getDayOfWeekFromDate, getCurrentDate } from '../utils';
+import { parseTimeToMinutes, getCurrentTimeInMinutes, getHolidayName, isHoliday, getDayOfWeekFromDate, getCurrentDate, toSafeISO } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { getLessonDisplayItems, deriveStatsFromLessons, LessonDisplayItem } from '../utils/lessonStats';
 import { sanitizeText, LIMITS } from '../utils/validation';
@@ -412,7 +412,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
     const newLog: LessonLog = {
       id: crypto.randomUUID(),
-      date: new Date(date + 'T00:00:00').toISOString(),
+      date: toSafeISO(date),
       schoolId: schoolId,
       classId: classId,
       slotId: slotId,
@@ -1480,7 +1480,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
         // Create new
         newLogs.push({
           id: crypto.randomUUID(),
-          date: new Date(copyData.targetDate + 'T00:00:00').toISOString(),
+          date: toSafeISO(copyData.targetDate),
           schoolId,
           classId,
           slotId,
@@ -1556,7 +1556,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
     const createLogObject = (slotId: string) => ({
       id: crypto.randomUUID(),
-      date: new Date(activeLesson.date + 'T00:00:00').toISOString(),
+      date: toSafeISO(activeLesson.date),
       schoolId: activeLesson.type === 'school' ? activeLesson.institution.id : '',
       studentId: activeLesson.type === 'private' ? activeLesson.institution.id : '',
       classId: activeLesson.type === 'school' ? activeLesson.schedule.classId : activeLesson.institution.name,
@@ -1594,7 +1594,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
     const newLog: LessonLog = {
       id: crypto.randomUUID(),
-      date: new Date(extraLessonForm.date + 'T00:00:00').toISOString(),
+      date: toSafeISO(extraLessonForm.date),
       schoolId: extraLessonForm.schoolId,
       classId: extraLessonForm.classId,
       slotId: crypto.randomUUID(),
@@ -1687,7 +1687,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
       school.shifts.forEach(shift => {
         // Proteção: garantir que slots existe
-        if (!shift.slots || !Array.isArray(shift.slots)) return;
+        if (!school.shifts || !Array.isArray(school.shifts)) return;
 
         // FIX: Check Academic Calendar for this school
         const currentYear = new Date(selectedDate).getFullYear();
@@ -2680,7 +2680,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                         // Create new "removed" log
                         const newRemovedLog: LessonLog = {
                           id: crypto.randomUUID(),
-                          date: new Date(activeLesson.date + 'T00:00:00').toISOString(),
+                          date: toSafeISO(activeLesson.date),
                           schoolId: activeLesson.institution.id,
                           classId: activeLesson.type === 'school' ? activeLesson.schedule.classId : activeLesson.institution.name,
                           slotId: activeLesson.schedule.slotId,
@@ -3322,7 +3322,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               futureLessons.forEach(lesson => {
                 const date = new Date(lesson.date + 'T00:00:00');
                 const weekStart = getWeekStart(date);
-                const weekKey = weekStart.toISOString().split('T')[0];
+                const weekKey = weekStart.toLocaleDateString('en-CA');
 
                 if (!groupedByWeek[weekKey]) {
                   groupedByWeek[weekKey] = [];
@@ -3464,7 +3464,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 historyItems.forEach(lesson => {
                   const date = new Date(lesson.date + 'T00:00:00');
                   const weekStart = getWeekStart(date);
-                  const weekKey = weekStart.toISOString().split('T')[0];
+                  const weekKey = weekStart.toLocaleDateString('en-CA');
 
                   if (!groupedByWeek[weekKey]) {
                     groupedByWeek[weekKey] = [];

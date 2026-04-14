@@ -275,6 +275,36 @@ const App: React.FC = () => {
       }];
     }
 
+    // MIGRATION: Timezone FIX (Self-Healing)
+    // Corrige logs que foram salvos com deslocamento de fuso horário (ex: T21:00:00Z do dia anterior)
+    if (dataWithDefaults.logs && dataWithDefaults.logs.length > 0) {
+      let migratedCount = 0;
+      dataWithDefaults.logs = dataWithDefaults.logs.map(log => {
+        if (!log.date || !log.date.includes('T')) return log;
+        const [datePart, timePart] = log.date.split('T');
+        
+        // Se o horário for entre 21h e 23h59, provavelmente é o dia seguinte em UTC-3 offset
+        if (timePart.startsWith('21:') || timePart.startsWith('22:') || timePart.startsWith('23:')) {
+          const d = new Date(datePart + 'T12:00:00');
+          d.setDate(d.getDate() + 1);
+          const newDate = d.toISOString().split('T')[0] + 'T00:00:00.000Z';
+          migratedCount++;
+          return { ...log, date: newDate };
+        }
+        
+        // Se tiver qualquer outro horário que não seja 00:00:00.000Z, normaliza
+        if (timePart !== '00:00:00.000Z') {
+          migratedCount++;
+          return { ...log, date: datePart + 'T00:00:00.000Z' };
+        }
+        
+        return log;
+      });
+      if (migratedCount > 0) {
+        console.log(`✨ [MIGRATION] Auto-cura de fuso horário: ${migratedCount} logs corrigidos.`);
+      }
+    }
+
     return dataWithDefaults;
   };
 

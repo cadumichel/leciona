@@ -14,6 +14,17 @@ export const getSafeDate = (dateStr: string): Date => {
   return new Date(cleanDateStr);
 };
 
+// Converte YYYY-MM-DD para ISO UTC meia-noite sem deslocamento de timezone
+export const toSafeISO = (dateStr: string): string => {
+  if (!dateStr) return new Date().toISOString();
+  // Se já for ISO completo, retorna como está ou normaliza
+  if (dateStr.includes('T')) {
+    const [d] = dateStr.split('T');
+    return `${d}T00:00:00.000Z`;
+  }
+  return `${dateStr}T00:00:00.000Z`;
+};
+
 export const getDayOfWeekFromDate = (dateStr: string): DayOfWeek => {
   if (!dateStr) return 0;
   const date = getSafeDate(dateStr);

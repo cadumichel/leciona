@@ -503,6 +503,75 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [data.events, data.schools]);
 
+  // --- RESUMO DA GRADE SEMANAL ---
+  const weeklyScheduleSummary = useMemo(() => {
+    if (data.settings.isPrivateTeacher && data.schools.filter(s => !s.deleted).length === 0) return [];
+
+    // Pega a versão ativa agora (grade fixa do professor, não se adapta à semana)
+    const scheduleEntries = getSchedulesForDate(data, todayDateStr);
+
+    const DAYS = [
+      { day: 1, label: 'SEG' },
+      { day: 2, label: 'TER' },
+      { day: 3, label: 'QUA' },
+      { day: 4, label: 'QUI' },
+      { day: 5, label: 'SEX' },
+    ];
+
+    return DAYS.map(({ day, label }) => {
+      const dayEntries = scheduleEntries.filter(s =>
+        Number(s.dayOfWeek) === day && s.classId !== 'window'
+      );
+
+      if (dayEntries.length === 0) return { day, label, groups: [] };
+
+      // Agrupar por escola + turno
+      const groupMap = new Map<string, {
+        schoolName: string;
+        schoolColor: string;
+        periodLabel: string;
+        classes: string[];
+      }>();
+
+      dayEntries.forEach(entry => {
+        const school = data.schools.find(s => s.id === entry.schoolId && !s.deleted);
+        if (!school) return;
+
+        const shift = school.shifts.find(sh => sh.id === entry.shiftId);
+        if (!shift) return;
+
+        // Resolver nome da turma
+        const classObj = school.classes.find(c =>
+          (typeof c === 'string' ? c : c.id) === entry.classId
+        );
+        const className = classObj
+          ? (typeof classObj === 'string' ? classObj : classObj.name)
+          : entry.classId;
+
+        // Determinar período pelo horário do slot
+        const slot = shift.slots.find(sl => sl.id === entry.slotId) || shift.slots[0];
+        const startHour = slot ? parseInt(slot.startTime.split(':')[0]) : 8;
+        const periodLabel = startHour < 12 ? 'MAT' : startHour < 18 ? 'VESP' : 'NOT';
+
+        const key = `${entry.schoolId}-${entry.shiftId}`;
+        if (!groupMap.has(key)) {
+          groupMap.set(key, {
+            schoolName: school.name,
+            schoolColor: school.color,
+            periodLabel,
+            classes: []
+          });
+        }
+        const group = groupMap.get(key)!;
+        if (!group.classes.includes(className)) {
+          group.classes.push(className);
+        }
+      });
+
+      return { day, label, groups: Array.from(groupMap.values()) };
+    });
+  }, [data.schools, data.schedules, data.scheduleVersions, data.settings.isPrivateTeacher, todayDateStr]);
+
   const renderDashboardCalendar = () => {
     const year = dashMonth.getFullYear();
     const month = dashMonth.getMonth();
@@ -967,6 +1036,73 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
             </div>
           </div>
         </div>
+
+        {/* GRADE DA SEMANA - abaixo dos cards de avaliações e eventos */}
+        {weeklyScheduleSummary.length > 0 && (
+          <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm w-full">
+            <div className="flex items-center gap-1.5 mb-4">
+              <CalendarDays className="text-primary" size={14} />
+              <h4 className="text-[9px] md:text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight">Grade Semanal</h4>
+            </div>
+            <div className="grid grid-cols-5 gap-2">
+              {weeklyScheduleSummary.map(({ day, label, groups }) => {
+                const isToday = new Date().getDay() === day;
+                return (
+                  <div
+                    key={day}
+                    className={`flex flex-col gap-1.5 rounded-xl p-2 md:p-3 min-w-0 transition-all ${
+                      isToday
+                        ? 'bg-primary/8 ring-1 ring-primary/20'
+                        : 'bg-slate-50 dark:bg-slate-800/40'
+                    }`}
+                  >
+                    {/* Cabeçalho do dia */}
+                    <span
+                      className={`text-[8px] md:text-[9px] font-black uppercase tracking-widest text-center block ${
+                        isToday ? 'text-primary' : 'text-slate-400'
+                      }`}
+                    >
+                      {label}
+                    </span>
+                    <div className="h-px w-full bg-slate-200 dark:bg-slate-700 mb-0.5" />
+
+                    {/* Aulas */}
+                    {groups.length === 0 ? (
+                      <span className="text-[8px] font-bold text-slate-300 dark:text-slate-600 italic text-center block py-1">—</span>
+                    ) : (
+                      <div className="flex flex-col gap-1.5">
+                        {groups.map((group, gIdx) => (
+                          <div key={gIdx} className="flex flex-col gap-1 min-w-0">
+                            {/* Badge de período */}
+                            <span
+                              className="text-[6px] md:text-[7px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded text-center w-full block"
+                              style={{ backgroundColor: group.schoolColor + '20', color: group.schoolColor }}
+                            >
+                              {group.periodLabel}
+                            </span>
+                            {/* Turmas */}
+                            <div className="flex flex-col gap-0.5">
+                              {group.classes.map((cls, cIdx) => (
+                                <span
+                                  key={cIdx}
+                                  className="text-[7px] md:text-[8px] font-black text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-700 px-1 py-0.5 rounded text-center block w-full truncate"
+                                  title={cls}
+                                >
+                                  {cls}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
         <div className="space-y-4 md:space-y-6 w-full min-w-0 overflow-hidden">
           {renderDashboardCalendar()}

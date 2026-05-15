@@ -512,6 +512,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
    const handleExport = (type: 'logs' | 'calendar' | 'assessments' | 'occurrences' | 'attendance' | 'grades' | 'privateLessons') => {
       const isFilterActive = filterInstId !== 'all' || filterClassId !== 'all' || filterPeriodIdx !== 'all';
 
+      // Helper para resolver o nome da turma a partir do classId (que pode ser um UUID)
+      const resolveClassName = (schoolId: string | undefined, classId: string | undefined): string => {
+         if (!classId) return 'Geral';
+         if (!schoolId) return classId;
+         const school = data.schools.find(s => s.id === schoolId);
+         if (!school) return classId;
+         const classObj = school.classes?.find(c => (typeof c === 'string' ? c : c.id) === classId);
+         if (!classObj) return classId;
+         return typeof classObj === 'string' ? classObj : classObj.name;
+      };
+
       // Helper para filtrar Logs com base nos seletores e período
       const filterLogs = (logs: any[]) => {
          return logs.filter(l => {
@@ -602,7 +613,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          downloadCSV(assessments.map(e => ({
             Data: new Date(e.date).toLocaleDateString('pt-BR'),
             Escola: data.schools.find(s => s.id === e.schoolId)?.name || 'N/A',
-            Turma: e.classId || 'Geral',
+            Turma: resolveClassName(e.schoolId, e.classId),
             Tipo: e.type === 'test' ? 'Prova' : 'Trabalho',
             Titulo: e.title,
             Descricao: e.description
@@ -626,7 +637,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                return {
                   Data: new Date(l.date).toLocaleDateString('pt-BR'),
                   Escola: availableInstitutions.find(i => i.id === (l.schoolId || l.studentId))?.name || 'N/A',
-                  Turma: l.classId,
+                  Turma: resolveClassName(l.schoolId, l.classId),
                   Tipo: occ.type,
                   Descricao: occ.description,
                   Alunos_Envolvidos: studentNames || 'Geral'
@@ -651,7 +662,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                return {
                   Data: new Date(l.date).toLocaleDateString('pt-BR'),
                   Escola: availableInstitutions.find(i => i.id === l.schoolId)?.name || 'N/A',
-                  Turma: l.classId,
+                  Turma: resolveClassName(l.schoolId, l.classId),
                   Aluno: student ? student.name : 'Desconhecido',
                   Status: statusMap[att.status] || att.status
                };
@@ -686,7 +697,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                   if (gradeEntry || student.active) { // Exporta se tiver nota OU se aluno estiver ativo (mesmo sem nota = vazio)
                      gradeRows.push({
                         Escola: schoolName,
-                        Turma: assessment.classId,
+                        Turma: resolveClassName(assessment.schoolId, assessment.classId),
                         Avaliacao: assessment.title,
                         Data: new Date(assessment.date).toLocaleDateString('pt-BR'),
                         Tipo: 'type' in assessment ? (assessment.type === 'test' ? 'Prova' : 'Trabalho') : 'Personalizada',

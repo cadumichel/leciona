@@ -518,7 +518,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          if (!schoolId) return classId;
          const school = data.schools.find(s => s.id === schoolId);
          if (!school) return classId;
-         const classObj = school.classes?.find(c => (typeof c === 'string' ? c : c.id) === classId);
+         // Busca por c.id OU c.name — avaliações antigas podem ter o nome da turma no classId
+         const classObj = school.classes?.find(c =>
+            (typeof c === 'string' ? c : c.id) === classId ||
+            (typeof c === 'string' ? c : c.name) === classId
+         );
          if (!classObj) return classId;
          return typeof classObj === 'string' ? classObj : classObj.name;
       };

@@ -530,12 +530,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       const resolveClassName = (schoolId: string | undefined, classId: string | undefined): string => {
          if (!classId) return 'Geral';
 
+         // O classId pode vir como array em dados muito antigos ou ter espaços
+         const safeClassId = String(Array.isArray(classId) ? classId[0] : classId).trim();
+         if (!safeClassId) return 'Geral';
+
          // Helper interno: busca em um array de classes pelo ID ou nome
          const findInClasses = (classes: any[] | undefined) =>
-            (classes || []).find((c: any) =>
-               (typeof c === 'string' ? c : c.id) === classId ||
-               (typeof c === 'string' ? c : c.name) === classId
-            );
+            (classes || []).find((c: any) => {
+               const cId = typeof c === 'string' ? c : c.id;
+               const cName = typeof c === 'string' ? c : c.name;
+               return String(cId).trim() === safeClassId || String(cName).trim() === safeClassId;
+            });
 
          // 1. Tenta primeiro na escola informada
          if (schoolId) {
@@ -553,7 +558,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          }
 
          // 3. Se não encontrou, retorna o classId original (pode ser nome legado)
-         return classId;
+         return safeClassId;
       };
 
       // Helper para filtrar Logs com base nos seletores e período
@@ -583,31 +588,16 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
          if (logs.length === 0) return alert('Sem registros para exportar com os filtros atuais.');
 
-         downloadCSV(logs.map(l => {
-            // FIX: Resolve Class Name if it's a UUID
-            let className = l.classId;
-            if (l.schoolId) {
-               const school = data.schools.find(s => s.id === l.schoolId);
-               if (school) {
-                  // Try to find the class by ID or Name
-                  const classObj = school.classes.find(c => (typeof c === 'string' ? c : c.id) === l.classId);
-                  if (classObj) {
-                     className = typeof classObj === 'string' ? classObj : classObj.name;
-                  }
-               }
-            }
-
-            return {
-               Data: new Date(l.date).toLocaleDateString('pt-BR'),
-               Tipo: l.type === 'extra' ? 'Aula Extra' : 'Regular',
-               Instituicao: availableInstitutions.find(i => i.id === (l.schoolId || l.studentId))?.name || 'N/A',
-               Turma: className,
-               Horario: l.startTime ? `${l.startTime}-${l.endTime}` : 'Grade Normal',
-               Conteudo: l.subject,
-               Tarefa: l.homework,
-               Notas: l.notes
-            };
-         }), `diario_aulas_${new Date().toISOString().split('T')[0]}`);
+         downloadCSV(logs.map(l => ({
+            Data: new Date(l.date).toLocaleDateString('pt-BR'),
+            Instituicao: availableInstitutions.find(i => i.id === (l.schoolId || l.studentId))?.name || 'N/A',
+            Turma: resolveClassName(l.schoolId, l.classId),
+            Turno: data.schools.find(s => s.id === l.schoolId)?.shifts.find(sh => sh.slots.some(sl => sl.id === l.slotId))?.name || 'N/A',
+            Horario: l.startTime ? `${l.startTime}-${l.endTime}` : 'Grade Normal',
+            Conteudo: l.subject,
+            Tarefa: l.homework,
+            Notas: l.notes
+         })), `diario_aulas_${new Date().toISOString().split('T')[0]}`);
 
       } else if (type === 'privateLessons') {
          // Filtra apenas os logs de alunos particulares (que têm studentId)

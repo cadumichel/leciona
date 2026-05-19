@@ -101,16 +101,30 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
    }, [data.schools, data.students]);
 
    const availableClasses = useMemo(() => {
+      // Returns {id, name} objects so the filter can store the class ID (not just the name)
       if (filterInstId === 'all') {
-         return Array.from(new Set([
-            ...data.schools.filter(s => !s.deleted).flatMap(s => s.classes ? s.classes.filter(c => typeof c === 'string' || !c.deleted).map(c => typeof c === 'string' ? c : c.name) : []),
-            ...data.students.map(st => st.name)
-         ]));
+         const seen = new Set<string>();
+         const result: { id: string; name: string }[] = [];
+         data.schools.filter(s => !s.deleted).forEach(s => {
+            (s.classes || []).filter(c => typeof c === 'string' || !c.deleted).forEach(c => {
+               const id = typeof c === 'string' ? c : c.id;
+               const name = typeof c === 'string' ? c : c.name;
+               if (!seen.has(id)) { seen.add(id); result.push({ id, name }); }
+            });
+         });
+         data.students.forEach(st => {
+            if (!seen.has(st.id)) { seen.add(st.id); result.push({ id: st.id, name: st.name }); }
+         });
+         return result;
       }
       const school = data.schools.find(s => s.id === filterInstId);
-      if (school && !school.deleted) return school.classes ? school.classes.filter(c => typeof c === 'string' || !c.deleted).map(c => typeof c === 'string' ? c : c.name) : [];
+      if (school && !school.deleted) {
+         return (school.classes || []).filter(c => typeof c === 'string' || !c.deleted).map(c =>
+            typeof c === 'string' ? { id: c, name: c } : { id: c.id, name: c.name }
+         );
+      }
       const student = data.students.find(st => st.id === filterInstId);
-      if (student) return [student.name];
+      if (student) return [{ id: student.id, name: student.name }];
       return [];
    }, [data.schools, data.students, filterInstId]);
 
@@ -515,16 +529,31 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       // Helper para resolver o nome da turma a partir do classId (que pode ser um UUID)
       const resolveClassName = (schoolId: string | undefined, classId: string | undefined): string => {
          if (!classId) return 'Geral';
-         if (!schoolId) return classId;
-         const school = data.schools.find(s => s.id === schoolId);
-         if (!school) return classId;
-         // Busca por c.id OU c.name — avaliações antigas podem ter o nome da turma no classId
-         const classObj = school.classes?.find(c =>
-            (typeof c === 'string' ? c : c.id) === classId ||
-            (typeof c === 'string' ? c : c.name) === classId
-         );
-         if (!classObj) return classId;
-         return typeof classObj === 'string' ? classObj : classObj.name;
+
+         // Helper interno: busca em um array de classes pelo ID ou nome
+         const findInClasses = (classes: any[] | undefined) =>
+            (classes || []).find((c: any) =>
+               (typeof c === 'string' ? c : c.id) === classId ||
+               (typeof c === 'string' ? c : c.name) === classId
+            );
+
+         // 1. Tenta primeiro na escola informada
+         if (schoolId) {
+            const school = data.schools.find(s => s.id === schoolId);
+            if (school) {
+               const classObj = findInClasses(school.classes);
+               if (classObj) return typeof classObj === 'string' ? classObj : classObj.name;
+            }
+         }
+
+         // 2. Fallback: busca em TODAS as escolas (cobre casos de schoolId incorreto)
+         for (const school of data.schools) {
+            const classObj = findInClasses(school.classes);
+            if (classObj) return typeof classObj === 'string' ? classObj : classObj.name;
+         }
+
+         // 3. Se não encontrou, retorna o classId original (pode ser nome legado)
+         return classId;
       };
 
       // Helper para filtrar Logs com base nos seletores e período
@@ -607,6 +636,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          const assessments = data.events.filter(e => {
             const isAssessment = ['test', 'work'].includes(e.type);
             const instMatch = filterInstId === 'all' || e.schoolId === filterInstId;
+            // filterClassId now stores the class ID (UUID), so compare directly
             const classMatch = filterClassId === 'all' || e.classId === filterClassId;
             const periodMatch = isDateInSelectedPeriod(e.date);
             return isAssessment && instMatch && classMatch && periodMatch;
@@ -1483,7 +1513,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
                            <select value={filterInstId} onChange={e => { setFilterInstId(e.target.value); setFilterClassId('all'); setFilterPeriodIdx('all'); }} className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none appearance-none cursor-pointer dark:text-white"><option value="all">Todas Instituições</option>{availableInstitutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</select>
-                           <select value={filterClassId} onChange={e => setFilterClassId(e.target.value)} className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none appearance-none cursor-pointer dark:text-white"><option value="all">Todas as Turmas</option>{availableClasses.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                           <select value={filterClassId} onChange={e => setFilterClassId(e.target.value)} className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none appearance-none cursor-pointer dark:text-white"><option value="all">Todas as Turmas</option>{availableClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
                            <select value={filterPeriodIdx} onChange={e => setFilterPeriodIdx(e.target.value)} disabled={filterInstId === 'all'} className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none appearance-none cursor-pointer dark:text-white disabled:opacity-50">
                               <option value="all">Todo o Período</option>
                               {periodOptions.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}

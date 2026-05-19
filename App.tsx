@@ -997,7 +997,6 @@ const App: React.FC = () => {
               onSyncNow={() => { }}
               user={user}
               onLogin={handleLogin}
-              onLogin={handleLogin}
               onLogout={handleLogout}
               isOnboarding={isOnboarding}
               onFinishOnboarding={() => setActiveTab('dashboard')}

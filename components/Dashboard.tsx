@@ -1142,7 +1142,6 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
             )}
           </div>
         </div>
-      </div>
 
       {/* RODAPÉ DO DASHBOARD */}
       <div className="pt-10 pb-8 text-center opacity-60">

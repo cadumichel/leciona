@@ -233,7 +233,6 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
   const handleSaveEvent = () => {
     if (!eventForm.title || !eventForm.schoolId) return;
 
-    const safeDateISO = new Date(eventForm.date + 'T12:00:00').toISOString();
     const dateStr = eventForm.date;
 
     if (eventForm.blocksClasses) {

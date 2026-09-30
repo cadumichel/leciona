@@ -400,16 +400,32 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     let weekCounter = 0;
 
     filteredEvents.forEach(e => {
-      const monthKey = getMonthKey(e.date);
-      let month = months.find(m => m.key === monthKey);
-      if (!month) { month = { key: monthKey, label: formatMonthHeader(e.date), weeks: [] }; months.push(month); }
-
       const weekKey = getMondayOfWeek(e.date.split('T')[0]);
+      
+      // A semana toda pertencerá ao mês em que a segunda-feira inicia
+      const monthKey = getMonthKey(weekKey);
+      
+      let month = months.find(m => m.key === monthKey);
+      if (!month) { 
+        month = { key: monthKey, label: formatMonthHeader(weekKey), weeks: [] }; 
+        months.push(month); 
+      }
+
       let week = month.weeks.find(w => w.weekKey === weekKey);
       if (!week) {
         if (!weekSeq.has(weekKey)) { weekSeq.set(weekKey, ++weekCounter); }
         const fridayStr = getFridayOfWeek(weekKey);
-        const label = `Semana ${weekSeq.get(weekKey)}: ${fmtShort(weekKey)} a ${fmtShort(fridayStr)}`;
+        
+        let label = `Semana ${weekSeq.get(weekKey)}: ${fmtShort(weekKey)} a ${fmtShort(fridayStr)}`;
+        
+        // Verifica se a semana divide meses
+        const startMonthName = getSafeDate(weekKey).toLocaleDateString('pt-BR', { month: 'long' });
+        const endMonthName = getSafeDate(fridayStr).toLocaleDateString('pt-BR', { month: 'long' });
+        
+        if (startMonthName !== endMonthName) {
+           label += ` - Obs: Início da semana em ${startMonthName} e fim da semana em ${endMonthName}!`;
+        }
+        
         week = { weekKey, label, events: [] };
         month.weeks.push(week);
       }

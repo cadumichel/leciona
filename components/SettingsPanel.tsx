@@ -11,12 +11,16 @@ import {
 } from 'lucide-react';
 import { deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebaseConnection';
-import { downloadCSV, downloadICS } from '../utils';
+import { downloadCSV, downloadICS, formatDateBR } from '../utils';
+import { getClassName, isSameClassRef } from '../utils/classRefs';
 import { QuickStartGuide, INITIAL_DATA } from '../App';
 import TermsOfUseModal from './TermsOfUseModal';
 import SchoolManagement from './SchoolManagement';
 import ScheduleManagement from './ScheduleManagement';
 import StudentManagement from './StudentManagement';
+import ClassRefRepair from './ClassRefRepair';
+import { trackChanges, SyncedData } from '../utils/sync';
+import { STORAGE_KEY, PENDING_KEY } from '../hooks/useSyncedData';
 import { processStudentList, ProcessedStudent, FormatMode } from '../utils/studentListProcessor';
 import { parseHolidayList, ParsedHoliday } from '../utils/holidayParser';
 import { User as FirebaseUser } from 'firebase/auth';
@@ -30,6 +34,7 @@ interface SettingsPanelProps {
    onLogout?: () => void;
    isOnboarding?: boolean;
    onFinishOnboarding?: () => void;
+   onRestoreData?: (backup: AppData) => Promise<void>;
 }
 
 const THEME_COLORS = [
@@ -44,7 +49,7 @@ const THEME_COLORS = [
    { name: 'Amarelo', value: '#facc15' },
 ];
 
-const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyncNow, user, onLogin, onLogout, isOnboarding = false, onFinishOnboarding }) => {
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyncNow, user, onLogin, onLogout, isOnboarding = false, onFinishOnboarding, onRestoreData }) => {
    const [activeSubTab, setActiveSubTab] = useState<'general' | 'schools' | 'calendar' | 'schedules' | 'classes' | 'students' | 'privatestudents'>('general');
    const [showTermsModal, setShowTermsModal] = useState(false);
 
@@ -476,13 +481,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          try {
             console.log("🗑️ Iniciando Hard Reset para userId:", user.uid);
 
+            const wipeMark = new Date().toISOString();
             // Em vez de deletar o doc (que causa resync dos outros devices),
             // sobrescrevemos com dados vazios e uma flag de wipe
             const emptyData = {
                ...INITIAL_DATA,
                settings: { ...INITIAL_DATA.settings, googleSyncEnabled: true },
                wiped: true,
-               wipedAt: new Date().toISOString()
+               wipedAt: wipeMark,
+               _wipedAt: wipeMark
             };
 
             // SANITIZAÇÃO CRÍTICA: Remove undefineds que quebram o Firestore setDoc
@@ -526,40 +533,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
    const handleExport = (type: 'logs' | 'calendar' | 'assessments' | 'occurrences' | 'attendance' | 'grades' | 'privateLessons') => {
       const isFilterActive = filterInstId !== 'all' || filterClassId !== 'all' || filterPeriodIdx !== 'all';
 
-      // Helper para resolver o nome da turma a partir do classId (que pode ser um UUID)
-      const resolveClassName = (schoolId: string | undefined, classId: string | undefined): string => {
-         if (!classId) return 'Geral';
+      // A turma pode estar salva pelo código interno ou pelo nome (grade horária): resolve os dois
+      const resolveClassName = (schoolId: string | undefined, classId: string | undefined): string =>
+         getClassName(data, schoolId, classId);
 
-         // O classId pode vir como array em dados muito antigos ou ter espaços
-         const safeClassId = String(Array.isArray(classId) ? classId[0] : classId).trim();
-         if (!safeClassId) return 'Geral';
+      // Filtro de turma: compara pela turma real, não pelo texto salvo
+      const matchesClassFilter = (schoolId: string | undefined, classId: string | undefined) =>
+         filterClassId === 'all' || isSameClassRef(data, schoolId, classId, filterClassId);
 
-         // Helper interno: busca em um array de classes pelo ID ou nome
-         const findInClasses = (classes: any[] | undefined) =>
-            (classes || []).find((c: any) => {
-               const cId = typeof c === 'string' ? c : c.id;
-               const cName = typeof c === 'string' ? c : c.name;
-               return String(cId).trim() === safeClassId || String(cName).trim() === safeClassId;
-            });
-
-         // 1. Tenta primeiro na escola informada
-         if (schoolId) {
-            const school = data.schools.find(s => s.id === schoolId);
-            if (school) {
-               const classObj = findInClasses(school.classes);
-               if (classObj) return typeof classObj === 'string' ? classObj : classObj.name;
-            }
-         }
-
-         // 2. Fallback: busca em TODAS as escolas (cobre casos de schoolId incorreto)
-         for (const school of data.schools) {
-            const classObj = findInClasses(school.classes);
-            if (classObj) return typeof classObj === 'string' ? classObj : classObj.name;
-         }
-
-         // 3. Se não encontrou, retorna o classId original (pode ser nome legado)
-         return safeClassId;
-      };
+      // Lista de alunos da turma do registro (código ou nome)
+      const findClassRecord = (schoolId: string | undefined, classId: string | undefined) =>
+         data.classRecords.find(r => r.schoolId === schoolId && isSameClassRef(data, schoolId, r.classId, classId));
 
       // Helper para filtrar Logs com base nos seletores e período
       const filterLogs = (logs: any[]) => {
@@ -570,7 +554,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
             const instId = l.schoolId || l.studentId;
             const instMatch = filterInstId === 'all' || instId === filterInstId;
-            const classMatch = filterClassId === 'all' || l.classId === filterClassId;
+            const classMatch = matchesClassFilter(l.schoolId, l.classId);
             const periodMatch = isDateInSelectedPeriod(l.date);
 
             // Check if institution is deleted
@@ -589,7 +573,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          if (logs.length === 0) return alert('Sem registros para exportar com os filtros atuais.');
 
          downloadCSV(logs.map(l => ({
-            Data: new Date(l.date).toLocaleDateString('pt-BR'),
+            Data: formatDateBR(l.date),
             Instituicao: availableInstitutions.find(i => i.id === (l.schoolId || l.studentId))?.name || 'N/A',
             Turma: resolveClassName(l.schoolId, l.classId),
             Turno: data.schools.find(s => s.id === l.schoolId)?.shifts.find(sh => sh.slots.some(sl => sl.id === l.slotId))?.name || 'N/A',
@@ -612,7 +596,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          downloadCSV(privateLogs.map(l => {
             const student = data.students.find(s => s.id === l.studentId);
             return {
-               Data: new Date(l.date).toLocaleDateString('pt-BR'),
+               Data: formatDateBR(l.date),
                Aluno: student?.name || 'N/A',
                Materia: student?.subject || 'N/A',
                Horario: l.startTime ? `${l.startTime}-${l.endTime}` : 'Horário do aluno',
@@ -626,8 +610,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          const assessments = data.events.filter(e => {
             const isAssessment = ['test', 'work'].includes(e.type);
             const instMatch = filterInstId === 'all' || e.schoolId === filterInstId;
-            // filterClassId now stores the class ID (UUID), so compare directly
-            const classMatch = filterClassId === 'all' || e.classId === filterClassId;
+            const classMatch = matchesClassFilter(e.schoolId, e.classId);
             const periodMatch = isDateInSelectedPeriod(e.date);
             return isAssessment && instMatch && classMatch && periodMatch;
          });
@@ -635,7 +618,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          if (assessments.length === 0) return alert('Sem avaliações para exportar com os filtros atuais.');
 
          downloadCSV(assessments.map(e => ({
-            Data: new Date(e.date).toLocaleDateString('pt-BR'),
+            Data: formatDateBR(e.date),
             Escola: data.schools.find(s => s.id === e.schoolId)?.name || 'N/A',
             Turma: resolveClassName(e.schoolId, e.classId),
             Tipo: e.type === 'test' ? 'Prova' : 'Trabalho',
@@ -652,14 +635,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                // Busca nomes dos alunos envolvidos se houver
                let studentNames = '';
                if (occ.studentIds && occ.studentIds.length > 0) {
-                  const record = data.classRecords.find(r => r.schoolId === l.schoolId && r.classId === l.classId);
+                  const record = findClassRecord(l.schoolId, l.classId);
                   if (record) {
                      studentNames = occ.studentIds.map(sid => record.students.find(s => s.id === sid)?.name || 'Desconhecido').join(', ');
                   }
                }
 
                return {
-                  Data: new Date(l.date).toLocaleDateString('pt-BR'),
+                  Data: formatDateBR(l.date),
                   Escola: availableInstitutions.find(i => i.id === (l.schoolId || l.studentId))?.name || 'N/A',
                   Turma: resolveClassName(l.schoolId, l.classId),
                   Tipo: occ.type,
@@ -676,7 +659,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          const logs = filterLogs(data.logs).filter(l => l.attendance && l.attendance.length > 0);
 
          const attendanceRecords = logs.flatMap(l => {
-            const record = data.classRecords.find(r => r.schoolId === l.schoolId && r.classId === l.classId);
+            const record = findClassRecord(l.schoolId, l.classId);
             if (!record) return [];
 
             return l.attendance!.map(att => {
@@ -684,7 +667,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                const statusMap: Record<string, string> = { 'present': 'Presente', 'absent': 'Falta', 'justified': 'Justificada' };
 
                return {
-                  Data: new Date(l.date).toLocaleDateString('pt-BR'),
+                  Data: formatDateBR(l.date),
                   Escola: availableInstitutions.find(i => i.id === l.schoolId)?.name || 'N/A',
                   Turma: resolveClassName(l.schoolId, l.classId),
                   Aluno: student ? student.name : 'Desconhecido',
@@ -700,7 +683,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          // Filtra Configurações de Notas/Colunas
          const assessments = [...data.events.filter(e => ['test', 'work'].includes(e.type)), ...data.customAssessments].filter(a => {
             const instMatch = filterInstId === 'all' || a.schoolId === filterInstId;
-            const classMatch = filterClassId === 'all' || a.classId === filterClassId;
+            const classMatch = matchesClassFilter(a.schoolId, a.classId);
             const periodMatch = isDateInSelectedPeriod(a.date);
             return instMatch && classMatch && periodMatch;
          });
@@ -712,7 +695,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          assessments.forEach(assessment => {
             const schoolName = data.schools.find(s => s.id === assessment.schoolId)?.name || 'N/A';
             // Find records for this class
-            const record = data.classRecords.find(r => r.schoolId === assessment.schoolId && r.classId === assessment.classId);
+            const record = findClassRecord(assessment.schoolId, assessment.classId);
 
             if (record) {
                record.students.forEach(student => {
@@ -723,7 +706,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                         Escola: schoolName,
                         Turma: resolveClassName(assessment.schoolId, assessment.classId),
                         Avaliacao: assessment.title,
-                        Data: new Date(assessment.date).toLocaleDateString('pt-BR'),
+                        Data: formatDateBR(assessment.date),
                         Tipo: 'type' in assessment ? (assessment.type === 'test' ? 'Prova' : 'Trabalho') : 'Personalizada',
                         Aluno: student.name,
                         Nota: gradeEntry ? String(gradeEntry.value).replace('.', ',') : '-'
@@ -744,7 +727,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
             return instMatch && periodMatch;
          });
          if (evs.length === 0) return alert('Sem eventos na agenda para exportar.');
-         downloadICS(evs.map(e => ({ title: e.title, start: e.date, end: e.date, description: e.description })), 'agenda_leciona');
+         downloadICS(evs.map(e => ({ uid: e.id, title: e.title, start: e.date, end: e.date, description: e.description || '' })), 'agenda_leciona');
       }
    };
 
@@ -780,7 +763,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       }
 
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
          try {
             const content = e.target?.result as string;
             const parsed = JSON.parse(content);
@@ -802,10 +785,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                }
             };
 
-            // Atualiza estado
-            onUpdateData(restoredData);
+            // Grava no aparelho e na nuvem ANTES de recarregar (antes recarregava sem salvar nada)
+            if (onRestoreData) {
+               await onRestoreData(restoredData);
+            } else {
+               onUpdateData(restoredData);
+            }
 
-            // Força recarregamento para limpar estados internos
             alert('Dados restaurados com sucesso! O aplicativo será recarregado.');
             window.location.reload();
 
@@ -1111,10 +1097,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       // Força a atualização do estado global
       onUpdateData(sanitizedData);
 
-      // Salva no LocalStorage imediatamente para garantir
-      const currentStorage = JSON.parse(localStorage.getItem('leciona-data-v1') || '{}');
-      const newStorage = { ...currentStorage, ...sanitizedData };
-      localStorage.setItem('leciona-data-v1', JSON.stringify(newStorage));
+      // Salva no aparelho imediatamente (com as marcas de exclusão, para os dados
+      // apagados não voltarem pela nuvem depois de recarregar)
+      const tracked = trackChanges(data as SyncedData, { ...data, ...sanitizedData } as SyncedData);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tracked));
+      localStorage.setItem(PENDING_KEY, '1');
 
       alert(`SUCESSO!\n\nForam removidas:\n- ${schoolsToDelete.length} Escolas\n- Dados vinculados limpos.\n\nO aplicativo será recarregado.`);
 
@@ -1614,6 +1601,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                   )
                }
 
+               {/* REPARO DE TURMAS NÃO ENCONTRADAS */}
+               {!isOnboarding && <ClassRefRepair data={data} onUpdateData={onUpdateData} />}
+
                {/* HARD RESET - APENAS DEV/TESTES */}
 
                {
@@ -1626,83 +1616,24 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                         <div className="space-y-4">
                            <div>
                               <p className="text-[10px] font-bold text-red-600 dark:text-red-300 leading-relaxed mb-2">
-                                 Limpeza de Integridade: Remove registros de aulas "fantasmas" que apontam para turmas ou escolas excluídas.
+                                 Limpeza de Integridade: Remove registros de aulas que apontam para escolas ou alunos particulares que não existem mais. Aulas de turmas excluídas são mantidas como histórico; turmas não encontradas devem ser reatribuídas no quadro acima.
                               </p>
                               <button
                                  onClick={() => {
-                                    console.group('🔍 SANITIZAÇÃO - FULL DEBUG');
-                                    console.log('Iniciando análise...', data.logs.length, 'logs encontrados.');
-
                                     const orphans: any[] = [];
                                     const orphanIds = new Set<string>();
 
-                                    // 1. Scan for orphans (ALL logs, no type filter)
+                                    // Só remove aulas cuja ESCOLA ou ALUNO PARTICULAR não existe mais.
+                                    // Aulas de turma excluída são histórico; turma não encontrada se resolve
+                                    // reatribuindo no quadro "Turmas não encontradas" (antes eram apagadas aqui).
                                     data.logs.forEach(log => {
-                                       // Skip empty/invalid logs entirely if they don't have schoolId or studentId
                                        if (!log.schoolId && !log.studentId) return;
-
-                                       // Check School Logs
-                                       if (log.schoolId) {
-                                          const school = data.schools.find(s => s.id === log.schoolId);
-                                          // 1. School must exist
-                                          if (!school) {
-                                             orphans.push(log);
-                                             orphanIds.add(log.id);
-                                             return;
-                                          }
-
-                                          // 2. Class must exist in the school (unless it's a window)
-                                          if (log.classId && log.classId !== 'window') {
-                                             // Check if class exists in school.classes AND is not deleted
-                                             // We check:
-                                             // a) Is it a simple string class that matches?
-                                             // b) Is it an object class with matching ID?
-                                             // c) Is it an object class with matching Name (legacy fallback)?
-                                             // AND ensure it's not marked as deleted (if it's an object)
-                                             // Check if class exists in school.classes AND is not deleted
-                                             const classMatches = school.classes && school.classes.filter(c => {
-                                                if (typeof c === 'string') return c === log.classId;
-                                                // Check ID or Name
-                                                return c.id === log.classId || c.name === log.classId;
-                                             });
-
-                                             const hasMatch = classMatches && classMatches.length > 0;
-
-                                             // Specific debug for the reported issue
-                                             // Specific debug for ANY class check in 'consulv1' to catch mismatches
-                                             if (school.id === 'consulv1') {
-                                                console.log(`[DEBUG] School: ${school.id}, ClassID in Log: '${log.classId}' (Type: ${typeof log.classId}). Matches found:`, classMatches.length);
-                                                if (classMatches.length === 0) {
-                                                   console.log(`[DEBUG] ❌ NO MATCH! Dumping available classes:`, school.classes);
-                                                }
-                                             }
-
-                                             const isDeleted = hasMatch && classMatches.every(c => typeof c !== 'string' && c.deleted);
-
-                                             if (!hasMatch) {
-                                                console.warn(`[PARTIAL ORPHAN] Log ${log.id} em ${log.date}: Turma '${log.classId}' não encontrada na escola '${school.name}' (ID: ${school.id}).`);
-                                                orphans.push(log);
-                                                orphanIds.add(log.id);
-                                                return;
-                                             }
-
-                                             if (isDeleted) {
-                                                // Log as warning but add to orphans
-                                                console.warn(`[DELETED REFERENCE] Log ${log.id} em ${log.date}: Turma '${log.classId}' foi excluída.`);
-                                                orphans.push(log);
-                                                orphanIds.add(log.id);
-                                                return;
-                                             }
-                                          }
-                                       }
-                                       // Check Private Logs
-                                       else if (log.studentId) {
-                                          const student = data.students.find(s => s.id === log.studentId);
-                                          if (!student) {
-                                             orphans.push(log);
-                                             orphanIds.add(log.id);
-                                             return;
-                                          }
+                                       const missing = log.schoolId
+                                          ? !data.schools.some(s => s.id === log.schoolId)
+                                          : !data.students.some(s => s.id === log.studentId);
+                                       if (missing) {
+                                          orphans.push(log);
+                                          orphanIds.add(log.id);
                                        }
                                     });
 
@@ -1711,9 +1642,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                        return;
                                     }
 
-                                    const confirmMsg = `Encontramos ${orphans.length} registros de aulas "fantasmas" (órfãos).\n\n` +
-                                       `Detectamos logs onde a Escola ou a Turma não existem mais.\n` +
-                                       `Deseja limpar esses registros agora?`;
+                                    const confirmMsg = `Encontramos ${orphans.length} registro(s) de aula de escolas ou alunos particulares que não existem mais.\n\n` +
+                                       `Recomendado: faça um backup antes.\n` +
+                                       `Deseja remover esses registros agora?`;
 
                                     if (confirm(confirmMsg)) {
                                        const cleanLogs = data.logs.filter(l => !orphanIds.has(l.id));

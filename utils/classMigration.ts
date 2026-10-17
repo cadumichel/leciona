@@ -1,58 +1,34 @@
 
-import { AppData, SchoolClass } from '../types';
+import { AppData } from '../types';
 
+/**
+ * Renomear turma: referências pelo código interno não precisam mudar (o código continua o mesmo).
+ * Só as referências que guardam o NOME da turma (grade horária e registros criados a partir dela)
+ * precisam ser atualizadas — inclusive dentro das versões de horário, que antes ficavam de fora
+ * e passavam a apontar para um nome que não existia mais.
+ */
 export const migrateClassData = (
     data: AppData,
     schoolId: string,
     oldClassName: string,
     newClassName: string
 ): Partial<AppData> => {
-    console.log(`Migrating class ${oldClassName} to ${newClassName} in school ${schoolId}`);
-
-    // 1. Update ClassRecords (Students)
-    const classRecords = (data.classRecords || []).map(r =>
-        (r.schoolId === schoolId && r.classId === oldClassName)
-            ? { ...r, classId: newClassName }
-            : r
-    );
-
-    // 2. Update Events (Scheduled Tests, Works)
-    const events = (data.events || []).map(e =>
-        (e.schoolId === schoolId && e.classId === oldClassName)
-            ? { ...e, classId: newClassName }
-            : e
-    );
-
-    // 3. Update CustomAssessments (Custom Columns)
-    const customAssessments = (data.customAssessments || []).map(c =>
-        (c.schoolId === schoolId && c.classId === oldClassName)
-            ? { ...c, classId: newClassName }
-            : c
-    );
-
-    // 4. Update Schedules (Time slots)
-    const schedules = (data.schedules || []).map(s =>
-        (s.schoolId === schoolId && s.classId === oldClassName)
-            ? { ...s, classId: newClassName }
-            : s
-    );
-
-    // 5. Update Logs (Daily Lessons and Occurrences)
-    const logs = (data.logs || []).map(l =>
-        (l.schoolId === schoolId && l.classId === oldClassName)
-            ? { ...l, classId: newClassName }
-            : l
-    );
-
-    // 6. Update School Classes (Usually handled by component, but safe to return if needed)
-    // Logic mostly relies on the component updating the School object itself, 
-    // but we return the dependent data updates here.
+    const rename = <T extends { schoolId?: string; classId?: string }>(item: T): T =>
+        (item.schoolId === schoolId && item.classId === oldClassName)
+            ? { ...item, classId: newClassName }
+            : item;
 
     return {
-        classRecords,
-        events,
-        customAssessments,
-        schedules,
-        logs
+        classRecords: (data.classRecords || []).map(rename),
+        events: (data.events || []).map(rename),
+        customAssessments: (data.customAssessments || []).map(rename),
+        gradingConfigs: (data.gradingConfigs || []).map(rename),
+        reminders: (data.reminders || []).map(rename),
+        schedules: (data.schedules || []).map(rename),
+        scheduleVersions: (data.scheduleVersions || []).map(v => ({
+            ...v,
+            schedules: (v.schedules || []).map(rename)
+        })),
+        logs: (data.logs || []).map(rename)
     };
 };

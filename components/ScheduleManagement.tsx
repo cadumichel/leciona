@@ -4,6 +4,7 @@ import { DAYS_OF_WEEK_NAMES } from '../constants';
 import { Plus, Trash2, LayoutGrid, Calendar as CalendarIcon, Save, Info, AlertCircle, User, Clock, ShieldAlert, Layers, ChevronDown, Check, ArrowRight, PackageX } from 'lucide-react';
 import { MigrationWizard, MigrationDecision } from './MigrationWizard';
 import { checkTimeOverlap } from '../utils';
+import { getClassName } from '../utils/classRefs';
 import { analyzeMigration, ScheduleChange, AffectedLog, AffectedEvent } from '../utils/scheduleMigration';
 
 interface ScheduleManagementProps {
@@ -425,7 +426,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
         );
 
         if (schoolConflict || privateConflict) {
-          const conflictName = schoolConflict ? schoolConflict.classId : privateConflict?.studentName;
+          const conflictName = schoolConflict ? getClassName(data, schoolConflict.schoolId, schoolConflict.classId) : privateConflict?.studentName;
           alert(`CONFLITO DE HORÁRIO!\nVocê já tem uma aula (${conflictName}) agendada neste mesmo horário.`);
           return;
         }
@@ -724,7 +725,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                         return {
                           schoolName: conflictSchool?.name || 'Outra escola',
                           schoolColor: conflictSchool?.color || '#6366f1',
-                          className: conflictingSchedule.classId
+                          className: getClassName(data, conflictingSchedule.schoolId, conflictingSchedule.classId)
                         };
                       }
                       return null;

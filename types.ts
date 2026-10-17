@@ -270,6 +270,7 @@ export interface AppSettings {
 
   // Controles de Exibição de Alertas
   hideUnregisteredClassesOnDiary?: boolean;
+  hideUnregisteredClassesOnDashboard?: boolean;
   termsAccepted?: boolean;
 }
 

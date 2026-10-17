@@ -4,6 +4,7 @@ import { getCurrentTimeInMinutes, parseTimeToMinutes, isHoliday, getHolidayName,
 import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName } from '../utils/classRefs';
 import { getLessonDisplayItems, isLessonBlocked, deriveStatsFromLessons } from '../utils/lessonStats';
+import { buildTodayTimeline, buildWeeklyGrid, todayLessonStatus, TodayLessonStatus } from '../utils/dashboardWeb';
 import {
   Clock,
   ArrowRight,
@@ -573,7 +574,11 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     });
   }, [data.schools, data.schedules, data.scheduleVersions, data.settings.isPrivateTeacher, todayDateStr]);
 
-  const renderDashboardCalendar = () => {
+  // --- VERSÃO WEB: linha do dia e grade semanal (cada aula separada, mesmo quando seguidas) ---
+  const todayTimeline = useMemo(() => buildTodayTimeline(data, todayDateStr), [data, todayDateStr]);
+  const weeklyGrid = useMemo(() => buildWeeklyGrid(data, todayDateStr), [data, todayDateStr]);
+
+  const renderDashboardCalendar = (compact = false) => {
     const year = dashMonth.getFullYear();
     const month = dashMonth.getMonth();
     const firstDay = new Date(year, month, 1).getDay();
@@ -611,11 +616,13 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     }
 
     return (
-      <div className="bg-white dark:bg-slate-900 p-2 md:p-6 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm w-full min-w-0 overflow-hidden">
-        <div className="flex justify-between items-center mb-2 md:mb-6">
+      <div className={compact
+        ? 'bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm w-full min-w-0 overflow-hidden'
+        : 'bg-white dark:bg-slate-900 p-2 md:p-6 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm w-full min-w-0 overflow-hidden'}>
+        <div className={compact ? 'flex justify-between items-center mb-3' : 'flex justify-between items-center mb-2 md:mb-6'}>
           <div className="flex items-center gap-1.5">
             <CalendarIcon className="text-primary" size={14} />
-            <h4 className="text-[9px] md:text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight">{dashMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h4>
+            <h4 className={compact ? 'text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight' : 'text-[9px] md:text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight'}>{dashMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h4>
           </div>
           <div className="flex gap-1">
             <button onClick={() => setDashMonth(new Date(year, month - 1))} className="p-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-all border border-slate-100 dark:border-slate-800"><ChevronLeft size={12} /></button>
@@ -624,7 +631,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '2px' }}>
           {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => (
-            <div key={`${d}-${i}`} className="text-center text-[7px] font-black text-slate-400 py-0.5 uppercase tracking-tight">{d}</div>
+            <div key={`${d}-${i}`} className={compact ? 'text-center text-[9px] font-black text-slate-400 py-0.5 uppercase tracking-tight' : 'text-center text-[7px] font-black text-slate-400 py-0.5 uppercase tracking-tight'}>{d}</div>
           ))}
           {days.map((d, i) => {
             if (!d) return <div key={i} />;
@@ -634,17 +641,22 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
             let cellBg = isToday ? 'bg-primary/5 border-primary ring-1 ring-primary/20' : 'bg-slate-50/50 dark:bg-slate-800/30 border-transparent';
             if (d.holidayName || d.recessInfo) cellBg = 'bg-pink-50 dark:bg-pink-900/10 border-pink-100 dark:border-pink-900/20';
 
+            // No computador: passar o mouse mostra o que há no dia
+            const dayTitle = compact
+              ? [d.holidayName, (d.recessInfo as any)?.name, ...d.events.map(ev => ev.title), ...d.reminders.map(r => r.title)].filter(Boolean).join(' • ') || undefined
+              : undefined;
+
             return (
-              <div key={i} className={`aspect-square rounded flex flex-col items-center justify-center relative border transition-all ${cellBg}`}>
-                <span className={`text-[8px] font-black leading-none ${isToday ? 'text-primary' : (d.holidayName || d.recessInfo) ? 'text-pink-600' : 'text-slate-500'}`}>{d.day}</span>
-                <div className="flex gap-px mt-0.5">
+              <div key={i} title={dayTitle} className={`${compact ? 'h-9 rounded-md' : 'aspect-square rounded'} flex flex-col items-center justify-center relative border transition-all ${cellBg}`}>
+                <span className={`${compact ? 'text-[11px]' : 'text-[8px]'} font-black leading-none ${isToday ? 'text-primary' : (d.holidayName || d.recessInfo) ? 'text-pink-600' : 'text-slate-500'}`}>{d.day}</span>
+                <div className={compact ? 'flex gap-0.5 mt-1' : 'flex gap-px mt-0.5'}>
                   {d.events.slice(0, 2).map((ev, idx) => {
                     const school = data.schools.find(s => s.id === ev.schoolId);
                     return (
-                      <div key={idx} className="w-1 h-1 rounded-full" style={{ backgroundColor: school ? school.color : '#f97316' }} />
+                      <div key={idx} className={compact ? 'w-1.5 h-1.5 rounded-full' : 'w-1 h-1 rounded-full'} style={{ backgroundColor: school ? school.color : '#f97316' }} />
                     );
                   })}
-                  {hasReminder && <div className="w-1 h-1 rounded-full bg-amber-400" />}
+                  {hasReminder && <div className={compact ? 'w-1.5 h-1.5 rounded-full bg-amber-400' : 'w-1 h-1 rounded-full bg-amber-400'} />}
                 </div>
               </div>
             );
@@ -701,112 +713,8 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     };
   }, [sortedTodaySchedules, currentTime]);
 
-  return (
-    <div className="space-y-4 md:space-y-6 animate-in fade-in duration-500 w-full max-w-full min-w-0 overflow-x-hidden">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 md:gap-4">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-lg md:text-3xl font-black text-slate-800 dark:text-white tracking-tight leading-none truncate block w-full">
-            Olá, {data.profile.title || 'Prof.'} {data.profile.name || 'Docente'}!
-          </h1>
-          <p className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-1 md:mt-2 truncate w-full">
-            {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 md:gap-3 bg-white dark:bg-slate-900 px-3 py-1.5 md:px-4 md:py-2 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm shrink-0 w-fit">
-          <Sparkles className="text-primary animate-pulse w-3 h-3 md:w-4 md:h-4" />
-          <span className="text-[8px] md:text-[9px] font-black uppercase tracking-tight text-slate-500">Inspirado para hoje</span>
-        </div>
-      </div>
-
-      {pendingCount > 0 && !data.settings.hideUnregisteredClassesOnDashboard && (
-        <button onClick={onNavigateToPendencies} className="relative block text-left w-full overflow-hidden p-3 md:p-4 rounded-xl text-amber-900 shadow-lg shadow-amber-100 dark:shadow-amber-900/10 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4" style={{ backgroundColor: '#fffbeb', border: '2px solid #fde68a' }}>
-          <div className="relative z-10 flex items-center justify-between w-full min-w-0">
-            <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-              <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#fbbf24' }}>
-                <AlertTriangle size={18} className="md:w-[20px] md:h-[20px] text-amber-800" />
-              </div>
-              <div className="text-left flex-1 min-w-0">
-                <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-amber-700 border-none outline-none truncate">Atenção Necessária</span>
-                <p className="text-[10px] md:text-xs font-black uppercase text-amber-900 border-none outline-none truncate">Você tem {pendingCount} registros pendentes.</p>
-              </div>
-            </div>
-            <ChevronRight size={18} className="md:w-[20px] md:h-[20px] shrink-0 text-amber-700" />
-          </div>
-        </button>
-      )}
-
-      {overduePayments.length > 0 && (
-        <div className="w-full flex items-center justify-between p-3 md:p-4 rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4 cursor-pointer">
-          <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/20 shrink-0">
-              <DollarSign size={18} className="md:w-[20px] md:h-[20px]" />
-            </div>
-            <div className="text-left flex-1 min-w-0">
-              <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/80 truncate">Financeiro</span>
-              <p className="text-[10px] md:text-xs font-black uppercase text-white truncate">
-                {overduePayments.length} pagamentos em atraso ({overduePayments[0].studentName}...)
-              </p>
-            </div>
-          </div>
-          <ChevronRight size={18} className="md:w-[20px] md:h-[20px] shrink-0" />
-        </div>
-      )}
-
-      {upcomingUnpreparedAssessments.length > 0 && (() => {
-        const nextAssessment = upcomingUnpreparedAssessments[0];
-        const eDate = new Date(nextAssessment.date.split('T')[0] + 'T00:00:00');
-        eDate.setHours(0, 0, 0, 0);
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
-        const daysLeft = Math.ceil((eDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        const daysText = daysLeft === 0 ? 'Para hoje' : daysLeft === 1 ? 'Para amanhã' : `Daqui a ${daysLeft} dias`;
-
-        const school = data.schools.find(s => s.id === nextAssessment.schoolId);
-        const cls = school?.classes.find(c =>
-          (typeof c === 'string' ? c : c.id) === nextAssessment.classId ||
-          (typeof c === 'string' ? c : c.name) === nextAssessment.classId
-        );
-        const className = cls ? (typeof cls === 'string' ? cls : cls.name) : nextAssessment.classId;
-
-        const total = upcomingUnpreparedAssessments.length;
-        const totalText = total > 1 ? ` (+${total - 1} nos próximos 7 dias)` : '';
-
-        return (
-          <div className="relative group">
-            <button
-              onClick={onNavigateToAssessments}
-              className={`relative z-10 w-full overflow-hidden p-3 md:p-4 rounded-xl text-white shadow-lg transition-transform animate-in slide-in-from-top-4 ${
-                daysLeft <= 3
-                  ? 'animate-siren ring-2 ring-offset-1 ring-red-400 dark:ring-offset-slate-900'
-                  : 'bg-red-600 shadow-red-300 dark:shadow-red-900/30 hover:scale-[1.01]'
-              }`}
-            >
-              <div className="relative z-10 flex items-center justify-between w-full">
-                <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/30 shrink-0">
-                    <FileCheck size={18} className="md:w-[20px] md:h-[20px]" />
-                  </div>
-                  <div className="text-left flex-1 min-w-0">
-                    <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/90 truncate border-none outline-none">Elaboração Pendente{totalText}</span>
-                    <p className="text-[10px] md:text-xs font-black uppercase text-white truncate border-none outline-none">{daysText}: {nextAssessment.title} ({className})</p>
-                  </div>
-                </div>
-                <ChevronRight size={18} className="md:w-[20px] md:h-[20px] shrink-0" />
-              </div>
-            </button>
-          </div>
-        );
-      })()}
-
-      {data.settings.showDailyQuote && (
-        <div className="bg-primary/5 dark:bg-primary/10 border-2 border-dashed border-primary/20 p-4 md:p-5 rounded-xl relative overflow-hidden break-words min-w-0 w-full max-w-full">
-          <div className="absolute -top-4 -left-4 md:-top-6 md:-left-6 opacity-5 pointer-events-none"><QuoteIcon size={60} className="md:w-[80px] md:h-[80px]" /></div>
-          <p className="text-xs md:text-base font-bold text-primary dark:text-primary-light italic leading-relaxed relative z-10 w-full">"{dailyQuote}"</p>
-        </div>
-      )}
-
-      <div className="grid lg:grid-cols-3 gap-4 md:gap-6 overflow-hidden w-full max-w-full min-w-0">
-        <div className="lg:col-span-2 space-y-4 md:space-y-6 w-full max-w-full min-w-0">
+  // Blocos iguais no celular e no computador
+  const activityCard = (
           <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
             <h3 className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight mb-4 md:mb-6 flex items-center gap-2"><Clock className="text-primary w-3 h-3 md:w-[14px] md:h-[14px]" /> Atividade Agora</h3>
             {activityInfo ? (
@@ -929,6 +837,462 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
               </div>
             )}
           </div>
+  );
+
+  const remindersCard = (
+          <div className="bg-amber-50 dark:bg-amber-900/10 p-4 md:p-6 rounded-xl border border-amber-100 dark:border-amber-900/20">
+            <div onClick={onNavigateToReminders} className="flex items-center justify-between mb-3 md:mb-4 cursor-pointer group">
+              <div className="flex items-center gap-2">
+                <div className="p-1 md:p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-amber-500"><Bell size={12} className="md:w-[14px] md:h-[14px]" /></div>
+                <h4 className="text-[9px] md:text-[10px] font-black uppercase text-amber-600 tracking-tight">Notas & Lembretes</h4>
+              </div>
+              <ArrowRight size={12} className="text-amber-400 group-hover:translate-x-1 transition-transform md:w-[14px] md:h-[14px]" />
+            </div>
+
+            {data.reminders.length > 0 ? (
+              <div className="space-y-2">
+                {data.reminders.slice(0, 3).map((reminder) => {
+                  const school = data.schools.find(s => s.id === reminder.schoolId);
+                  const color = school?.color || '#f59e0b'; // Amber default
+
+                  return (
+                    <div key={reminder.id} onClick={onNavigateToReminders} className="bg-white dark:bg-slate-900 p-2.5 md:p-3 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 cursor-pointer hover:translate-x-1 transition-transform" style={{ borderLeft: `3px solid ${color}` }}>
+                      <p className="text-[9px] md:text-[10px] font-black text-slate-700 dark:text-slate-200 truncate">{reminder.title}</p>
+                      <div className="flex justify-between items-center mt-0.5">
+                        <p className="text-[8px] text-slate-500 font-bold truncate max-w-[60%]">{reminder.content}</p>
+                        {school && <span className="text-[7px] font-black uppercase truncate max-w-[35%]" style={{ color: color }}>{school.name}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+                {data.reminders.length > 3 && (
+                  <p className="text-[8px] md:text-[9px] font-black text-amber-500 text-center uppercase tracking-tighter mt-2">+ {data.reminders.length - 3} outros</p>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-[8px] md:text-[9px] text-amber-700/60 font-bold uppercase">Nenhum lembrete ativo</p>
+              </div>
+            )}
+          </div>
+  );
+
+  const dashboardFooter = (
+      <div className="pt-10 pb-8 text-center opacity-60">
+        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+          Leciona v1.0 - Codex
+        </p>
+        <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+          Criado para professores pelo professor Cadu Michel
+        </p>
+        <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400">
+          Contato: appleciona@gmail.com
+        </p>
+      </div>
+  );
+
+  // ================== VERSÃO WEB (computador) ==================
+
+  // Avisos em etiquetas ao lado da saudação (no celular continuam como faixas)
+  const unpreparedAlert = (() => {
+    const next = upcomingUnpreparedAssessments[0];
+    if (!next) return null;
+    const eDate = new Date(next.date.split('T')[0] + 'T00:00:00');
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const daysLeft = Math.ceil((eDate.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
+    const daysText = daysLeft === 0 ? 'hoje' : daysLeft === 1 ? 'amanhã' : `em ${daysLeft} dias`;
+    return {
+      event: next,
+      daysLeft,
+      daysText,
+      className: getClassName(data, next.schoolId, next.classId),
+      more: upcomingUnpreparedAssessments.length - 1
+    };
+  })();
+  const showPendingAlert = pendingCount > 0 && !data.settings.hideUnregisteredClassesOnDashboard;
+  const hasDesktopAlerts = showPendingAlert || !!unpreparedAlert || overduePayments.length > 0;
+
+  const desktopAlerts = (
+    <div className="flex flex-wrap justify-end items-center gap-2 min-w-0 max-w-[65%]">
+      {showPendingAlert && (
+        <button onClick={onNavigateToPendencies} title="Ver registros pendentes" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-amber-900 hover:scale-[1.02] transition-transform shrink-0" style={{ backgroundColor: '#fffbeb', borderColor: '#fde68a' }}>
+          <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+          <span className="text-[10px] font-black uppercase whitespace-nowrap">{pendingCount} {pendingCount === 1 ? 'registro pendente' : 'registros pendentes'}</span>
+          <ChevronRight size={14} className="text-amber-700 shrink-0" />
+        </button>
+      )}
+      {unpreparedAlert && (
+        <button
+          onClick={onNavigateToAssessments}
+          title={`Elaboração pendente: ${unpreparedAlert.event.title} (${unpreparedAlert.className}) – ${unpreparedAlert.daysText}`}
+          className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-white min-w-0 max-w-full hover:scale-[1.02] transition-transform ${unpreparedAlert.daysLeft <= 3 ? 'animate-siren' : 'bg-red-600'}`}
+        >
+          <FileCheck size={14} className="shrink-0" />
+          <span className="text-[10px] font-black uppercase truncate">
+            Elaborar: {unpreparedAlert.event.title} ({unpreparedAlert.className}) · {unpreparedAlert.daysText}{unpreparedAlert.more > 0 ? ` (+${unpreparedAlert.more})` : ''}
+          </span>
+          <ChevronRight size={14} className="shrink-0" />
+        </button>
+      )}
+      {overduePayments.length > 0 && (
+        <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 text-white shrink-0" title={overduePayments.map(p => `${p.studentName} (${p.month})`).join(', ')}>
+          <DollarSign size={14} className="shrink-0" />
+          <span className="text-[10px] font-black uppercase whitespace-nowrap">{overduePayments.length} {overduePayments.length === 1 ? 'pagamento em atraso' : 'pagamentos em atraso'}</span>
+        </div>
+      )}
+    </div>
+  );
+
+  // Linha do dia: uma etiqueta por aula, com o número da aula no turno (1ª, 2ª…)
+  const TIMELINE_STYLES: Record<TodayLessonStatus, string> = {
+    done: 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-300',
+    pending: 'bg-amber-50 border-amber-300 text-amber-800 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-300',
+    now: 'text-white shadow-md ring-2 ring-offset-2 ring-primary dark:ring-offset-slate-900',
+    upcoming: 'bg-white border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200',
+    blocked: 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-800/40 dark:border-slate-700 dark:text-slate-500',
+    window: 'bg-transparent border-dashed border-slate-200 text-slate-400 dark:border-slate-700 dark:text-slate-500'
+  };
+  const TIMELINE_LABELS: Record<TodayLessonStatus, string> = {
+    done: 'registrada', pending: 'registro pendente', now: 'agora', upcoming: 'a seguir', blocked: 'aula suspensa', window: 'janela'
+  };
+  const timelineLessons = todayTimeline.flatMap(g => g.lessons).filter(l => !l.isWindow && !l.blocked);
+  const timelineDone = timelineLessons.filter(l => {
+    const status = todayLessonStatus(l, currentTime);
+    return status === 'done' || (status === 'now' && l.hasContent);
+  }).length;
+  const timelinePending = timelineLessons.filter(l => todayLessonStatus(l, currentTime) === 'pending').length;
+  const todayHolidayName = getHolidayName(new Date());
+
+  const todayStrip = (
+    <div className="bg-white dark:bg-slate-900 px-5 py-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-between gap-4 mb-3">
+        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2"><CalendarDays className="text-primary" size={14} /> Aulas de hoje</h3>
+        {timelineLessons.length > 0 && (
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+            {timelineDone} de {timelineLessons.length} registradas
+            {timelinePending > 0 && <span className="text-amber-600"> · {timelinePending} {timelinePending === 1 ? 'pendente' : 'pendentes'}</span>}
+          </span>
+        )}
+      </div>
+      {todayTimeline.length === 0 ? (
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{todayHolidayName ? `Feriado: ${todayHolidayName}` : 'Sem aulas na grade hoje'}</p>
+      ) : (
+        <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
+          {todayTimeline.map((group, gIdx) => (
+            <div key={`${group.key}-${gIdx}`} className="flex flex-col gap-1.5 min-w-0" style={{ flex: `${group.lessons.length} ${group.lessons.length} 0px` }}>
+              <span className="text-[9px] font-black uppercase tracking-tight truncate flex items-center gap-1.5" style={{ color: group.color }}>
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
+                <span className="truncate">{group.schoolName}{group.shiftName ? ` · ${group.shiftName}` : ''}</span>
+              </span>
+              <div className="flex gap-1.5">
+                {group.lessons.map(lesson => {
+                  const status = todayLessonStatus(lesson, currentTime);
+                  const clickable = status !== 'window' && status !== 'blocked';
+                  const numberLabel = lesson.number ? `${lesson.number}ª` : 'Part.';
+                  return (
+                    <button
+                      key={lesson.key}
+                      type="button"
+                      disabled={!clickable}
+                      onClick={() => clickable && onNavigateToLesson(lesson.schedule, todayDateStr)}
+                      title={`${numberLabel} aula · ${lesson.startTime}–${lesson.endTime} · ${lesson.className} · ${TIMELINE_LABELS[status]}${lesson.assessment ? ` · avaliação: ${lesson.assessment}` : ''}`}
+                      className={`flex-1 min-w-[64px] text-left px-2 py-1.5 rounded-lg border transition-all ${clickable ? 'hover:-translate-y-0.5 hover:shadow-sm cursor-pointer' : 'cursor-default'} ${TIMELINE_STYLES[status]}`}
+                      style={status === 'now' ? { backgroundColor: 'var(--primary-color)', borderColor: 'var(--primary-color)' } : undefined}
+                    >
+                      <span className="flex items-center justify-between gap-1 text-[9px] font-black uppercase leading-none mb-1">
+                        <span className={`flex items-center gap-1 ${status === 'now' ? '' : 'opacity-70'}`}>
+                          {numberLabel}
+                          {lesson.assessment && <FileCheck size={10} className={status === 'now' ? 'shrink-0' : 'shrink-0 text-red-500'} />}
+                        </span>
+                        {status === 'now' && <span className="text-[8px] tracking-widest">agora</span>}
+                        {(status === 'done' || (status === 'now' && lesson.hasContent)) && <CheckCircle2 size={11} className="shrink-0" />}
+                        {status === 'pending' && <AlertCircle size={11} className="shrink-0" />}
+                      </span>
+                      <span className={`block text-[11px] font-black leading-tight truncate ${status === 'blocked' ? 'line-through' : ''}`}>{lesson.className}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Avaliações e eventos: uma linha por item
+  const COMPACT_LIMIT = 6;
+  const renderCompactRow = (event: SchoolEvent, subtitle: string, onClick: () => void, faded = false) => {
+    const school = data.schools.find(s => s.id === event.schoolId);
+    const color = school?.color || '#3b82f6';
+    return (
+      <button key={event.id} type="button" onClick={onClick} className={`w-full flex items-center gap-3 py-2 text-left group ${faded ? 'opacity-80' : ''}`}>
+        <div className="w-11 shrink-0 rounded-md py-1 text-center" style={{ backgroundColor: color + '15', color }}>
+          <span className="block text-[7px] font-black uppercase leading-none">{getShortWeekDay(event.date)}</span>
+          <span className="block text-[11px] font-black leading-none mt-0.5">{getDayMonth(event.date)}</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-black text-slate-800 dark:text-white uppercase truncate group-hover:underline">{event.title}</p>
+          <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tight truncate mt-0.5">
+            {subtitle} · <span style={{ color }}>{school?.name}</span>
+          </p>
+        </div>
+      </button>
+    );
+  };
+  const assessmentSubtitle = (e: SchoolEvent) => `${e.type === 'test' ? 'Prova' : 'Trabalho'} · ${getClassName(data, e.schoolId, e.classId)}`;
+  const shownThisWeek = thisWeekAssessments.slice(0, COMPACT_LIMIT);
+  const shownNextWeek = nextWeekAssessments.slice(0, Math.max(0, COMPACT_LIMIT - shownThisWeek.length));
+  const hiddenAssessments = thisWeekAssessments.length + nextWeekAssessments.length - shownThisWeek.length - shownNextWeek.length;
+  const hiddenEvents = Math.max(0, upcomingEvents.length - COMPACT_LIMIT);
+
+  const assessmentsCompact = (
+    <div className="bg-white dark:bg-slate-900 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-tight mb-2 flex items-center gap-2"><FileCheck className="text-primary" size={14} /> Avaliações (15d)</h3>
+      {shownThisWeek.length + shownNextWeek.length === 0 ? (
+        <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 py-2">Sem avaliações próximas</p>
+      ) : (
+        <div>
+          {shownThisWeek.length > 0 && (
+            <>
+              <h4 className="text-[8px] font-black uppercase text-slate-400 tracking-widest mt-1">Esta semana</h4>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {shownThisWeek.map(e => renderCompactRow(e, assessmentSubtitle(e), onNavigateToAssessments))}
+              </div>
+            </>
+          )}
+          {shownNextWeek.length > 0 && (
+            <>
+              <h4 className="text-[8px] font-black uppercase text-slate-400 tracking-widest mt-2">Próxima semana</h4>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {shownNextWeek.map(e => renderCompactRow(e, assessmentSubtitle(e), onNavigateToAssessments, true))}
+              </div>
+            </>
+          )}
+          {hiddenAssessments > 0 && (
+            <button onClick={onNavigateToAssessments} className="mt-2 text-[9px] font-black uppercase tracking-tight text-primary hover:underline">+ {hiddenAssessments} {hiddenAssessments === 1 ? 'outra' : 'outras'}</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  const eventsCompact = (
+    <div className="bg-white dark:bg-slate-900 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-tight mb-2 flex items-center gap-2"><Calendar className="text-orange-500" size={14} /> Eventos (15d)</h3>
+      {upcomingEvents.length === 0 ? (
+        <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 py-2">Sem eventos próximos</p>
+      ) : (
+        <div>
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {upcomingEvents.slice(0, COMPACT_LIMIT).map(e => renderCompactRow(e, EVENT_TYPE_LABELS[e.type] || e.type, onNavigateToAgenda))}
+          </div>
+          {hiddenEvents > 0 && (
+            <button onClick={onNavigateToAgenda} className="mt-2 text-[9px] font-black uppercase tracking-tight text-primary hover:underline">+ {hiddenEvents} {hiddenEvents === 1 ? 'outro' : 'outros'}</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  // Grade semanal: cada aula numa linha "HH:MM Turma" (aulas seguidas aparecem repetidas)
+  const weeklyTotal = weeklyGrid.reduce((n, d) => n + d.count, 0);
+  const weeklyGridCard = weeklyTotal > 0 && (
+    <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-1.5"><CalendarDays className="text-primary" size={14} /> Grade Semanal</h4>
+        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">{weeklyTotal} aulas na semana</span>
+      </div>
+      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${weeklyGrid.length}, minmax(0, 1fr))` }}>
+        {weeklyGrid.map(d => {
+          const isToday = d.day === today;
+          return (
+            <div key={d.day} className={`rounded-xl p-3 min-w-0 ${isToday ? 'ring-1 ring-primary' : 'bg-slate-50 dark:bg-slate-800/40'}`} style={isToday ? { backgroundColor: 'var(--primary-light)' } : undefined}>
+              <div className="flex items-baseline justify-between mb-2 pb-1.5 border-b border-slate-200 dark:border-slate-700">
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isToday ? 'text-primary' : 'text-slate-500'}`}>{d.label}{isToday ? ' · hoje' : ''}</span>
+                {d.count > 0 && <span className="text-[9px] font-bold text-slate-400">{d.count} {d.count === 1 ? 'aula' : 'aulas'}</span>}
+              </div>
+              {d.groups.length === 0 ? (
+                <p className="text-[9px] font-bold text-slate-300 dark:text-slate-600 italic text-center py-2">—</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {d.groups.map((g, gIdx) => (
+                    <div key={`${g.key}-${gIdx}`} className="min-w-0">
+                      <p className="text-[8px] font-black uppercase tracking-wider truncate mb-1" style={{ color: g.color }}>{g.period} · {g.schoolName}</p>
+                      <ul className="space-y-0.5 border-l-2 pl-2" style={{ borderColor: g.color + '60' }}>
+                        {g.lessons.map(l => (
+                          <li key={l.key} className="flex items-baseline gap-2 min-w-0 text-[10px]" title={`${l.time} ${l.className}`}>
+                            <span className="font-bold text-slate-400 tabular-nums shrink-0">{l.time}</span>
+                            <span className="font-black text-slate-700 dark:text-slate-200 truncate">{l.className}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const desktopLayout = (
+    <div className="hidden lg:block space-y-5 w-full min-w-0">
+      <div className="flex items-start justify-between gap-6">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight leading-none truncate">
+            Olá, {data.profile.title || 'Prof.'} {data.profile.name || 'Docente'}!
+          </h1>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-2 truncate">
+            {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+        {hasDesktopAlerts ? desktopAlerts : (
+          <div className="flex items-center gap-3 bg-white dark:bg-slate-900 px-4 py-2 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm shrink-0">
+            <Sparkles className="text-primary animate-pulse w-4 h-4" />
+            <span className="text-[9px] font-black uppercase tracking-tight text-slate-500">Inspirado para hoje</span>
+          </div>
+        )}
+      </div>
+
+      {data.settings.showDailyQuote && dailyQuote && (
+        <p className="text-sm font-bold italic text-primary leading-snug pl-3 border-l-4 border-primary">"{dailyQuote}"</p>
+      )}
+
+      {todayStrip}
+
+      <div className="grid grid-cols-3 gap-6 items-start">
+        <div className="col-span-2 space-y-6 min-w-0">
+          {activityCard}
+          <div className="grid grid-cols-2 gap-6 items-start">
+            {assessmentsCompact}
+            {eventsCompact}
+          </div>
+        </div>
+        <div className="space-y-6 min-w-0">
+          {renderDashboardCalendar(true)}
+          {remindersCard}
+        </div>
+      </div>
+
+      {weeklyGridCard}
+
+      {dashboardFooter}
+    </div>
+  );
+
+  return (
+    <div className="animate-in fade-in duration-500 w-full max-w-full min-w-0 overflow-x-hidden">
+      {/* ===== CELULAR E TABLET (abaixo de 1024px): layout de sempre, sem mudanças ===== */}
+      <div className="lg:hidden space-y-4 md:space-y-6 w-full max-w-full min-w-0">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 md:gap-4">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg md:text-3xl font-black text-slate-800 dark:text-white tracking-tight leading-none truncate block w-full">
+            Olá, {data.profile.title || 'Prof.'} {data.profile.name || 'Docente'}!
+          </h1>
+          <p className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-1 md:mt-2 truncate w-full">
+            {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 md:gap-3 bg-white dark:bg-slate-900 px-3 py-1.5 md:px-4 md:py-2 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm shrink-0 w-fit">
+          <Sparkles className="text-primary animate-pulse w-3 h-3 md:w-4 md:h-4" />
+          <span className="text-[8px] md:text-[9px] font-black uppercase tracking-tight text-slate-500">Inspirado para hoje</span>
+        </div>
+      </div>
+
+      {pendingCount > 0 && !data.settings.hideUnregisteredClassesOnDashboard && (
+        <button onClick={onNavigateToPendencies} className="relative block text-left w-full overflow-hidden p-3 md:p-4 rounded-xl text-amber-900 shadow-lg shadow-amber-100 dark:shadow-amber-900/10 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4" style={{ backgroundColor: '#fffbeb', border: '2px solid #fde68a' }}>
+          <div className="relative z-10 flex items-center justify-between w-full min-w-0">
+            <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#fbbf24' }}>
+                <AlertTriangle size={18} className="md:w-[20px] md:h-[20px] text-amber-800" />
+              </div>
+              <div className="text-left flex-1 min-w-0">
+                <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-amber-700 border-none outline-none truncate">Atenção Necessária</span>
+                <p className="text-[10px] md:text-xs font-black uppercase text-amber-900 border-none outline-none truncate">Você tem {pendingCount} registros pendentes.</p>
+              </div>
+            </div>
+            <ChevronRight size={18} className="md:w-[20px] md:h-[20px] shrink-0 text-amber-700" />
+          </div>
+        </button>
+      )}
+
+      {overduePayments.length > 0 && (
+        <div className="w-full flex items-center justify-between p-3 md:p-4 rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4 cursor-pointer">
+          <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/20 shrink-0">
+              <DollarSign size={18} className="md:w-[20px] md:h-[20px]" />
+            </div>
+            <div className="text-left flex-1 min-w-0">
+              <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/80 truncate">Financeiro</span>
+              <p className="text-[10px] md:text-xs font-black uppercase text-white truncate">
+                {overduePayments.length} pagamentos em atraso ({overduePayments[0].studentName}...)
+              </p>
+            </div>
+          </div>
+          <ChevronRight size={18} className="md:w-[20px] md:h-[20px] shrink-0" />
+        </div>
+      )}
+
+      {upcomingUnpreparedAssessments.length > 0 && (() => {
+        const nextAssessment = upcomingUnpreparedAssessments[0];
+        const eDate = new Date(nextAssessment.date.split('T')[0] + 'T00:00:00');
+        eDate.setHours(0, 0, 0, 0);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const daysLeft = Math.ceil((eDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const daysText = daysLeft === 0 ? 'Para hoje' : daysLeft === 1 ? 'Para amanhã' : `Daqui a ${daysLeft} dias`;
+
+        const school = data.schools.find(s => s.id === nextAssessment.schoolId);
+        const cls = school?.classes.find(c =>
+          (typeof c === 'string' ? c : c.id) === nextAssessment.classId ||
+          (typeof c === 'string' ? c : c.name) === nextAssessment.classId
+        );
+        const className = cls ? (typeof cls === 'string' ? cls : cls.name) : nextAssessment.classId;
+
+        const total = upcomingUnpreparedAssessments.length;
+        const totalText = total > 1 ? ` (+${total - 1} nos próximos 7 dias)` : '';
+
+        return (
+          <div className="relative group">
+            <button
+              onClick={onNavigateToAssessments}
+              className={`relative z-10 w-full overflow-hidden p-3 md:p-4 rounded-xl text-white shadow-lg transition-transform animate-in slide-in-from-top-4 ${
+                daysLeft <= 3
+                  ? 'animate-siren ring-2 ring-offset-1 ring-red-400 dark:ring-offset-slate-900'
+                  : 'bg-red-600 shadow-red-300 dark:shadow-red-900/30 hover:scale-[1.01]'
+              }`}
+            >
+              <div className="relative z-10 flex items-center justify-between w-full">
+                <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/30 shrink-0">
+                    <FileCheck size={18} className="md:w-[20px] md:h-[20px]" />
+                  </div>
+                  <div className="text-left flex-1 min-w-0">
+                    <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/90 truncate border-none outline-none">Elaboração Pendente{totalText}</span>
+                    <p className="text-[10px] md:text-xs font-black uppercase text-white truncate border-none outline-none">{daysText}: {nextAssessment.title} ({className})</p>
+                  </div>
+                </div>
+                <ChevronRight size={18} className="md:w-[20px] md:h-[20px] shrink-0" />
+              </div>
+            </button>
+          </div>
+        );
+      })()}
+
+      {data.settings.showDailyQuote && (
+        <div className="bg-primary/5 dark:bg-primary/10 border-2 border-dashed border-primary/20 p-4 md:p-5 rounded-xl relative overflow-hidden break-words min-w-0 w-full max-w-full">
+          <div className="absolute -top-4 -left-4 md:-top-6 md:-left-6 opacity-5 pointer-events-none"><QuoteIcon size={60} className="md:w-[80px] md:h-[80px]" /></div>
+          <p className="text-xs md:text-base font-bold text-primary dark:text-primary-light italic leading-relaxed relative z-10 w-full">"{dailyQuote}"</p>
+        </div>
+      )}
+
+      <div className="grid lg:grid-cols-3 gap-4 md:gap-6 overflow-hidden w-full max-w-full min-w-0">
+        <div className="lg:col-span-2 space-y-4 md:space-y-6 w-full max-w-full min-w-0">
+          {activityCard}
 
           <div className="grid sm:grid-cols-2 gap-4 md:gap-6">
             <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col">
@@ -1107,56 +1471,16 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
         <div className="space-y-4 md:space-y-6 w-full min-w-0 overflow-hidden">
           {renderDashboardCalendar()}
-          <div className="bg-amber-50 dark:bg-amber-900/10 p-4 md:p-6 rounded-xl border border-amber-100 dark:border-amber-900/20">
-            <div onClick={onNavigateToReminders} className="flex items-center justify-between mb-3 md:mb-4 cursor-pointer group">
-              <div className="flex items-center gap-2">
-                <div className="p-1 md:p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-amber-500"><Bell size={12} className="md:w-[14px] md:h-[14px]" /></div>
-                <h4 className="text-[9px] md:text-[10px] font-black uppercase text-amber-600 tracking-tight">Notas & Lembretes</h4>
-              </div>
-              <ArrowRight size={12} className="text-amber-400 group-hover:translate-x-1 transition-transform md:w-[14px] md:h-[14px]" />
-            </div>
-
-            {data.reminders.length > 0 ? (
-              <div className="space-y-2">
-                {data.reminders.slice(0, 3).map((reminder) => {
-                  const school = data.schools.find(s => s.id === reminder.schoolId);
-                  const color = school?.color || '#f59e0b'; // Amber default
-
-                  return (
-                    <div key={reminder.id} onClick={onNavigateToReminders} className="bg-white dark:bg-slate-900 p-2.5 md:p-3 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 cursor-pointer hover:translate-x-1 transition-transform" style={{ borderLeft: `3px solid ${color}` }}>
-                      <p className="text-[9px] md:text-[10px] font-black text-slate-700 dark:text-slate-200 truncate">{reminder.title}</p>
-                      <div className="flex justify-between items-center mt-0.5">
-                        <p className="text-[8px] text-slate-500 font-bold truncate max-w-[60%]">{reminder.content}</p>
-                        {school && <span className="text-[7px] font-black uppercase truncate max-w-[35%]" style={{ color: color }}>{school.name}</span>}
-                      </div>
-                    </div>
-                  );
-                })}
-                {data.reminders.length > 3 && (
-                  <p className="text-[8px] md:text-[9px] font-black text-amber-500 text-center uppercase tracking-tighter mt-2">+ {data.reminders.length - 3} outros</p>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-[8px] md:text-[9px] text-amber-700/60 font-bold uppercase">Nenhum lembrete ativo</p>
-              </div>
-            )}
-          </div>
+          {remindersCard}
         </div>
 
       {/* RODAPÉ DO DASHBOARD */}
-      <div className="pt-10 pb-8 text-center opacity-60">
-        <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-          Leciona v1.0 - Codex
-        </p>
-        <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-1">
-          Criado para professores pelo professor Cadu Michel
-        </p>
-        <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400">
-          Contato: appleciona@gmail.com
-        </p>
+      {dashboardFooter}
       </div>
-    </div >
+
+      {/* ===== COMPUTADOR (a partir de 1024px) ===== */}
+      {desktopLayout}
+    </div>
   );
 };
 

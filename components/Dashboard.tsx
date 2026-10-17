@@ -4,7 +4,7 @@ import { getCurrentTimeInMinutes, parseTimeToMinutes, isHoliday, getHolidayName,
 import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName } from '../utils/classRefs';
 import { getLessonDisplayItems, isLessonBlocked, deriveStatsFromLessons } from '../utils/lessonStats';
-import { buildTodayTimeline, buildWeeklyGrid, todayLessonStatus, TodayLessonStatus } from '../utils/dashboardWeb';
+import { buildTodayTimeline, buildWeeklyGrid, todayLessonStatus, TodayLessonStatus, TodayLesson } from '../utils/dashboardWeb';
 import {
   Clock,
   ArrowRight,
@@ -17,6 +17,7 @@ import {
   Quote as QuoteIcon,
   Sparkles,
   Calendar as CalendarIcon,
+  Check,
   Coffee,
   CheckCircle2,
   AlertCircle,
@@ -964,6 +965,49 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
   const timelinePending = timelineLessons.filter(l => todayLessonStatus(l, currentTime) === 'pending').length;
   const todayHolidayName = getHolidayName(new Date());
 
+  // Etiqueta de uma aula: "1ª - 07:20h" + turma. Os ícones de situação ficam num selo no canto,
+  // assim o horário cabe sem aumentar a etiqueta.
+  const renderTimelineChip = (lesson: TodayLesson, extraClass = 'flex-1 min-w-[64px]') => {
+    const status = todayLessonStatus(lesson, currentTime);
+    const clickable = status !== 'window' && status !== 'blocked';
+    const numberLabel = lesson.number ? `${lesson.number}ª` : '';
+    const isNow = status === 'now';
+    const showCheck = status === 'done' || (isNow && lesson.hasContent);
+    return (
+      <button
+        key={lesson.key}
+        type="button"
+        disabled={!clickable}
+        onClick={() => clickable && onNavigateToLesson(lesson.schedule, todayDateStr)}
+        title={`${numberLabel ? numberLabel + ' aula · ' : ''}${lesson.startTime}–${lesson.endTime} · ${lesson.className} · ${TIMELINE_LABELS[status]}${lesson.assessment ? ` · avaliação: ${lesson.assessment}` : ''}`}
+        className={`relative ${extraClass} text-left px-1.5 py-1.5 rounded-lg border transition-all ${clickable ? 'hover:-translate-y-0.5 hover:shadow-sm cursor-pointer' : 'cursor-default'} ${TIMELINE_STYLES[status]}`}
+        style={isNow ? { backgroundColor: 'var(--primary-color)', borderColor: 'var(--primary-color)' } : undefined}
+      >
+        <span className="flex items-baseline gap-0.5 text-[9px] leading-none mb-1 whitespace-nowrap overflow-hidden">
+          {numberLabel && <span className="font-black">{numberLabel}</span>}
+          <span className={`font-bold tabular-nums tracking-tight ${isNow ? 'opacity-90' : 'opacity-60'}`}>{numberLabel ? '- ' : ''}{lesson.startTime}h</span>
+        </span>
+        <span className={`block text-[11px] font-black leading-tight truncate ${status === 'blocked' ? 'line-through' : ''}`}>{lesson.className}</span>
+        {(isNow || showCheck || status === 'pending' || lesson.assessment) && (
+          <span className="absolute -top-1.5 -right-1 flex items-center gap-0.5 pointer-events-none">
+            {isNow && (
+              <span className="h-3.5 px-1 rounded-full bg-white text-[7px] font-black uppercase tracking-wider flex items-center shadow-sm ring-1 ring-slate-200 dark:ring-slate-700" style={{ color: 'var(--primary-color)' }}>agora</span>
+            )}
+            {lesson.assessment && (
+              <span className="w-3.5 h-3.5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-slate-900"><FileCheck size={8} strokeWidth={3} /></span>
+            )}
+            {showCheck && (
+              <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-slate-900"><Check size={9} strokeWidth={4} /></span>
+            )}
+            {status === 'pending' && (
+              <span className="w-3.5 h-3.5 rounded-full bg-amber-400 text-white flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-slate-900 text-[9px] font-black leading-none">!</span>
+            )}
+          </span>
+        )}
+      </button>
+    );
+  };
+
   const todayStrip = (
     <div className="bg-white dark:bg-slate-900 px-5 py-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
       <div className="flex items-center justify-between gap-4 mb-3">
@@ -980,39 +1024,13 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
       ) : (
         <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
           {todayTimeline.map((group, gIdx) => (
-            <div key={`${group.key}-${gIdx}`} className="flex flex-col gap-1.5 min-w-0" style={{ flex: `${group.lessons.length} ${group.lessons.length} 0px` }}>
+            <div key={`${group.key}-${gIdx}`} className="flex flex-col gap-1.5" style={{ flex: `${group.lessons.length} ${group.lessons.length} 0px`, minWidth: group.lessons.length * 64 + (group.lessons.length - 1) * 6 }}>
               <span className="text-[9px] font-black uppercase tracking-tight truncate flex items-center gap-1.5" style={{ color: group.color }}>
                 <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
                 <span className="truncate">{group.schoolName}{group.shiftName ? ` · ${group.shiftName}` : ''}</span>
               </span>
               <div className="flex gap-1.5">
-                {group.lessons.map(lesson => {
-                  const status = todayLessonStatus(lesson, currentTime);
-                  const clickable = status !== 'window' && status !== 'blocked';
-                  const numberLabel = lesson.number ? `${lesson.number}ª` : 'Part.';
-                  return (
-                    <button
-                      key={lesson.key}
-                      type="button"
-                      disabled={!clickable}
-                      onClick={() => clickable && onNavigateToLesson(lesson.schedule, todayDateStr)}
-                      title={`${numberLabel} aula · ${lesson.startTime}–${lesson.endTime} · ${lesson.className} · ${TIMELINE_LABELS[status]}${lesson.assessment ? ` · avaliação: ${lesson.assessment}` : ''}`}
-                      className={`flex-1 min-w-[64px] text-left px-2 py-1.5 rounded-lg border transition-all ${clickable ? 'hover:-translate-y-0.5 hover:shadow-sm cursor-pointer' : 'cursor-default'} ${TIMELINE_STYLES[status]}`}
-                      style={status === 'now' ? { backgroundColor: 'var(--primary-color)', borderColor: 'var(--primary-color)' } : undefined}
-                    >
-                      <span className="flex items-center justify-between gap-1 text-[9px] font-black uppercase leading-none mb-1">
-                        <span className={`flex items-center gap-1 ${status === 'now' ? '' : 'opacity-70'}`}>
-                          {numberLabel}
-                          {lesson.assessment && <FileCheck size={10} className={status === 'now' ? 'shrink-0' : 'shrink-0 text-red-500'} />}
-                        </span>
-                        {status === 'now' && <span className="text-[8px] tracking-widest">agora</span>}
-                        {(status === 'done' || (status === 'now' && lesson.hasContent)) && <CheckCircle2 size={11} className="shrink-0" />}
-                        {status === 'pending' && <AlertCircle size={11} className="shrink-0" />}
-                      </span>
-                      <span className={`block text-[11px] font-black leading-tight truncate ${status === 'blocked' ? 'line-through' : ''}`}>{lesson.className}</span>
-                    </button>
-                  );
-                })}
+                {group.lessons.map(lesson => renderTimelineChip(lesson))}
               </div>
             </div>
           ))}

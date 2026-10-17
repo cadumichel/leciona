@@ -1,9 +1,10 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { AppData, DayOfWeek, SchoolEvent, LessonLog, Reminder } from '../types';
 import { getCurrentTimeInMinutes, parseTimeToMinutes, isHoliday, getHolidayName, getShortWeekDay, getDayMonth, getSafeDate } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName } from '../utils/classRefs';
 import { getLessonDisplayItems, isLessonBlocked, deriveStatsFromLessons } from '../utils/lessonStats';
+import { buildTodayTimeline, buildWeeklyGrid, todayLessonStatus, TodayLessonStatus, TodayLesson } from '../utils/dashboardWeb';
 import {
   Clock,
   ArrowRight,
@@ -16,6 +17,7 @@ import {
   Quote as QuoteIcon,
   Sparkles,
   Calendar as CalendarIcon,
+  Check,
   Coffee,
   CheckCircle2,
   AlertCircle,
@@ -192,6 +194,13 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
   const [currentTime, setCurrentTime] = useState(getCurrentTimeInMinutes());
   const [dashMonth, setDashMonth] = useState(new Date());
   const [dailyQuote, setDailyQuote] = useState("");
+  // Celular: dia aberto na grade semanal (começa no dia de hoje) e a faixa rolável da linha do dia
+  const [mobileWeekDay, setMobileWeekDay] = useState<number>(() => {
+    const d = new Date().getDay();
+    return d >= 1 && d <= 6 ? d : 1;
+  });
+  const mobileStripRef = useRef<HTMLDivElement>(null);
+  const [stripEdges, setStripEdges] = useState({ left: false, right: false });
 
   const todayDateStr = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
   const today = new Date().getDay();
@@ -504,76 +513,11 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [data.events, data.schools]);
 
-  // --- RESUMO DA GRADE SEMANAL ---
-  const weeklyScheduleSummary = useMemo(() => {
-    if (data.settings.isPrivateTeacher && data.schools.filter(s => !s.deleted).length === 0) return [];
+  // --- VERSÃO WEB: linha do dia e grade semanal (cada aula separada, mesmo quando seguidas) ---
+  const todayTimeline = useMemo(() => buildTodayTimeline(data, todayDateStr), [data, todayDateStr]);
+  const weeklyGrid = useMemo(() => buildWeeklyGrid(data, todayDateStr), [data, todayDateStr]);
 
-    // Pega a versão ativa agora (grade fixa do professor, não se adapta à semana)
-    const scheduleEntries = getSchedulesForDate(data, todayDateStr);
-
-    const DAYS = [
-      { day: 1, label: 'SEG' },
-      { day: 2, label: 'TER' },
-      { day: 3, label: 'QUA' },
-      { day: 4, label: 'QUI' },
-      { day: 5, label: 'SEX' },
-    ];
-
-    return DAYS.map(({ day, label }) => {
-      const dayEntries = scheduleEntries.filter(s =>
-        Number(s.dayOfWeek) === day && s.classId !== 'window'
-      );
-
-      if (dayEntries.length === 0) return { day, label, groups: [] };
-
-      // Agrupar por escola + turno
-      const groupMap = new Map<string, {
-        schoolName: string;
-        schoolColor: string;
-        periodLabel: string;
-        classes: string[];
-      }>();
-
-      dayEntries.forEach(entry => {
-        const school = data.schools.find(s => s.id === entry.schoolId && !s.deleted);
-        if (!school) return;
-
-        const shift = school.shifts.find(sh => sh.id === entry.shiftId);
-        if (!shift) return;
-
-        // Resolver nome da turma
-        const classObj = school.classes.find(c =>
-          (typeof c === 'string' ? c : c.id) === entry.classId
-        );
-        const className = classObj
-          ? (typeof classObj === 'string' ? classObj : classObj.name)
-          : entry.classId;
-
-        // Determinar período pelo horário do slot
-        const slot = shift.slots.find(sl => sl.id === entry.slotId) || shift.slots[0];
-        const startHour = slot ? parseInt(slot.startTime.split(':')[0]) : 8;
-        const periodLabel = startHour < 12 ? 'MAT' : startHour < 18 ? 'VESP' : 'NOT';
-
-        const key = `${entry.schoolId}-${entry.shiftId}`;
-        if (!groupMap.has(key)) {
-          groupMap.set(key, {
-            schoolName: school.name,
-            schoolColor: school.color,
-            periodLabel,
-            classes: []
-          });
-        }
-        const group = groupMap.get(key)!;
-        if (!group.classes.includes(className)) {
-          group.classes.push(className);
-        }
-      });
-
-      return { day, label, groups: Array.from(groupMap.values()) };
-    });
-  }, [data.schools, data.schedules, data.scheduleVersions, data.settings.isPrivateTeacher, todayDateStr]);
-
-  const renderDashboardCalendar = () => {
+  const renderDashboardCalendar = (compact = false) => {
     const year = dashMonth.getFullYear();
     const month = dashMonth.getMonth();
     const firstDay = new Date(year, month, 1).getDay();
@@ -611,11 +555,13 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     }
 
     return (
-      <div className="bg-white dark:bg-slate-900 p-2 md:p-6 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm w-full min-w-0 overflow-hidden">
-        <div className="flex justify-between items-center mb-2 md:mb-6">
+      <div className={compact
+        ? 'bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm w-full min-w-0 overflow-hidden'
+        : 'bg-white dark:bg-slate-900 p-2 md:p-6 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm w-full min-w-0 overflow-hidden'}>
+        <div className={compact ? 'flex justify-between items-center mb-3' : 'flex justify-between items-center mb-2 md:mb-6'}>
           <div className="flex items-center gap-1.5">
             <CalendarIcon className="text-primary" size={14} />
-            <h4 className="text-[9px] md:text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight">{dashMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h4>
+            <h4 className={compact ? 'text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight' : 'text-[9px] md:text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight'}>{dashMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h4>
           </div>
           <div className="flex gap-1">
             <button onClick={() => setDashMonth(new Date(year, month - 1))} className="p-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-all border border-slate-100 dark:border-slate-800"><ChevronLeft size={12} /></button>
@@ -624,7 +570,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '2px' }}>
           {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => (
-            <div key={`${d}-${i}`} className="text-center text-[7px] font-black text-slate-400 py-0.5 uppercase tracking-tight">{d}</div>
+            <div key={`${d}-${i}`} className={compact ? 'text-center text-[9px] font-black text-slate-400 py-0.5 uppercase tracking-tight' : 'text-center text-[7px] font-black text-slate-400 py-0.5 uppercase tracking-tight'}>{d}</div>
           ))}
           {days.map((d, i) => {
             if (!d) return <div key={i} />;
@@ -634,17 +580,22 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
             let cellBg = isToday ? 'bg-primary/5 border-primary ring-1 ring-primary/20' : 'bg-slate-50/50 dark:bg-slate-800/30 border-transparent';
             if (d.holidayName || d.recessInfo) cellBg = 'bg-pink-50 dark:bg-pink-900/10 border-pink-100 dark:border-pink-900/20';
 
+            // No computador: passar o mouse mostra o que há no dia
+            const dayTitle = compact
+              ? [d.holidayName, (d.recessInfo as any)?.name, ...d.events.map(ev => ev.title), ...d.reminders.map(r => r.title)].filter(Boolean).join(' • ') || undefined
+              : undefined;
+
             return (
-              <div key={i} className={`aspect-square rounded flex flex-col items-center justify-center relative border transition-all ${cellBg}`}>
-                <span className={`text-[8px] font-black leading-none ${isToday ? 'text-primary' : (d.holidayName || d.recessInfo) ? 'text-pink-600' : 'text-slate-500'}`}>{d.day}</span>
-                <div className="flex gap-px mt-0.5">
+              <div key={i} title={dayTitle} className={`${compact ? 'h-9 rounded-md' : 'aspect-square rounded'} flex flex-col items-center justify-center relative border transition-all ${cellBg}`}>
+                <span className={`${compact ? 'text-[11px]' : 'text-[8px]'} font-black leading-none ${isToday ? 'text-primary' : (d.holidayName || d.recessInfo) ? 'text-pink-600' : 'text-slate-500'}`}>{d.day}</span>
+                <div className={compact ? 'flex gap-0.5 mt-1' : 'flex gap-px mt-0.5'}>
                   {d.events.slice(0, 2).map((ev, idx) => {
                     const school = data.schools.find(s => s.id === ev.schoolId);
                     return (
-                      <div key={idx} className="w-1 h-1 rounded-full" style={{ backgroundColor: school ? school.color : '#f97316' }} />
+                      <div key={idx} className={compact ? 'w-1.5 h-1.5 rounded-full' : 'w-1 h-1 rounded-full'} style={{ backgroundColor: school ? school.color : '#f97316' }} />
                     );
                   })}
-                  {hasReminder && <div className="w-1 h-1 rounded-full bg-amber-400" />}
+                  {hasReminder && <div className={compact ? 'w-1.5 h-1.5 rounded-full bg-amber-400' : 'w-1 h-1 rounded-full bg-amber-400'} />}
                 </div>
               </div>
             );
@@ -701,112 +652,8 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     };
   }, [sortedTodaySchedules, currentTime]);
 
-  return (
-    <div className="space-y-4 md:space-y-6 animate-in fade-in duration-500 w-full max-w-full min-w-0 overflow-x-hidden">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 md:gap-4">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-lg md:text-3xl font-black text-slate-800 dark:text-white tracking-tight leading-none truncate block w-full">
-            Olá, {data.profile.title || 'Prof.'} {data.profile.name || 'Docente'}!
-          </h1>
-          <p className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-1 md:mt-2 truncate w-full">
-            {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 md:gap-3 bg-white dark:bg-slate-900 px-3 py-1.5 md:px-4 md:py-2 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm shrink-0 w-fit">
-          <Sparkles className="text-primary animate-pulse w-3 h-3 md:w-4 md:h-4" />
-          <span className="text-[8px] md:text-[9px] font-black uppercase tracking-tight text-slate-500">Inspirado para hoje</span>
-        </div>
-      </div>
-
-      {pendingCount > 0 && !data.settings.hideUnregisteredClassesOnDashboard && (
-        <button onClick={onNavigateToPendencies} className="relative block text-left w-full overflow-hidden p-3 md:p-4 rounded-xl text-amber-900 shadow-lg shadow-amber-100 dark:shadow-amber-900/10 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4" style={{ backgroundColor: '#fffbeb', border: '2px solid #fde68a' }}>
-          <div className="relative z-10 flex items-center justify-between w-full min-w-0">
-            <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-              <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#fbbf24' }}>
-                <AlertTriangle size={18} className="md:w-[20px] md:h-[20px] text-amber-800" />
-              </div>
-              <div className="text-left flex-1 min-w-0">
-                <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-amber-700 border-none outline-none truncate">Atenção Necessária</span>
-                <p className="text-[10px] md:text-xs font-black uppercase text-amber-900 border-none outline-none truncate">Você tem {pendingCount} registros pendentes.</p>
-              </div>
-            </div>
-            <ChevronRight size={18} className="md:w-[20px] md:h-[20px] shrink-0 text-amber-700" />
-          </div>
-        </button>
-      )}
-
-      {overduePayments.length > 0 && (
-        <div className="w-full flex items-center justify-between p-3 md:p-4 rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-900/20 hover:scale-[1.01] transition-transform animate-in slide-in-from-top-4 cursor-pointer">
-          <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/20 shrink-0">
-              <DollarSign size={18} className="md:w-[20px] md:h-[20px]" />
-            </div>
-            <div className="text-left flex-1 min-w-0">
-              <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/80 truncate">Financeiro</span>
-              <p className="text-[10px] md:text-xs font-black uppercase text-white truncate">
-                {overduePayments.length} pagamentos em atraso ({overduePayments[0].studentName}...)
-              </p>
-            </div>
-          </div>
-          <ChevronRight size={18} className="md:w-[20px] md:h-[20px] shrink-0" />
-        </div>
-      )}
-
-      {upcomingUnpreparedAssessments.length > 0 && (() => {
-        const nextAssessment = upcomingUnpreparedAssessments[0];
-        const eDate = new Date(nextAssessment.date.split('T')[0] + 'T00:00:00');
-        eDate.setHours(0, 0, 0, 0);
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
-        const daysLeft = Math.ceil((eDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        const daysText = daysLeft === 0 ? 'Para hoje' : daysLeft === 1 ? 'Para amanhã' : `Daqui a ${daysLeft} dias`;
-
-        const school = data.schools.find(s => s.id === nextAssessment.schoolId);
-        const cls = school?.classes.find(c =>
-          (typeof c === 'string' ? c : c.id) === nextAssessment.classId ||
-          (typeof c === 'string' ? c : c.name) === nextAssessment.classId
-        );
-        const className = cls ? (typeof cls === 'string' ? cls : cls.name) : nextAssessment.classId;
-
-        const total = upcomingUnpreparedAssessments.length;
-        const totalText = total > 1 ? ` (+${total - 1} nos próximos 7 dias)` : '';
-
-        return (
-          <div className="relative group">
-            <button
-              onClick={onNavigateToAssessments}
-              className={`relative z-10 w-full overflow-hidden p-3 md:p-4 rounded-xl text-white shadow-lg transition-transform animate-in slide-in-from-top-4 ${
-                daysLeft <= 3
-                  ? 'animate-siren ring-2 ring-offset-1 ring-red-400 dark:ring-offset-slate-900'
-                  : 'bg-red-600 shadow-red-300 dark:shadow-red-900/30 hover:scale-[1.01]'
-              }`}
-            >
-              <div className="relative z-10 flex items-center justify-between w-full">
-                <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center bg-white/30 shrink-0">
-                    <FileCheck size={18} className="md:w-[20px] md:h-[20px]" />
-                  </div>
-                  <div className="text-left flex-1 min-w-0">
-                    <span className="text-[8px] md:text-[9px] font-black uppercase block mb-0.5 text-white/90 truncate border-none outline-none">Elaboração Pendente{totalText}</span>
-                    <p className="text-[10px] md:text-xs font-black uppercase text-white truncate border-none outline-none">{daysText}: {nextAssessment.title} ({className})</p>
-                  </div>
-                </div>
-                <ChevronRight size={18} className="md:w-[20px] md:h-[20px] shrink-0" />
-              </div>
-            </button>
-          </div>
-        );
-      })()}
-
-      {data.settings.showDailyQuote && (
-        <div className="bg-primary/5 dark:bg-primary/10 border-2 border-dashed border-primary/20 p-4 md:p-5 rounded-xl relative overflow-hidden break-words min-w-0 w-full max-w-full">
-          <div className="absolute -top-4 -left-4 md:-top-6 md:-left-6 opacity-5 pointer-events-none"><QuoteIcon size={60} className="md:w-[80px] md:h-[80px]" /></div>
-          <p className="text-xs md:text-base font-bold text-primary dark:text-primary-light italic leading-relaxed relative z-10 w-full">"{dailyQuote}"</p>
-        </div>
-      )}
-
-      <div className="grid lg:grid-cols-3 gap-4 md:gap-6 overflow-hidden w-full max-w-full min-w-0">
-        <div className="lg:col-span-2 space-y-4 md:space-y-6 w-full max-w-full min-w-0">
+  // Blocos iguais no celular e no computador
+  const activityCard = (
           <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
             <h3 className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight mb-4 md:mb-6 flex items-center gap-2"><Clock className="text-primary w-3 h-3 md:w-[14px] md:h-[14px]" /> Atividade Agora</h3>
             {activityInfo ? (
@@ -929,184 +776,9 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
               </div>
             )}
           </div>
+  );
 
-          <div className="grid sm:grid-cols-2 gap-4 md:gap-6">
-            <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col">
-              <h3 className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight mb-3 md:mb-4 flex items-center gap-2"><FileCheck className="text-primary w-3 h-3 md:w-[14px] md:h-[14px]" /> Avaliações (15d)</h3>
-              <div className="space-y-2 md:space-y-3 flex-1">
-                {(thisWeekAssessments.length > 0 || nextWeekAssessments.length > 0) ? (
-                  <div className="space-y-4">
-                    {/* Esta Semana */}
-                    {thisWeekAssessments.length > 0 && (
-                      <div className="space-y-2">
-                        <h4 className="text-[8px] font-black uppercase text-slate-400 tracking-widest pl-1">Esta Semana</h4>
-                        {thisWeekAssessments.map((event, idx) => {
-                          const school = data.schools.find(s => s.id === event.schoolId);
-                          const color = school?.color || '#3b82f6';
-                          return (
-                            <div key={`this-week-${idx}`} onClick={onNavigateToAssessments} className="flex items-center gap-3 p-2.5 md:p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800 cursor-pointer hover:scale-[1.02] transition-transform" style={{ borderColor: color + '30', backgroundColor: color + '05' }}>
-                              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg flex flex-col items-center justify-center shrink-0 border-b-2" style={{ backgroundColor: color + '15', color: color, borderColor: color + '30' }}>
-                                <span className="text-[7px] md:text-[8px] font-black uppercase leading-none mb-0.5">{getShortWeekDay(event.date)}</span>
-                                <span className="text-[10px] md:text-xs font-black leading-none">{getDayMonth(event.date)}</span>
-                              </div>
-                              <div className="flex-1 overflow-hidden min-w-0">
-                                <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
-                                <div className="flex flex-col min-w-0">
-                                  <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter truncate">
-                                    {event.type === 'test' ? 'Prova' : 'Trabalho'} • {(() => {
-                                      const schoolClass = school?.classes.find(c => (typeof c === 'string' ? c : c.id) === event.classId || (typeof c === 'string' ? c : c.name) === event.classId);
-                                      return schoolClass ? (typeof schoolClass === 'string' ? schoolClass : schoolClass.name) : event.classId;
-                                    })()}
-                                  </p>
-                                  <p className="text-[7px] font-black uppercase truncate mt-0.5" style={{ color: color }}>{school?.name}</p>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Próxima Semana */}
-                    {nextWeekAssessments.length > 0 && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 mb-1 mt-2">
-                          <div className="h-px bg-slate-100 dark:bg-slate-800 flex-1"></div>
-                          <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest bg-white dark:bg-slate-900 px-2 rounded-full border border-slate-100 dark:border-slate-800">Próxima Semana</span>
-                          <div className="h-px bg-slate-100 dark:bg-slate-800 flex-1"></div>
-                        </div>
-                        {nextWeekAssessments.map((event, idx) => {
-                          const school = data.schools.find(s => s.id === event.schoolId);
-                          const color = school?.color || '#3b82f6';
-                          return (
-                            <div key={`next-week-${idx}`} onClick={onNavigateToAssessments} className="flex items-center gap-3 p-2.5 md:p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800 cursor-pointer hover:scale-[1.02] transition-transform opacity-80" style={{ borderColor: color + '30', backgroundColor: color + '05' }}>
-                              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg flex flex-col items-center justify-center shrink-0 border-b-2" style={{ backgroundColor: color + '15', color: color, borderColor: color + '30' }}>
-                                <span className="text-[7px] md:text-[8px] font-black uppercase leading-none mb-0.5">{getShortWeekDay(event.date)}</span>
-                                <span className="text-[10px] md:text-xs font-black leading-none">{getDayMonth(event.date)}</span>
-                              </div>
-                              <div className="flex-1 overflow-hidden min-w-0">
-                                <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
-                                <div className="flex flex-col min-w-0">
-                                  <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter truncate">
-                                    {event.type === 'test' ? 'Prova' : 'Trabalho'} • {(() => {
-                                      const schoolClass = school?.classes.find(c => (typeof c === 'string' ? c : c.id) === event.classId || (typeof c === 'string' ? c : c.name) === event.classId);
-                                      return schoolClass ? (typeof schoolClass === 'string' ? schoolClass : schoolClass.name) : event.classId;
-                                    })()}
-                                  </p>
-                                  <p className="text-[7px] font-black uppercase truncate mt-0.5" style={{ color: color }}>{school?.name}</p>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="py-6 md:py-8 text-center flex flex-col items-center justify-center h-full"><p className="text-[8px] md:text-[9px] font-black uppercase tracking-tight text-slate-500">Sem avaliações próximas</p></div>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col">
-              <h3 className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight mb-3 md:mb-4 flex items-center gap-2"><Calendar className="text-orange-500 w-3 h-3 md:w-[14px] md:h-[14px]" /> Eventos (15d)</h3>
-              <div className="space-y-2 md:space-y-3 flex-1">
-                {upcomingEvents.length > 0 ? upcomingEvents.map((event, idx) => {
-                  const school = data.schools.find(s => s.id === event.schoolId);
-                  const color = school?.color || '#f97316';
-
-                  return (
-                    <div key={idx} onClick={onNavigateToAgenda} className="flex items-center gap-3 p-2.5 md:p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800 cursor-pointer hover:scale-[1.02] transition-transform" style={{ borderColor: color + '30', backgroundColor: color + '05' }}>
-                      <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg flex flex-col items-center justify-center shrink-0 border-b-2" style={{ backgroundColor: color + '15', color: color, borderColor: color + '30' }}>
-                        <span className="text-[7px] md:text-[8px] font-black uppercase leading-none mb-0.5">{getShortWeekDay(event.date)}</span>
-                        <span className="text-[10px] md:text-xs font-black leading-none">{getDayMonth(event.date)}</span>
-                      </div>
-                      <div className="flex-1 overflow-hidden min-w-0">
-                        <h4 className="text-[9px] md:text-[10px] font-black text-slate-800 dark:text-white uppercase truncate">{event.title}</h4>
-                        <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter shrink-0">{EVENT_TYPE_LABELS[event.type] || event.type}</span>
-                          <span className="text-[7px] font-black uppercase truncate" style={{ color: color }}>• {school?.name}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }) : (
-                  <div className="py-6 md:py-8 text-center flex flex-col items-center justify-center h-full"><p className="text-[8px] md:text-[9px] font-black uppercase tracking-tight text-slate-500">Sem eventos próximos</p></div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* GRADE DA SEMANA - abaixo dos cards de avaliações e eventos */}
-        {weeklyScheduleSummary.length > 0 && (
-          <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm w-full">
-            <div className="flex items-center gap-1.5 mb-4">
-              <CalendarDays className="text-primary" size={14} />
-              <h4 className="text-[9px] md:text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight">Grade Semanal</h4>
-            </div>
-            <div className="grid grid-cols-5 gap-2">
-              {weeklyScheduleSummary.map(({ day, label, groups }) => {
-                const isToday = new Date().getDay() === day;
-                return (
-                  <div
-                    key={day}
-                    className={`flex flex-col gap-1.5 rounded-xl p-2 md:p-3 min-w-0 transition-all ${
-                      isToday
-                        ? 'bg-primary/8 ring-1 ring-primary/20'
-                        : 'bg-slate-50 dark:bg-slate-800/40'
-                    }`}
-                  >
-                    {/* Cabeçalho do dia */}
-                    <span
-                      className={`text-[8px] md:text-[9px] font-black uppercase tracking-widest text-center block ${
-                        isToday ? 'text-primary' : 'text-slate-400'
-                      }`}
-                    >
-                      {label}
-                    </span>
-                    <div className="h-px w-full bg-slate-200 dark:bg-slate-700 mb-0.5" />
-
-                    {/* Aulas */}
-                    {groups.length === 0 ? (
-                      <span className="text-[8px] font-bold text-slate-300 dark:text-slate-600 italic text-center block py-1">—</span>
-                    ) : (
-                      <div className="flex flex-col gap-1.5">
-                        {groups.map((group, gIdx) => (
-                          <div key={gIdx} className="flex flex-col gap-1 min-w-0">
-                            {/* Badge de período */}
-                            <span
-                              className="text-[6px] md:text-[7px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded text-center w-full block"
-                              style={{ backgroundColor: group.schoolColor + '20', color: group.schoolColor }}
-                            >
-                              {group.periodLabel}
-                            </span>
-                            {/* Turmas */}
-                            <div className="flex flex-col gap-0.5">
-                              {group.classes.map((cls, cIdx) => (
-                                <span
-                                  key={cIdx}
-                                  className="text-[7px] md:text-[8px] font-black text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-700 px-1 py-0.5 rounded text-center block w-full truncate"
-                                  title={cls}
-                                >
-                                  {cls}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-        <div className="space-y-4 md:space-y-6 w-full min-w-0 overflow-hidden">
-          {renderDashboardCalendar()}
+  const remindersCard = (
           <div className="bg-amber-50 dark:bg-amber-900/10 p-4 md:p-6 rounded-xl border border-amber-100 dark:border-amber-900/20">
             <div onClick={onNavigateToReminders} className="flex items-center justify-between mb-3 md:mb-4 cursor-pointer group">
               <div className="flex items-center gap-2">
@@ -1142,9 +814,9 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
               </div>
             )}
           </div>
-        </div>
+  );
 
-      {/* RODAPÉ DO DASHBOARD */}
+  const dashboardFooter = (
       <div className="pt-10 pb-8 text-center opacity-60">
         <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
           Leciona v1.0 - Codex
@@ -1156,7 +828,479 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
           Contato: appleciona@gmail.com
         </p>
       </div>
-    </div >
+  );
+
+  // ================== VERSÃO WEB (computador) ==================
+
+  // Avisos em etiquetas ao lado da saudação (no celular continuam como faixas)
+  const unpreparedAlert = (() => {
+    const next = upcomingUnpreparedAssessments[0];
+    if (!next) return null;
+    const eDate = new Date(next.date.split('T')[0] + 'T00:00:00');
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const daysLeft = Math.ceil((eDate.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
+    const daysText = daysLeft === 0 ? 'hoje' : daysLeft === 1 ? 'amanhã' : `em ${daysLeft} dias`;
+    return {
+      event: next,
+      daysLeft,
+      daysText,
+      className: getClassName(data, next.schoolId, next.classId),
+      more: upcomingUnpreparedAssessments.length - 1
+    };
+  })();
+  const showPendingAlert = pendingCount > 0 && !data.settings.hideUnregisteredClassesOnDashboard;
+  const hasDesktopAlerts = showPendingAlert || !!unpreparedAlert || overduePayments.length > 0;
+
+  const renderAlerts = (containerClass: string) => (
+    <div className={containerClass}>
+      {showPendingAlert && (
+        <button onClick={onNavigateToPendencies} title="Ver registros pendentes" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-amber-900 hover:scale-[1.02] transition-transform shrink-0" style={{ backgroundColor: '#fffbeb', borderColor: '#fde68a' }}>
+          <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+          <span className="text-[10px] font-black uppercase whitespace-nowrap">{pendingCount} {pendingCount === 1 ? 'registro pendente' : 'registros pendentes'}</span>
+          <ChevronRight size={14} className="text-amber-700 shrink-0" />
+        </button>
+      )}
+      {unpreparedAlert && (
+        <button
+          onClick={onNavigateToAssessments}
+          title={`Elaboração pendente: ${unpreparedAlert.event.title} (${unpreparedAlert.className}) – ${unpreparedAlert.daysText}`}
+          className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-white min-w-0 max-w-full hover:scale-[1.02] transition-transform ${unpreparedAlert.daysLeft <= 3 ? 'animate-siren' : 'bg-red-600'}`}
+        >
+          <FileCheck size={14} className="shrink-0" />
+          <span className="text-[10px] font-black uppercase truncate">
+            Elaborar: {unpreparedAlert.event.title} ({unpreparedAlert.className}) · {unpreparedAlert.daysText}{unpreparedAlert.more > 0 ? ` (+${unpreparedAlert.more})` : ''}
+          </span>
+          <ChevronRight size={14} className="shrink-0" />
+        </button>
+      )}
+      {overduePayments.length > 0 && (
+        <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 text-white shrink-0" title={overduePayments.map(p => `${p.studentName} (${p.month})`).join(', ')}>
+          <DollarSign size={14} className="shrink-0" />
+          <span className="text-[10px] font-black uppercase whitespace-nowrap">{overduePayments.length} {overduePayments.length === 1 ? 'pagamento em atraso' : 'pagamentos em atraso'}</span>
+        </div>
+      )}
+    </div>
+  );
+
+  // Linha do dia: uma etiqueta por aula, com o número da aula no turno (1ª, 2ª…)
+  const TIMELINE_STYLES: Record<TodayLessonStatus, string> = {
+    done: 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-300',
+    pending: 'bg-amber-50 border-amber-300 text-amber-800 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-300',
+    now: 'text-white shadow-md ring-2 ring-offset-2 ring-primary dark:ring-offset-slate-900',
+    upcoming: 'bg-white border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200',
+    blocked: 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-800/40 dark:border-slate-700 dark:text-slate-500',
+    window: 'bg-transparent border-dashed border-slate-200 text-slate-400 dark:border-slate-700 dark:text-slate-500'
+  };
+  const TIMELINE_LABELS: Record<TodayLessonStatus, string> = {
+    done: 'registrada', pending: 'registro pendente', now: 'agora', upcoming: 'a seguir', blocked: 'aula suspensa', window: 'janela'
+  };
+  const timelineLessons = todayTimeline.flatMap(g => g.lessons).filter(l => !l.isWindow && !l.blocked);
+  const timelineDone = timelineLessons.filter(l => {
+    const status = todayLessonStatus(l, currentTime);
+    return status === 'done' || (status === 'now' && l.hasContent);
+  }).length;
+  const timelinePending = timelineLessons.filter(l => todayLessonStatus(l, currentTime) === 'pending').length;
+  const todayHolidayName = getHolidayName(new Date());
+
+  // Etiqueta de uma aula: "1ª - 07:20h" + turma. Os ícones de situação ficam num selo no canto,
+  // assim o horário cabe sem aumentar a etiqueta.
+  const renderTimelineChip = (lesson: TodayLesson, extraClass = 'flex-1 min-w-[64px]') => {
+    const status = todayLessonStatus(lesson, currentTime);
+    const clickable = status !== 'window' && status !== 'blocked';
+    const numberLabel = lesson.number ? `${lesson.number}ª` : '';
+    const isNow = status === 'now';
+    const showCheck = status === 'done' || (isNow && lesson.hasContent);
+    return (
+      <button
+        key={lesson.key}
+        data-lesson-key={lesson.key}
+        type="button"
+        disabled={!clickable}
+        onClick={() => clickable && onNavigateToLesson(lesson.schedule, todayDateStr)}
+        title={`${numberLabel ? numberLabel + ' aula · ' : ''}${lesson.startTime}–${lesson.endTime} · ${lesson.className} · ${TIMELINE_LABELS[status]}${lesson.assessment ? ` · avaliação: ${lesson.assessment}` : ''}`}
+        className={`relative ${extraClass} text-left px-1.5 py-1.5 rounded-lg border transition-all ${clickable ? 'hover:-translate-y-0.5 hover:shadow-sm cursor-pointer' : 'cursor-default'} ${TIMELINE_STYLES[status]}`}
+        style={isNow ? { backgroundColor: 'var(--primary-color)', borderColor: 'var(--primary-color)' } : undefined}
+      >
+        <span className="flex items-baseline gap-0.5 text-[9px] leading-none mb-1 whitespace-nowrap overflow-hidden">
+          {numberLabel && <span className="font-black">{numberLabel}</span>}
+          <span className={`font-bold tabular-nums tracking-tight ${isNow ? 'opacity-90' : 'opacity-60'}`}>{numberLabel ? '- ' : ''}{lesson.startTime}h</span>
+        </span>
+        <span className={`block text-[11px] font-black leading-tight truncate ${status === 'blocked' ? 'line-through' : ''}`}>{lesson.className}</span>
+        {(isNow || showCheck || status === 'pending' || lesson.assessment) && (
+          <span className="absolute -top-1.5 -right-1 flex items-center gap-0.5 pointer-events-none">
+            {isNow && (
+              <span className="h-3.5 px-1 rounded-full bg-white text-[7px] font-black uppercase tracking-wider flex items-center shadow-sm ring-1 ring-slate-200 dark:ring-slate-700" style={{ color: 'var(--primary-color)' }}>agora</span>
+            )}
+            {lesson.assessment && (
+              <span className="w-3.5 h-3.5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-slate-900"><FileCheck size={8} strokeWidth={3} /></span>
+            )}
+            {showCheck && (
+              <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-slate-900"><Check size={9} strokeWidth={4} /></span>
+            )}
+            {status === 'pending' && (
+              <span className="w-3.5 h-3.5 rounded-full bg-amber-400 text-white flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-slate-900 text-[9px] font-black leading-none">!</span>
+            )}
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  const todayStrip = (
+    <div className="bg-white dark:bg-slate-900 px-5 py-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-between gap-4 mb-3">
+        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2"><CalendarDays className="text-primary" size={14} /> Aulas de hoje</h3>
+        {timelineLessons.length > 0 && (
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+            {timelineDone} de {timelineLessons.length} registradas
+            {timelinePending > 0 && <span className="text-amber-600"> · {timelinePending} {timelinePending === 1 ? 'pendente' : 'pendentes'}</span>}
+          </span>
+        )}
+      </div>
+      {todayTimeline.length === 0 ? (
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{todayHolidayName ? `Feriado: ${todayHolidayName}` : 'Sem aulas na grade hoje'}</p>
+      ) : (
+        <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
+          {todayTimeline.map((group, gIdx) => (
+            <div key={`${group.key}-${gIdx}`} className="flex flex-col gap-1.5" style={{ flex: `${group.lessons.length} ${group.lessons.length} 0px`, minWidth: group.lessons.length * 64 + (group.lessons.length - 1) * 6 }}>
+              <span className="text-[9px] font-black uppercase tracking-tight truncate flex items-center gap-1.5" style={{ color: group.color }}>
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
+                <span className="truncate">{group.schoolName}{group.shiftName ? ` · ${group.shiftName}` : ''}</span>
+              </span>
+              <div className="flex gap-1.5">
+                {group.lessons.map(lesson => renderTimelineChip(lesson))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Avaliações e eventos: uma linha por item
+  const COMPACT_LIMIT = 6;
+  const renderCompactRow = (event: SchoolEvent, subtitle: string, onClick: () => void, faded = false) => {
+    const school = data.schools.find(s => s.id === event.schoolId);
+    const color = school?.color || '#3b82f6';
+    return (
+      <button key={event.id} type="button" onClick={onClick} className={`w-full flex items-center gap-3 py-2 text-left group ${faded ? 'opacity-80' : ''}`}>
+        <div className="w-11 shrink-0 rounded-md py-1 text-center" style={{ backgroundColor: color + '15', color }}>
+          <span className="block text-[7px] font-black uppercase leading-none">{getShortWeekDay(event.date)}</span>
+          <span className="block text-[11px] font-black leading-none mt-0.5">{getDayMonth(event.date)}</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-black text-slate-800 dark:text-white uppercase truncate group-hover:underline">{event.title}</p>
+          <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tight truncate mt-0.5">
+            {subtitle} · <span style={{ color }}>{school?.name}</span>
+          </p>
+        </div>
+      </button>
+    );
+  };
+  const assessmentSubtitle = (e: SchoolEvent) => `${e.type === 'test' ? 'Prova' : 'Trabalho'} · ${getClassName(data, e.schoolId, e.classId)}`;
+  const shownThisWeek = thisWeekAssessments.slice(0, COMPACT_LIMIT);
+  const shownNextWeek = nextWeekAssessments.slice(0, Math.max(0, COMPACT_LIMIT - shownThisWeek.length));
+  const hiddenAssessments = thisWeekAssessments.length + nextWeekAssessments.length - shownThisWeek.length - shownNextWeek.length;
+  const hiddenEvents = Math.max(0, upcomingEvents.length - COMPACT_LIMIT);
+
+  const assessmentsCompact = (
+    <div className="bg-white dark:bg-slate-900 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-tight mb-2 flex items-center gap-2"><FileCheck className="text-primary" size={14} /> Avaliações (15d)</h3>
+      {shownThisWeek.length + shownNextWeek.length === 0 ? (
+        <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 py-2">Sem avaliações próximas</p>
+      ) : (
+        <div>
+          {shownThisWeek.length > 0 && (
+            <>
+              <h4 className="text-[8px] font-black uppercase text-slate-400 tracking-widest mt-1">Esta semana</h4>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {shownThisWeek.map(e => renderCompactRow(e, assessmentSubtitle(e), onNavigateToAssessments))}
+              </div>
+            </>
+          )}
+          {shownNextWeek.length > 0 && (
+            <>
+              <h4 className="text-[8px] font-black uppercase text-slate-400 tracking-widest mt-2">Próxima semana</h4>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {shownNextWeek.map(e => renderCompactRow(e, assessmentSubtitle(e), onNavigateToAssessments, true))}
+              </div>
+            </>
+          )}
+          {hiddenAssessments > 0 && (
+            <button onClick={onNavigateToAssessments} className="mt-2 text-[9px] font-black uppercase tracking-tight text-primary hover:underline">+ {hiddenAssessments} {hiddenAssessments === 1 ? 'outra' : 'outras'}</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  const eventsCompact = (
+    <div className="bg-white dark:bg-slate-900 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-tight mb-2 flex items-center gap-2"><Calendar className="text-orange-500" size={14} /> Eventos (15d)</h3>
+      {upcomingEvents.length === 0 ? (
+        <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 py-2">Sem eventos próximos</p>
+      ) : (
+        <div>
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {upcomingEvents.slice(0, COMPACT_LIMIT).map(e => renderCompactRow(e, EVENT_TYPE_LABELS[e.type] || e.type, onNavigateToAgenda))}
+          </div>
+          {hiddenEvents > 0 && (
+            <button onClick={onNavigateToAgenda} className="mt-2 text-[9px] font-black uppercase tracking-tight text-primary hover:underline">+ {hiddenEvents} {hiddenEvents === 1 ? 'outro' : 'outros'}</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  // Grade semanal: cada aula numa linha "HH:MM Turma" (aulas seguidas aparecem repetidas)
+  const weeklyTotal = weeklyGrid.reduce((n, d) => n + d.count, 0);
+  const weeklyGridCard = weeklyTotal > 0 && (
+    <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-1.5"><CalendarDays className="text-primary" size={14} /> Grade Semanal</h4>
+        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">{weeklyTotal} aulas na semana</span>
+      </div>
+      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${weeklyGrid.length}, minmax(0, 1fr))` }}>
+        {weeklyGrid.map(d => {
+          const isToday = d.day === today;
+          return (
+            <div key={d.day} className={`rounded-xl p-3 min-w-0 ${isToday ? 'ring-1 ring-primary' : 'bg-slate-50 dark:bg-slate-800/40'}`} style={isToday ? { backgroundColor: 'var(--primary-light)' } : undefined}>
+              <div className="flex items-baseline justify-between mb-2 pb-1.5 border-b border-slate-200 dark:border-slate-700">
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isToday ? 'text-primary' : 'text-slate-500'}`}>{d.label}{isToday ? ' · hoje' : ''}</span>
+                {d.count > 0 && <span className="text-[9px] font-bold text-slate-400">{d.count} {d.count === 1 ? 'aula' : 'aulas'}</span>}
+              </div>
+              {d.groups.length === 0 ? (
+                <p className="text-[9px] font-bold text-slate-300 dark:text-slate-600 italic text-center py-2">—</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {d.groups.map((g, gIdx) => (
+                    <div key={`${g.key}-${gIdx}`} className="min-w-0">
+                      <p className="text-[8px] font-black uppercase tracking-wider truncate mb-1" style={{ color: g.color }}>{g.period} · {g.schoolName}</p>
+                      <ul className="space-y-0.5 border-l-2 pl-2" style={{ borderColor: g.color + '60' }}>
+                        {g.lessons.map(l => (
+                          <li key={l.key} className="flex items-baseline gap-2 min-w-0 text-[10px]" title={`${l.time} ${l.className}`}>
+                            <span className="font-bold text-slate-400 tabular-nums shrink-0">{l.time}</span>
+                            <span className="font-black text-slate-700 dark:text-slate-200 truncate">{l.className}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const desktopLayout = (
+    <div className="hidden lg:block space-y-5 w-full min-w-0">
+      <div className="flex items-start justify-between gap-6">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight leading-none truncate">
+            Olá, {data.profile.title || 'Prof.'} {data.profile.name || 'Docente'}!
+          </h1>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-2 truncate">
+            {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+        {hasDesktopAlerts ? renderAlerts('flex flex-wrap justify-end items-center gap-2 min-w-0 max-w-[65%]') : (
+          <div className="flex items-center gap-3 bg-white dark:bg-slate-900 px-4 py-2 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm shrink-0">
+            <Sparkles className="text-primary animate-pulse w-4 h-4" />
+            <span className="text-[9px] font-black uppercase tracking-tight text-slate-500">Inspirado para hoje</span>
+          </div>
+        )}
+      </div>
+
+      {data.settings.showDailyQuote && dailyQuote && (
+        <p className="text-sm font-bold italic text-primary leading-snug pl-3 border-l-4 border-primary">"{dailyQuote}"</p>
+      )}
+
+      {todayStrip}
+
+      <div className="grid grid-cols-3 gap-6 items-start">
+        <div className="col-span-2 space-y-6 min-w-0">
+          {activityCard}
+          <div className="grid grid-cols-2 gap-6 items-start">
+            {assessmentsCompact}
+            {eventsCompact}
+          </div>
+        </div>
+        <div className="space-y-6 min-w-0">
+          {renderDashboardCalendar(true)}
+          {remindersCard}
+        </div>
+      </div>
+
+      {weeklyGridCard}
+
+      {dashboardFooter}
+    </div>
+  );
+
+  // ================== CELULAR E TABLET ==================
+
+  // Linha do dia: rola sozinha até a aula de agora (ou a próxima)
+  const focusLessonKey = (() => {
+    const lessons = todayTimeline.flatMap(g => g.lessons).filter(l => !l.isWindow);
+    const now = lessons.find(l => todayLessonStatus(l, currentTime) === 'now');
+    const next = lessons.find(l => todayLessonStatus(l, currentTime) === 'upcoming');
+    return (now || next || lessons[lessons.length - 1])?.key;
+  })();
+  const updateStripEdges = () => {
+    const box = mobileStripRef.current;
+    if (!box) return;
+    const left = box.scrollLeft > 4;
+    const right = box.scrollLeft + box.clientWidth < box.scrollWidth - 4;
+    setStripEdges(prev => (prev.left === left && prev.right === right ? prev : { left, right }));
+  };
+  useEffect(() => {
+    const box = mobileStripRef.current;
+    if (!box || !focusLessonKey) return;
+    const el = box.querySelector<HTMLElement>(`[data-lesson-key="${CSS.escape(focusLessonKey)}"]`);
+    if (!el) return;
+    // deixa uma aula anterior visível à esquerda
+    box.scrollLeft = Math.max(0, el.offsetLeft - box.offsetLeft - 96);
+    updateStripEdges();
+  }, [focusLessonKey]);
+
+  const todayStripMobile = (
+    <div className="relative bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <h3 className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2 shrink-0"><CalendarDays className="text-primary w-3 h-3 md:w-[14px] md:h-[14px]" /> Aulas de hoje</h3>
+        {timelineLessons.length > 0 && (
+          <span className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase tracking-tight text-right">
+            {timelineDone}/{timelineLessons.length} registradas
+            {timelinePending > 0 && <span className="text-amber-600"> · {timelinePending} {timelinePending === 1 ? 'pendente' : 'pendentes'}</span>}
+          </span>
+        )}
+      </div>
+      {todayTimeline.length === 0 ? (
+        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">{todayHolidayName ? `Feriado: ${todayHolidayName}` : 'Sem aulas na grade hoje'}</p>
+      ) : (
+        <>
+          <div ref={mobileStripRef} onScroll={updateStripEdges} className="relative flex gap-4 overflow-x-auto -mx-4 px-4 md:-mx-6 md:px-6 pt-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+            {todayTimeline.map((group, gIdx) => (
+              <div key={`${group.key}-${gIdx}`} className="flex flex-col gap-1.5 shrink-0">
+                <span className="text-[8px] font-black uppercase tracking-tight flex items-center gap-1.5 whitespace-nowrap" style={{ color: group.color }}>
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
+                  {group.schoolName}{group.shiftName ? ` · ${group.shiftName}` : ''}
+                </span>
+                <div className="flex gap-1.5">
+                  {group.lessons.map(lesson => renderTimelineChip(lesson, 'w-[84px] shrink-0'))}
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* indica que há mais aulas para os lados (arrastar) */}
+          {stripEdges.left && <div className="pointer-events-none absolute left-0 bottom-4 h-14 w-8 bg-gradient-to-r from-white dark:from-slate-900" />}
+          {stripEdges.right && <div className="pointer-events-none absolute right-0 bottom-4 h-14 w-8 bg-gradient-to-l from-white dark:from-slate-900" />}
+        </>
+      )}
+    </div>
+  );
+
+  // Grade semanal: um dia por vez (abas), cada aula numa linha "HH:MM Turma"
+  const selectedWeekDay = weeklyGrid.find(d => d.day === mobileWeekDay) || weeklyGrid[0];
+  const weeklyGridMobile = weeklyTotal > 0 && selectedWeekDay && (
+    <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-[9px] md:text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-1.5"><CalendarDays className="text-primary" size={14} /> Grade Semanal</h4>
+        <span className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase tracking-tight">{weeklyTotal} aulas na semana</span>
+      </div>
+      <div className="grid gap-1.5 mb-3" style={{ gridTemplateColumns: `repeat(${weeklyGrid.length}, minmax(0, 1fr))` }}>
+        {weeklyGrid.map(d => {
+          const selected = d.day === selectedWeekDay.day;
+          const isToday = d.day === today;
+          return (
+            <button
+              key={d.day}
+              type="button"
+              onClick={() => setMobileWeekDay(d.day)}
+              className={`py-1.5 rounded-lg text-center border transition-colors ${selected ? 'text-white border-transparent' : 'bg-slate-50 dark:bg-slate-800/40 text-slate-500 border-slate-100 dark:border-slate-800'} ${isToday && !selected ? 'ring-1 ring-primary' : ''}`}
+              style={selected ? { backgroundColor: 'var(--primary-color)' } : undefined}
+            >
+              <span className="block text-[10px] font-black leading-none">{d.label}</span>
+              <span className="block text-[8px] font-bold leading-none mt-1 opacity-80">{isToday ? 'hoje' : `${d.count}`}</span>
+            </button>
+          );
+        })}
+      </div>
+      {selectedWeekDay.groups.length === 0 ? (
+        <p className="text-[9px] font-bold text-slate-400 uppercase text-center py-3">Sem aulas neste dia</p>
+      ) : (
+        <div className="space-y-3">
+          {selectedWeekDay.groups.map((g, gIdx) => (
+            <div key={`${g.key}-${gIdx}`}>
+              <p className="text-[8px] font-black uppercase tracking-wider mb-1" style={{ color: g.color }}>{g.period} · {g.schoolName}</p>
+              <ul className="space-y-1 border-l-2 pl-2.5" style={{ borderColor: g.color + '60' }}>
+                {g.lessons.map(l => (
+                  <li key={l.key} className="flex items-baseline gap-3 text-[11px]">
+                    <span className="font-bold text-slate-400 tabular-nums shrink-0">{l.time}</span>
+                    <span className="font-black text-slate-700 dark:text-slate-200 truncate">{l.className}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const mobileLayout = (
+    <div className="lg:hidden space-y-4 md:space-y-6 w-full max-w-full min-w-0">
+      <div className="min-w-0">
+        <h1 className="text-lg md:text-3xl font-black text-slate-800 dark:text-white tracking-tight leading-none truncate block w-full">
+          Olá, {data.profile.title || 'Prof.'} {data.profile.name || 'Docente'}!
+        </h1>
+        <p className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-1 md:mt-2 truncate w-full">
+          {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+        </p>
+      </div>
+
+      {hasDesktopAlerts ? renderAlerts('flex flex-wrap items-center gap-2 w-full min-w-0') : (
+        <div className="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm w-fit">
+          <Sparkles className="text-primary animate-pulse w-3 h-3" />
+          <span className="text-[8px] font-black uppercase tracking-tight text-slate-500">Inspirado para hoje</span>
+        </div>
+      )}
+
+      {data.settings.showDailyQuote && dailyQuote && (
+        <p className="text-xs md:text-sm font-bold italic text-primary leading-snug pl-3 border-l-4 border-primary">"{dailyQuote}"</p>
+      )}
+
+      {activityCard}
+
+      {todayStripMobile}
+
+      <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-6 md:items-start">
+        {assessmentsCompact}
+        {eventsCompact}
+      </div>
+
+      <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-6 md:items-start">
+        {renderDashboardCalendar(true)}
+        {remindersCard}
+      </div>
+
+      {weeklyGridMobile}
+
+      {dashboardFooter}
+    </div>
+  );
+
+  return (
+    <div className="animate-in fade-in duration-500 w-full max-w-full min-w-0 overflow-x-hidden">
+      {/* ===== CELULAR E TABLET (abaixo de 1024px) ===== */}
+      {mobileLayout}
+
+      {/* ===== COMPUTADOR (a partir de 1024px) ===== */}
+      {desktopLayout}
+    </div>
   );
 };
 

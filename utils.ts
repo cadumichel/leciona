@@ -9,7 +9,11 @@ export const isWeekend = (date: Date): boolean => {
 // Helper seguro para criar objeto Date a partir de string
 export const getSafeDate = (dateStr: string): Date => {
   if (!dateStr) return new Date();
-  // Se já tiver 'T' (ISO), usa como está. Se for YYYY-MM-DD, adiciona meio-dia para evitar problemas de fuso.
+  // YYYY-MM-DD: adiciona meio-dia para evitar problemas de fuso.
+  // Datas de aulas/eventos são salvas como meia-noite UTC ("2026-10-20T00:00:00.000Z"), que no fuso
+  // de Brasília é 21h do dia ANTERIOR — por isso apareciam um dia antes. Elas representam um dia
+  // inteiro, então são lidas pelo dia que está escrito.
+  if (/T00:00:00(\.000)?Z$/.test(dateStr)) return new Date(`${dateStr.split('T')[0]}T12:00:00`);
   const cleanDateStr = dateStr.includes('T') ? dateStr : `${dateStr}T12:00:00`;
   return new Date(cleanDateStr);
 };
@@ -162,39 +166,64 @@ export const downloadCSV = (data: any[], filename: string) => {
   URL.revokeObjectURL(url);
 };
 
-export const downloadICS = (events: { title: string; start: string; end: string; description: string }[], filename: string) => {
-  if (events.length === 0) {
-    alert('Nenhum evento encontrado para exportar.');
-    return;
-  }
+/**
+ * Formata uma data salva pelo app ("2026-10-20" ou "2026-10-20T00:00:00.000Z") como "20/10/2026".
+ * Lê o dia direto do texto: new Date(...).toLocaleDateString() no fuso de Brasília
+ * mostraria o dia anterior para datas salvas à meia-noite UTC.
+ */
+export const formatDateBR = (dateStr: string | undefined | null): string => {
+  if (!dateStr) return '';
+  const [y, m, d] = String(dateStr).split('T')[0].split('-');
+  if (!y || !m || !d) return String(dateStr);
+  return `${d}/${m}/${y}`;
+};
 
-  const formatToICSDate = (dateStr: string) => {
-    return dateStr.replace(/[-:]/g, '').split('.')[0];
+export const buildICS = (events: { title: string; start: string; end: string; description: string; uid?: string }[]): string => {
+  // Datas do app são dias inteiros: exporta como evento de dia inteiro (VALUE=DATE),
+  // senão a meia-noite UTC vira 21h do dia anterior no calendário do celular.
+  const dayOf = (dateStr: string) => String(dateStr).split('T')[0].replace(/-/g, '');
+  const nextDay = (dateStr: string) => {
+    const [y, m, d] = String(dateStr).split('T')[0].split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d + 1));
+    return dt.toISOString().slice(0, 10).replace(/-/g, '');
   };
+  const escapeText = (text: string) =>
+    String(text || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
 
-  let icsContent = [
+  const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//Leciona//Gestao Escolar//PT',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH'
-  ].join('\r\n');
+  ];
 
-  events.forEach(event => {
-    icsContent += '\r\n' + [
+  events.forEach((event, i) => {
+    lines.push(
       'BEGIN:VEVENT',
-      `SUMMARY:${event.title}`,
-      `DTSTART:${formatToICSDate(event.start)}`,
-      `DTEND:${formatToICSDate(event.end)}`,
-      `DESCRIPTION:${event.description.replace(/\n/g, '\\n')}`,
+      `UID:${event.uid || `${dayOf(event.start)}-${i}`}@leciona`,
+      `DTSTAMP:${stamp}`,
+      `SUMMARY:${escapeText(event.title)}`,
+      `DTSTART;VALUE=DATE:${dayOf(event.start)}`,
+      `DTEND;VALUE=DATE:${nextDay(event.end || event.start)}`,
+      `DESCRIPTION:${escapeText(event.description)}`,
       'STATUS:CONFIRMED',
       'END:VEVENT'
-    ].join('\r\n');
+    );
   });
 
-  icsContent += '\r\nEND:VCALENDAR';
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+};
 
-  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8;' });
+export const downloadICS = (events: { title: string; start: string; end: string; description: string; uid?: string }[], filename: string) => {
+  if (events.length === 0) {
+    alert('Nenhum evento encontrado para exportar.');
+    return;
+  }
+
+  const blob = new Blob([buildICS(events)], { type: 'text/calendar;charset=utf-8;' });
   const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
 
@@ -203,7 +232,6 @@ export const downloadICS = (events: { title: string; start: string; end: string;
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();
-  document.body.removeChild(link);
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 };

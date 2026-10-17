@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { AppData, DayOfWeek, SchoolEvent, LessonLog, Reminder } from '../types';
-import { getCurrentTimeInMinutes, parseTimeToMinutes, isHoliday, getHolidayName, getShortWeekDay, getDayMonth } from '../utils';
+import { getCurrentTimeInMinutes, parseTimeToMinutes, isHoliday, getHolidayName, getShortWeekDay, getDayMonth, getSafeDate } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
+import { getClassName } from '../utils/classRefs';
 import { getLessonDisplayItems, isLessonBlocked, deriveStatsFromLessons } from '../utils/lessonStats';
 import {
   Clock,
@@ -448,7 +449,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
     const upcoming = data.events
       .filter(e => {
-        const eDate = new Date(e.date);
+        const eDate = getSafeDate(e.date);
         const school = data.schools.find(s => s.id === e.schoolId);
         return (e.type === 'test' || e.type === 'work') && eDate >= now && eDate <= limit && school && !school.deleted;
       })
@@ -459,7 +460,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     const nextWeek: SchoolEvent[] = [];
 
     upcoming.forEach(e => {
-      const eDate = new Date(e.date);
+      const eDate = getSafeDate(e.date);
       if (eDate <= endOfWeek) {
         thisWeek.push(e);
       } else {
@@ -477,7 +478,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
     return data.events
       .filter(e => {
-        const eDate = new Date(e.date);
+        const eDate = getSafeDate(e.date);
         const school = data.schools.find(s => s.id === e.schoolId);
         return !['test', 'work'].includes(e.type) && eDate >= now && eDate <= limit && school && !school.deleted;
       })
@@ -654,7 +655,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
   };
 
   const getEventScope = (event: SchoolEvent) => {
-    if (event.classId) return `Turma ${event.classId}`;
+    if (event.classId) return `Turma ${getClassName(data, event.schoolId, event.classId)}`;
     if (event.slotId) return `Turno/Horário`;
     return 'Geral';
   };

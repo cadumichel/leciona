@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { AppData, Student, PrivateSchedule, DayOfWeek } from '../types';
 import { COLORS, DAYS_OF_WEEK_NAMES } from '../constants';
 import { checkTimeOverlap, getNearestClassDate } from '../utils';
+import { getSchedulesForDate } from '../utils/schedule';
+import { getClassName } from '../utils/classRefs';
 import { Plus, Trash2, Edit3, Save, X, Clock, User, GraduationCap, ChevronRight, Calendar, DollarSign, Download, CreditCard, FileText, BookText, History } from 'lucide-react';
 
 interface StudentManagementProps {
@@ -136,8 +138,10 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
       }
 
       // 2. Check against Schools
-      const schoolConflict = (data.schedules || []).find(schoolSched => {
+      // Usa a grade em vigor hoje (versões de horário), não a grade antiga
+      const schoolConflict = getSchedulesForDate(data, new Date().toLocaleDateString('en-CA')).find(schoolSched => {
         if (Number(schoolSched.dayOfWeek) !== day) return false;
+        if (!schoolSched.classId || schoolSched.classId === 'window') return false;
 
         const school = data.schools.find(s => s.id === schoolSched.schoolId);
         if (!school || school.deleted) return false;
@@ -152,7 +156,7 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
 
       if (schoolConflict) {
         const school = data.schools.find(s => s.id === schoolConflict.schoolId);
-        alert(`Conflito de horário detectado!\n\nO horário de ${DAYS_OF_WEEK_NAMES[day]} das ${schedule.startTime} às ${schedule.endTime} choca com uma aula na escola ${school?.name} (Turma: ${schoolConflict.classId}).`);
+        alert(`Conflito de horário detectado!\n\nO horário de ${DAYS_OF_WEEK_NAMES[day]} das ${schedule.startTime} às ${schedule.endTime} choca com uma aula na escola ${school?.name} (Turma: ${getClassName(data, schoolConflict.schoolId, schoolConflict.classId)}).`);
         return;
       }
     }

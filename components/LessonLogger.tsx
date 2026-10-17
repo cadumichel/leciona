@@ -39,8 +39,9 @@ import {
   Eye
 } from 'lucide-react';
 import { DAYS_OF_WEEK_NAMES } from '../constants';
-import { parseTimeToMinutes, getCurrentTimeInMinutes, getHolidayName, isHoliday, getDayOfWeekFromDate, getCurrentDate, toSafeISO } from '../utils';
+import { parseTimeToMinutes, getCurrentTimeInMinutes, getHolidayName, isHoliday, getDayOfWeekFromDate, toSafeISO, formatDateBR } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
+import { getClassName } from '../utils/classRefs';
 import { getLessonDisplayItems, deriveStatsFromLessons, LessonDisplayItem } from '../utils/lessonStats';
 import { sanitizeText, LIMITS } from '../utils/validation';
 import { useToast } from '../hooks/useToast';
@@ -222,7 +223,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
   const [currentTime, setCurrentTime] = useState(getCurrentTimeInMinutes());
 
   // Security: Toast notifications
-  const { showError, showSuccess } = useToast();
+  const { showError, showSuccess, showWarning } = useToast();
 
   const getYYYYMMDD = (date: Date) => {
     return date.toLocaleDateString('en-CA');
@@ -1039,7 +1040,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
         id: existingLog.id,
         startTime: existingLog.startTime || '00:00',
         endTime: existingLog.endTime || '00:00',
-        label: existingLog.type === 'extra' ? 'Aula Extra' : existingLog.type === 'regular' ? (data.classRecords?.find(r => r.classId === existingLog.classId)?.className || existingLog.classId) : 'Substituição',
+        label: existingLog.type === 'extra' ? 'Aula Extra' : existingLog.type === 'regular' ? getClassName(data, existingLog.schoolId, existingLog.classId) : 'Substituição',
         type: 'class'
       };
 
@@ -1096,7 +1097,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           id: existingLog.id,
           startTime: existingLog.startTime || '00:00',
           endTime: existingLog.endTime || '00:00',
-          label: existingLog.type === 'extra' ? 'Aula Extra' : existingLog.type === 'regular' ? (data.classRecords?.find(r => r.classId === existingLog.classId)?.className || existingLog.classId) : 'Substituição',
+          label: existingLog.type === 'extra' ? 'Aula Extra' : existingLog.type === 'regular' ? getClassName(data, existingLog.schoolId, existingLog.classId) : 'Substituição',
           type: 'class'
         };
 
@@ -1324,7 +1325,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     }
 
     if (!found) {
-      alert(`Não foi encontrada aula para ${classId} nos próximos/anteriores 60 dias.`);
+      alert(`Não foi encontrada aula para ${getClassName(data, schoolId, classId)} nos próximos/anteriores 60 dias.`);
     }
   };
 
@@ -1415,7 +1416,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
         shift.slots.forEach(slot => {
           // Check if there is a schedule for this slot on the target day
-          const schedules = (data.schedules || []).filter(s =>
+          const schedules = getSchedulesForDate(data, copyData.targetDate).filter(s =>
             Number(s.dayOfWeek) === dayOfWeek &&
             s.schoolId === school.id &&
             s.shiftId === shift.id &&
@@ -1438,9 +1439,9 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
             slots.push({
               id: `${school.id}|${shift.id}|${slot.id}|${sched.classId}`,
-              label: `${sched.classId} - ${school.name}`,
+              label: `${getClassName(data, school.id, sched.classId)} - ${school.name}`,
               schoolName: school.name,
-              className: sched.classId,
+              className: getClassName(data, school.id, sched.classId),
               time: `${slot.startTime} - ${slot.endTime}`,
               hasContent
             });
@@ -1450,7 +1451,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     });
 
     return slots;
-  }, [copyData, data.schedules, data.schools, data.logs]);
+  }, [copyData, data.scheduleVersions, data.schedules, data.schools, data.logs]);
 
   const handleCopyLesson = () => {
     if (copyData.selectedSlots.length === 0) return;
@@ -2243,7 +2244,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             <p className="text-xs font-bold text-slate-700 dark:text-slate-300 italic mb-2">"{lastLessonInfo.subject}"</p>
             <div className="flex gap-4">
               {lastLessonInfo.homework && <div className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase">Tarefa: {lastLessonInfo.homework}</div>}
-              <div className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase">Em: {new Date(lastLessonInfo.date).toLocaleDateString('pt-BR')}</div>
+              <div className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase">Em: {formatDateBR(lastLessonInfo.date)}</div>
             </div>
           </div>
         )}
@@ -2829,7 +2830,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 <AlertCircle size={14} className="md:w-4 md:h-4" />
               </div>
               <div className="overflow-hidden">
-                <h4 className="text-xs font-black uppercase truncate text-slate-800 dark:text-white">{item.schedule.classId}</h4>
+                <h4 className="text-xs font-black uppercase truncate text-slate-800 dark:text-white">{getClassName(data, item.schedule.schoolId, item.schedule.classId, '')}</h4>
                 <p className="text-[8px] md:text-[9px] text-slate-500 font-bold uppercase truncate">{item.institution.name}</p>
                 <p className="text-[7px] md:text-[8px] text-red-500 font-bold uppercase mt-1">Pendente</p>
               </div>
@@ -3413,7 +3414,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                               </div>
                               <div className="flex-1 overflow-hidden">
                                 <div className="flex items-center justify-between gap-2">
-                                  <h4 className="text-sm font-black uppercase truncate text-slate-800 dark:text-white">{item.schedule.classId}</h4>
+                                  <h4 className="text-sm font-black uppercase truncate text-slate-800 dark:text-white">{getClassName(data, item.schedule.schoolId, item.schedule.classId, '')}</h4>
                                   <span className="text-[10px] font-bold text-slate-500 uppercase shrink-0">
                                     {shiftName === 'Extra' || shiftName === 'Particular' ? item.slot.startTime : `${lessonNumber}ª aula`}
                                   </span>

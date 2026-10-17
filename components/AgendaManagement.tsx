@@ -17,6 +17,8 @@ import {
   LayoutGrid,
 } from 'lucide-react';
 import { getDayOfWeekFromDate, getShortWeekDay, getDayMonth, toSafeISO } from '../utils';
+import { getSchedulesForDate } from '../utils/schedule';
+import { getClassName, isSameClassRef } from '../utils/classRefs';
 
 interface AgendaManagementProps {
   data: AppData;
@@ -200,7 +202,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
     if (assessments.length === 0) return;
     const conflict = assessments.find(assessment => {
       if (eventForm.cancelScope === 'all') return true;
-      if (eventForm.cancelScope === 'class') return assessment.classId === eventForm.classId;
+      if (eventForm.cancelScope === 'class') return isSameClassRef(data, eventForm.schoolId, assessment.classId, eventForm.classId);
       if (eventForm.cancelScope === 'shift') {
         const shift = formSchool?.shifts.find(s => s.id === eventForm.shiftId);
         if (assessment.slotId && shift) return shift.slots.some(sl => sl.id === assessment.slotId);
@@ -210,7 +212,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
     });
     if (conflict) {
       const typeLabel = conflict.type === 'test' ? 'uma Prova' : 'um Trabalho';
-      const scopeLabel = conflict.classId ? `na turma ${conflict.classId}` : '';
+      const scopeLabel = conflict.classId ? `na turma ${getClassName(data, conflict.schoolId, conflict.classId)}` : '';
       setConflictWarning(`Atenção: Este cancelamento coincide com ${typeLabel} ("${conflict.title}") agendada ${scopeLabel}.`);
     }
   }, [eventForm, data.events, formSchool]);
@@ -243,7 +245,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
           const shift = formSchool?.shifts.find(s => s.id === eventForm.shiftId);
           return !!shift?.slots.some(sl => sl.id === l.slotId);
         }
-        if (eventForm.cancelScope === 'class') return l.classId === eventForm.classId;
+        if (eventForm.cancelScope === 'class') return isSameClassRef(data, eventForm.schoolId, l.classId, eventForm.classId);
         return false;
       });
       if (logConflict) {
@@ -269,12 +271,12 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
     const newLogs: LessonLog[] = [];
     if (newEvent.blocksClasses) {
       const dayOfWeek = getDayOfWeekFromDate(eventForm.date);
-      data.schedules.forEach(schedule => {
+      getSchedulesForDate(data, eventForm.date).forEach(schedule => {
         if (schedule.schoolId !== eventForm.schoolId || Number(schedule.dayOfWeek) !== dayOfWeek || schedule.classId === 'window') return;
         let shouldFill = false;
         if (eventForm.cancelScope === 'all') shouldFill = true;
         else if (eventForm.cancelScope === 'shift' && schedule.shiftId === eventForm.shiftId) shouldFill = true;
-        else if (eventForm.cancelScope === 'class' && schedule.classId === eventForm.classId) shouldFill = true;
+        else if (eventForm.cancelScope === 'class' && isSameClassRef(data, eventForm.schoolId, schedule.classId, eventForm.classId)) shouldFill = true;
         if (shouldFill) {
           newLogs.push({
             id: crypto.randomUUID(),
@@ -300,10 +302,26 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
     });
   };
 
+  // Exclui o evento e, se ele cancelava aulas, também os registros "Aula substituída por evento" que ele criou
+  const handleDeleteEvent = (event: SchoolEvent) => {
+    const eventDay = event.date.split('T')[0];
+    const autoSubject = `Evento: ${event.title}`;
+    const logs = event.blocksClasses
+      ? data.logs.filter(l => !(
+          l.schoolId === event.schoolId &&
+          l.date.split('T')[0] === eventDay &&
+          l.subject === autoSubject &&
+          l.notes === 'Aula substituída por evento escolar.' &&
+          !l.homework
+        ))
+      : data.logs;
+    onUpdateData({ events: data.events.filter(e => e.id !== event.id), logs });
+  };
+
   // ── Helpers ──────────────────────────────────────────────────────────────
 
   const getEventScope = (event: SchoolEvent, school?: any) => {
-    if (event.classId) return `Turma ${event.classId}`;
+    if (event.classId) return `Turma ${getClassName(data, event.schoolId, event.classId)}`;
     if (event.slotId) {
       const shift = school?.shifts.find((s: any) => s.id === event.slotId);
       return shift ? `Turno ${shift.name}` : `Turno/Horário Específico`;
@@ -586,7 +604,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
                             <span className="text-[8px] font-bold text-slate-600 uppercase">Confirmar?</span>
                             <div className="flex items-center gap-1">
                               <button
-                                onClick={() => { onUpdateData({ events: data.events.filter(e => e.id !== event.id) }); setDeletingEventId(null); }}
+                                onClick={() => { handleDeleteEvent(event); setDeletingEventId(null); }}
                                 className="bg-red-500 text-white px-1.5 py-0.5 rounded text-[9px] font-bold"
                               >Sim</button>
                               <button

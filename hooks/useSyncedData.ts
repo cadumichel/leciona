@@ -21,6 +21,8 @@ export const STORAGE_KEY = 'leciona-data-v1';
 export const PENDING_KEY = 'leciona-pending-sync';
 /** Última marca de "Excluir todos os dados" já aplicada neste aparelho */
 export const WIPE_SEEN_KEY = 'leciona-wipe-seen';
+/** Última virada de ano letivo já aplicada neste aparelho */
+export const YEAR_RESET_SEEN_KEY = 'leciona-year-reset-seen';
 
 export type SaveStatus = 'saved' | 'pending' | 'saving' | 'error';
 
@@ -387,6 +389,23 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
           return;
         }
 
+        // Virada do ano letivo feita em outro aparelho: aplica uma vez, sem juntar com o ano anterior
+        const yearMark = cloud._yearResetAt;
+        if (yearMark && localStorage.getItem(YEAR_RESET_SEEN_KEY) !== yearMark) {
+          console.log(`📅 Virada para ${cloud._schoolYear || 'o novo ano letivo'} detectada. Aplicando neste aparelho.`);
+          const newYearData = { ...cloud, settings: { ...cloud.settings, googleSyncEnabled: true } } as SyncedData;
+          pendingRef.current = false;
+          cloudReadyRef.current = true;
+          lastCloudRef.current = normalizeForCompare(newYearData);
+          try {
+            localStorage.setItem(YEAR_RESET_SEEN_KEY, yearMark);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(newYearData));
+            localStorage.setItem(PENDING_KEY, '0');
+          } catch { /* ignora */ }
+          setData(newYearData);
+          return;
+        }
+
         const normalizedCloud = normalizeForCompare(cloud);
         cloudReadyRef.current = true;
 
@@ -485,7 +504,36 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
     }
   }, [persistLocal, clearPending]);
 
+  /**
+   * Virada do ano letivo: substitui os dados pelo novo ano (já montado por utils/newSchoolYear.ts),
+   * grava no aparelho e tenta gravar na nuvem antes de concluir. Os outros aparelhos aplicam a
+   * virada pela marca `_yearResetAt`. Retorna se a nuvem já recebeu.
+   */
+  const startNewSchoolYear = useCallback(async (newYear: SyncedData): Promise<boolean> => {
+    if (newYear._yearResetAt) {
+      try { localStorage.setItem(YEAR_RESET_SEEN_KEY, newYear._yearResetAt); } catch { /* ignora */ }
+    }
+    pendingRef.current = true;
+    dataRef.current = newYear;
+    persistLocal(newYear);
+    setData(newYear);
+
+    const currentUser = userRef.current;
+    if (!currentUser) return false;
+    try {
+      const payload = removeUndefined({ ...newYear, settings: { ...newYear.settings, googleSyncEnabled: true } });
+      await withTimeout(setDoc(doc(db, 'users', currentUser.uid), { ...payload, updatedAt: Timestamp.now() }), 10000);
+      lastCloudRef.current = normalizeForCompare(payload);
+      clearPending();
+      persistLocal(newYear);
+      return true;
+    } catch (error) {
+      console.warn('Novo ano salvo no aparelho; o envio para a nuvem será feito quando houver conexão.', error);
+      return false;
+    }
+  }, [persistLocal, clearPending]);
+
   const requestSync = useCallback(() => setSyncTick(t => t + 1), []);
 
-  return { data, user, saveStatus, lastSavedTime, updateData, logout, restoreData, requestSync };
+  return { data, user, saveStatus, lastSavedTime, updateData, logout, restoreData, startNewSchoolYear, requestSync };
 };

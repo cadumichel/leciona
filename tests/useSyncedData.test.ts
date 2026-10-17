@@ -173,3 +173,39 @@ describe('sincronização (hooks/useSyncedData)', () => {
     expect(result.current.data.logs.map((l: any) => l.id)).toEqual(['DAQUI']);
   });
 });
+
+describe('virada do ano letivo entre aparelhos', () => {
+  it('outro aparelho aplica a virada uma vez, sem juntar com o ano anterior', async () => {
+    // Aparelho com 2026 e até uma edição pendente
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudDoc({ logs: [log('L2026')], events: [{ id: 'P2026', date: '2026-10-20T00:00:00.000Z', schoolId: 'S1', type: 'test', title: 'Prova' }] })));
+    localStorage.setItem(PENDING_KEY, '1');
+    const { result } = renderHook(() => useSyncedData(opts));
+    await login();
+    const mark = '2026-12-20T15:00:00.000Z';
+    act(() => fb.snapCb!(snap(cloudDoc({ logs: [], events: [], _schoolYear: 2027, _yearResetAt: mark }))));
+    await waitFor(() => expect(result.current.data._schoolYear).toBe(2027));
+    expect(result.current.data.logs).toHaveLength(0);
+    expect(result.current.data.events).toHaveLength(0);
+    expect(localStorage.getItem('leciona-year-reset-seen')).toBe(mark);
+
+    // Depois, aulas novas de 2027 chegam normalmente (não aplica a virada de novo)
+    act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L2027')], _schoolYear: 2027, _yearResetAt: mark }))));
+    await waitFor(() => expect(result.current.data.logs.map((l: any) => l.id)).toEqual(['L2027']));
+  });
+
+  it('o aparelho que faz a virada grava no aparelho e na nuvem', async () => {
+    const { result } = renderHook(() => useSyncedData(opts));
+    await login();
+    act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L2026')] }))));
+    await waitFor(() => expect(result.current.data.logs).toHaveLength(1));
+
+    const newYear = { ...cloudDoc(), logs: [], _schoolYear: 2027, _yearResetAt: '2026-12-20T15:00:00.000Z' } as any;
+    let synced = false;
+    await act(async () => { synced = await result.current.startNewSchoolYear(newYear); });
+    expect(synced).toBe(true);
+    expect(savedLocal()._schoolYear).toBe(2027);
+    expect(lastSetDocPayload()._yearResetAt).toBe('2026-12-20T15:00:00.000Z');
+    expect(lastSetDocPayload().logs).toEqual([]);
+    expect(localStorage.getItem('leciona-year-reset-seen')).toBe('2026-12-20T15:00:00.000Z');
+  });
+});

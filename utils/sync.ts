@@ -37,6 +37,10 @@ export interface SyncMeta {
   _fieldM?: Partial<Record<typeof SINGLE_FIELDS[number], number>>;
   /** marca de "Excluir todos os dados" */
   _wipedAt?: string;
+  /** marca da virada do ano letivo (cada aparelho aplica uma vez) */
+  _yearResetAt?: string;
+  /** ano letivo em uso */
+  _schoolYear?: number;
 }
 
 export type SyncedData = AppData & SyncMeta;

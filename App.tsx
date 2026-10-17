@@ -81,7 +81,7 @@ const App: React.FC = () => {
   const { runWithLock } = useAsyncLock();
 
   // Dados + sincronização (hooks/useSyncedData.ts)
-  const { data, user, saveStatus, lastSavedTime, updateData, logout, restoreData, requestSync } =
+  const { data, user, saveStatus, lastSavedTime, updateData, logout, restoreData, startNewSchoolYear, requestSync } =
     useSyncedData({ showError, showWarning });
 
   // Tema: aplica na hora (antes só depois do primeiro salvamento, ~2s após abrir)
@@ -401,6 +401,7 @@ const App: React.FC = () => {
               onUpdateData={updateData}
               onSyncNow={requestSync}
               onRestoreData={restoreData}
+              onStartNewYear={startNewSchoolYear}
               user={user}
               onLogin={handleLogin}
               onLogout={handleLogout}

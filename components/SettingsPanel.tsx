@@ -13,12 +13,14 @@ import { deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebaseConnection';
 import { downloadCSV, downloadICS, formatDateBR } from '../utils';
 import { getClassName, isSameClassRef } from '../utils/classRefs';
+import { buildLogRows, buildAssessmentRows } from '../utils/exportRows';
 import { QuickStartGuide, INITIAL_DATA } from '../App';
 import TermsOfUseModal from './TermsOfUseModal';
 import SchoolManagement from './SchoolManagement';
 import ScheduleManagement from './ScheduleManagement';
 import StudentManagement from './StudentManagement';
 import ClassRefRepair from './ClassRefRepair';
+import NewSchoolYearWizard from './NewSchoolYearWizard';
 import { trackChanges, SyncedData } from '../utils/sync';
 import { STORAGE_KEY, PENDING_KEY } from '../hooks/useSyncedData';
 import { processStudentList, ProcessedStudent, FormatMode } from '../utils/studentListProcessor';
@@ -35,6 +37,7 @@ interface SettingsPanelProps {
    isOnboarding?: boolean;
    onFinishOnboarding?: () => void;
    onRestoreData?: (backup: AppData) => Promise<void>;
+   onStartNewYear?: (newYear: SyncedData) => Promise<boolean>;
 }
 
 const THEME_COLORS = [
@@ -49,7 +52,8 @@ const THEME_COLORS = [
    { name: 'Amarelo', value: '#facc15' },
 ];
 
-const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyncNow, user, onLogin, onLogout, isOnboarding = false, onFinishOnboarding, onRestoreData }) => {
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyncNow, user, onLogin, onLogout, isOnboarding = false, onFinishOnboarding, onRestoreData, onStartNewYear }) => {
+   const [showNewYearWizard, setShowNewYearWizard] = useState(false);
    const [activeSubTab, setActiveSubTab] = useState<'general' | 'schools' | 'calendar' | 'schedules' | 'classes' | 'students' | 'privatestudents'>('general');
    const [showTermsModal, setShowTermsModal] = useState(false);
 
@@ -572,16 +576,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
          if (logs.length === 0) return alert('Sem registros para exportar com os filtros atuais.');
 
-         downloadCSV(logs.map(l => ({
-            Data: formatDateBR(l.date),
-            Instituicao: availableInstitutions.find(i => i.id === (l.schoolId || l.studentId))?.name || 'N/A',
-            Turma: resolveClassName(l.schoolId, l.classId),
-            Turno: data.schools.find(s => s.id === l.schoolId)?.shifts.find(sh => sh.slots.some(sl => sl.id === l.slotId))?.name || 'N/A',
-            Horario: l.startTime ? `${l.startTime}-${l.endTime}` : 'Grade Normal',
-            Conteudo: l.subject,
-            Tarefa: l.homework,
-            Notas: l.notes
-         })), `diario_aulas_${new Date().toISOString().split('T')[0]}`);
+         downloadCSV(buildLogRows(data, logs), `diario_aulas_${new Date().toISOString().split('T')[0]}`);
 
       } else if (type === 'privateLessons') {
          // Filtra apenas os logs de alunos particulares (que têm studentId)
@@ -617,14 +612,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
          if (assessments.length === 0) return alert('Sem avaliações para exportar com os filtros atuais.');
 
-         downloadCSV(assessments.map(e => ({
-            Data: formatDateBR(e.date),
-            Escola: data.schools.find(s => s.id === e.schoolId)?.name || 'N/A',
-            Turma: resolveClassName(e.schoolId, e.classId),
-            Tipo: e.type === 'test' ? 'Prova' : 'Trabalho',
-            Titulo: e.title,
-            Descricao: e.description
-         })), `avaliacoes_${new Date().toISOString().split('T')[0]}`);
+         downloadCSV(buildAssessmentRows(data, assessments), `avaliacoes_${new Date().toISOString().split('T')[0]}`);
 
       } else if (type === 'occurrences') {
          const logs = filterLogs(data.logs);
@@ -1600,6 +1588,31 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                      </section>
                   )
                }
+
+               {/* VIRADA DO ANO LETIVO */}
+               {!isOnboarding && onStartNewYear && (
+                  <section className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                           <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
+                              <Archive className="text-primary" size={18} /> Ano letivo {(data as SyncedData)._schoolYear || Math.max(...data.calendars.map(c => Number(c.year) || 0), new Date().getFullYear())}
+                           </h3>
+                           <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
+                              Ao terminar o ano, arquive os registros (backup e planilhas) e comece o próximo mantendo escolas, turnos, turmas e a grade como rascunho.
+                           </p>
+                        </div>
+                        <button
+                           onClick={() => setShowNewYearWizard(true)}
+                           className="shrink-0 px-4 py-2.5 bg-primary text-white rounded-lg font-black uppercase text-[10px] tracking-tight flex items-center justify-center gap-2"
+                        >
+                           <CalendarRange size={14} /> Virada do ano letivo
+                        </button>
+                     </div>
+                  </section>
+               )}
+               {showNewYearWizard && onStartNewYear && (
+                  <NewSchoolYearWizard data={data} onClose={() => setShowNewYearWizard(false)} onStartNewYear={onStartNewYear} />
+               )}
 
                {/* REPARO DE TURMAS NÃO ENCONTRADAS */}
                {!isOnboarding && <ClassRefRepair data={data} onUpdateData={onUpdateData} />}

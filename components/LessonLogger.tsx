@@ -3045,7 +3045,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
                           {isFutureDate && item.log && (
                             <div
-                              className="mt-1.5 mb-1 px-1 py-0.5 rounded-lg bg-purple-100 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 overflow-visible max-w-full min-w-0"
+                              className={`${isBulkEditMode ? '' : 'lg:hidden '}mt-1.5 mb-1 px-1 py-0.5 rounded-lg bg-purple-100 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 overflow-visible max-w-full min-w-0`}
                               onClick={(e) => isBulkEditMode && e.stopPropagation()}
                             >
                               <p className="text-[7px] md:text-[8px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-tight mb-0.5 ml-1">Planejado:</p>
@@ -3066,13 +3066,18 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                               ) : (
                                 <>
                                   <span className="text-[7px] md:text-[8px] font-bold text-slate-500 truncate max-w-[80px]">{item.inst.name}</span>
-                                  <span className="text-[9px] md:text-[11px] font-black text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg uppercase tracking-tight">
+                                  <span className="text-[9px] md:text-[11px] font-black text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg uppercase tracking-tight shrink-0">
                                     {idx + 1}ª Aula
                                   </span>
                                 </>
                               )}
                             </div>
-                            <div className={`flex items-center gap-1 text-[7px] font-black uppercase ${item.slot.type === 'break' ? 'hidden' : item.isFree ? 'text-slate-500' : item.isWindow ? 'text-slate-500' : item.log ? (isFutureDate ? 'text-purple-500' : 'text-green-500') : (isFutureDate || (selectedDate === getYYYYMMDD(new Date()) && currentTime < (item as any).endTimeMin)) ? 'text-slate-400' : 'text-blue-500'}`}>
+                            {isFutureDate && item.log && !isBulkEditMode && (
+                              <span className="hidden lg:block flex-1 min-w-0 mx-2 truncate text-[10px] font-bold italic text-purple-700 dark:text-purple-300" title={item.log.subject}>
+                                {item.log.subject || 'Planejado'}
+                              </span>
+                            )}
+                            <div className={`flex items-center gap-1 shrink-0 text-[7px] font-black uppercase ${item.slot.type === 'break' ? 'hidden' : item.isFree ? 'text-slate-500' : item.isWindow ? 'text-slate-500' : item.log ? (isFutureDate ? 'text-purple-500' : 'text-green-500') : (isFutureDate || (selectedDate === getYYYYMMDD(new Date()) && currentTime < (item as any).endTimeMin)) ? 'text-slate-400' : 'text-blue-500'}`}>
                               {item.log ? <CheckCircle2 size={10} /> : null}
                               {
                                 item.slot.type === 'break' ? '' :

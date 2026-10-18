@@ -1362,7 +1362,7 @@ Se faltar informa\xE7\xE3o (ex.: a turma tem aulas seguidas e \xE9 preciso escol
 Conte\xFAdo de aula ("hoje na 183 dei\u2026"): use preparar_conteudo. Se a turma tiver aulas seguidas no dia, pergunte se o conte\xFAdo vale para todas ou s\xF3 para uma. Por padr\xE3o o texto \xE9 acrescentado ao que j\xE1 estiver no di\xE1rio; s\xF3 use modo "substituir" se o Cadu pedir.
 Calend\xE1rio: ano letivo, bimestres/trimestres e recesso de meio de ano com preparar_calendario. Feriados nacionais j\xE1 est\xE3o no app; feriado municipal, da escola ou dia sem aula entram como recesso (preparar_recessos; sem escola = todas as escolas). Reuni\xF5es, festas, passeios etc. com preparar_eventos; pergunte se o evento suspende as aulas quando n\xE3o estiver claro.
 Depois de gravar, diga que d\xE1 para desfazer e guarde o "codigo_desfazer" para usar em "desfazer_gravacao" se ele pedir.
-Situa\xE7\xE3o das avalia\xE7\xF5es: Pendente \u2192 Agendada (alunos avisados) \u2192 Pronta (elaborada, enviada e alunos avisados).`;
+Situa\xE7\xE3o das avalia\xE7\xF5es: Pendente (vai acontecer, alunos ainda n\xE3o avisados) \u2192 Agendada (comunicada aos alunos) \u2192 Pronta (enviada para a coordena\xE7\xE3o e impress\xE3o; os alunos j\xE1 sabem). "Falta elaborar" = ainda n\xE3o est\xE1 Pronta.`;
 var somenteLeitura = { readOnlyHint: true, openWorldHint: false };
 var criarServidorMcp = (dados, hoje, escrita) => {
   const servidor = new McpServer({ name: "leciona", version: "1.0.0" }, { instructions: INSTRUCOES });
@@ -1377,13 +1377,13 @@ var criarServidorMcp = (dados, hoje, escrita) => {
   const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use AAAA-MM-DD");
   servidor.registerTool("listar_avaliacoes", {
     title: "Listar avalia\xE7\xF5es",
-    description: "Provas e trabalhos cadastrados, com data, turma, aula e situa\xE7\xE3o (Pendente, Agendada = alunos avisados, Pronta = elaborada, enviada e alunos avisados). Filtre por per\xEDodo, escola, turma ou pelas que faltam elaborar.",
+    description: "Provas e trabalhos cadastrados, com data, turma, aula e situa\xE7\xE3o (Pendente = vai acontecer, alunos ainda n\xE3o avisados; Agendada = comunicada aos alunos; Pronta = enviada para a coordena\xE7\xE3o e impress\xE3o). Filtre por per\xEDodo, escola, turma ou pelas que faltam elaborar.",
     inputSchema: {
       de: data.optional().describe("Data inicial (AAAA-MM-DD)"),
       ate: data.optional().describe("Data final (AAAA-MM-DD)"),
       escola: z.string().optional().describe("Nome da escola"),
       turma: z.string().optional().describe('Nome da turma, ex.: "183"'),
-      elaborada: z.boolean().optional().describe("true = s\xF3 as j\xE1 elaboradas; false = s\xF3 as que faltam elaborar")
+      elaborada: z.boolean().optional().describe("true = s\xF3 as Prontas (enviadas para a coordena\xE7\xE3o e impress\xE3o); false = s\xF3 as que ainda n\xE3o est\xE3o prontas")
     },
     annotations: somenteLeitura
   }, async (args) => responder(() => listarAvaliacoes(dados, args)));
@@ -1468,7 +1468,7 @@ var registrarEscrita = (servidor, dados, hoje, escrita) => {
   }, async ({ avaliacoes }) => previa(() => prepararAvaliacoes(dados, avaliacoes, hoje)));
   servidor.registerTool("preparar_situacao", {
     title: "Preparar mudan\xE7a de situa\xE7\xE3o",
-    description: "Mostra a pr\xE9via da mudan\xE7a de situa\xE7\xE3o de avalia\xE7\xF5es (Pendente, Agendada = alunos avisados, Pronta = elaborada, enviada e alunos avisados). N\xC3O grava: devolve um c\xF3digo para confirmar_gravacao.",
+    description: "Mostra a pr\xE9via da mudan\xE7a de situa\xE7\xE3o de avalia\xE7\xF5es (Pendente = vai acontecer, alunos ainda n\xE3o avisados; Agendada = comunicada aos alunos; Pronta = enviada para a coordena\xE7\xE3o e impress\xE3o). N\xC3O grava: devolve um c\xF3digo para confirmar_gravacao.",
     inputSchema: {
       avaliacoes: z.array(z.object({
         turma: z.string(),

@@ -55,18 +55,23 @@ export const QuickStartGuide: React.FC<{ onDismiss: () => void; onNavigate: (tab
 );
 
 /** Mostra notificação do sistema. No Android, `new Notification()` não funciona: usa o service worker. */
-const showSystemNotification = async (title: string, options: NotificationOptions) => {
+/** O navegador permite mostrar notificações do sistema? */
+const canNotify = () => typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
+
+const showSystemNotification = async (title: string, options: NotificationOptions): Promise<boolean> => {
   try {
     if ('serviceWorker' in navigator) {
       const registration = await navigator.serviceWorker.getRegistration();
       if (registration) {
         await registration.showNotification(title, options);
-        return;
+        return true;
       }
     }
     new Notification(title, options);
+    return true;
   } catch (error) {
     console.warn('Não foi possível mostrar a notificação:', error);
+    return false;
   }
 };
 
@@ -202,13 +207,16 @@ const App: React.FC = () => {
             lastNotifiedSlot.current = slotKey;
             const title = isLastLesson && data.settings.alertAfterShift ? 'Fim de Turno' : 'Fim de Aula';
 
-            if (data.settings.alertType === 'popup') {
+            if (data.settings.alertType === 'popup' || !canNotify()) {
+              // Sem permissão de notificação, o aviso aparece na tela (antes se perdia)
               setNotificationPopup({ title, message: msg, isOpen: true });
-            } else if ("Notification" in window && Notification.permission === "granted") {
+            } else {
               const style = data.settings.alertNotificationStyle || 'sound';
               const options: NotificationOptions = { body: msg, silent: style !== 'sound', tag: slotKey };
               if (style === 'vibration' && navigator.vibrate) navigator.vibrate([200, 100, 200]);
-              void showSystemNotification('Leciona: Lembrete de Registro', options);
+              void showSystemNotification('Leciona: Lembrete de Registro', options).then(ok => {
+                if (!ok) setNotificationPopup({ title, message: msg, isOpen: true });
+              });
             }
           }
         });
@@ -222,11 +230,23 @@ const App: React.FC = () => {
         return diffMs <= 0 && diffMs > -86400000;
       });
       if (dueReminders.length > 0) {
-        dueReminders.forEach(reminder => {
-          if ("Notification" in window && Notification.permission === "granted") {
-            void showSystemNotification(`Lembrete: ${reminder.title}`, { body: reminder.content, tag: `reminder-${reminder.id}` });
-          }
-        });
+        // Modo "popup" ou notificações bloqueadas: mostra na tela. Antes o lembrete era marcado
+        // como avisado mesmo sem aparecer nada.
+        const showOnScreen = (list: typeof dueReminders) => {
+          if (!list.length) return;
+          setNotificationPopup({
+            title: list.length === 1 ? `Lembrete: ${list[0].title}` : `${list.length} lembretes`,
+            message: list.map(r => (list.length === 1 ? r.content : `• ${r.title}${r.content ? `: ${r.content}` : ''}`)).join('\n'),
+            isOpen: true
+          });
+        };
+        if (data.settings.alertType === 'popup' || !canNotify()) {
+          showOnScreen(dueReminders);
+        } else {
+          void Promise.all(dueReminders.map(reminder =>
+            showSystemNotification(`Lembrete: ${reminder.title}`, { body: reminder.content, tag: `reminder-${reminder.id}` })
+          )).then(results => showOnScreen(dueReminders.filter((_, i) => !results[i])));
+        }
         const dueIds = new Set(dueReminders.map(r => r.id));
         updateData({
           reminders: data.reminders.map(r => dueIds.has(r.id) ? { ...r, alarmTriggered: true } : r)
@@ -428,7 +448,7 @@ const App: React.FC = () => {
                 <AlertTriangle size={32} />
               </div>
               <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">{notificationPopup.title}</h3>
-              <p className="text-sm font-medium text-slate-500 mb-6">{notificationPopup.message}</p>
+              <p className="text-sm font-medium text-slate-500 mb-6 whitespace-pre-line">{notificationPopup.message}</p>
               <button
                 onClick={() => setNotificationPopup(prev => ({ ...prev, isOpen: false }))}
                 className="w-full py-3 bg-primary text-white rounded-xl font-black uppercase tracking-wider hover:bg-primary-dark transition-colors"

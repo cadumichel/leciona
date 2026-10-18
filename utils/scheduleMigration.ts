@@ -1,5 +1,5 @@
 import { LessonLog, ScheduleEntry, DayOfWeek, School, AppData, SchoolEvent } from '../types';
-import { isHoliday } from '../utils';
+import { isHoliday, todayLocal } from '../utils';
 import { isLessonBlocked } from '../utils/lessonStats';
 export interface ScheduleChange {
     classId: string;
@@ -145,7 +145,7 @@ export const calculateNewDate = (originalDate: string, oldDay: number, newDay: n
     // Validate parsing
     if (!y || !m || !d || isNaN(y) || isNaN(m) || isNaN(d)) {
         console.error("Invalid date format:", originalDate);
-        return new Date().toISOString().split('T')[0];
+        return todayLocal();
     }
 
     // Format strings securely for ISO 8601
@@ -155,7 +155,7 @@ export const calculateNewDate = (originalDate: string, oldDay: number, newDay: n
     const date = new Date(`${yearStr}-${monthStr}-${dayStr}T00:00:00`);
 
     // Safety check
-    if (isNaN(date.getTime())) return new Date().toISOString().split('T')[0];
+    if (isNaN(date.getTime())) return todayLocal();
 
     const currentDay = date.getDay();
     // Calculate difference

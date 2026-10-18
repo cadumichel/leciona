@@ -16,7 +16,7 @@ import {
   SlidersHorizontal,
   LayoutGrid,
 } from 'lucide-react';
-import { getDayOfWeekFromDate, getShortWeekDay, getDayMonth, toSafeISO } from '../utils';
+import { getDayOfWeekFromDate, getShortWeekDay, getDayMonth, toSafeISO, todayLocal } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName, isSameClassRef } from '../utils/classRefs';
 
@@ -118,7 +118,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
     return cal.terms.map((t, i) => ({ ...t, idx: i }));
   }, [filterSchoolId, data.calendars]);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocal();
 
   // ── Filtered list ─────────────────────────────────────────────────────────
 

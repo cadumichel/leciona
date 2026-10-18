@@ -16,7 +16,7 @@ import {
   Bell,
   Clock
 } from 'lucide-react';
-import { getSafeDate } from '../utils';
+import { getSafeDate, todayLocal } from '../utils';
 
 interface ReminderManagementProps {
   data: AppData;
@@ -39,7 +39,7 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
     category: 'general',
     title: '',
     content: '',
-    date: new Date().toISOString().split('T')[0],
+    date: todayLocal(),
     alarmTime: '',
     schoolId: '',
     classId: '',
@@ -73,7 +73,7 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
       title: form.title,
       content: form.content,
       category: form.category as any,
-      date: form.date || new Date().toISOString().split('T')[0],
+      date: form.date || todayLocal(),
       alarmTime: finalAlarmTime,
       alarmTriggered: false,
       schoolId: form.schoolId,
@@ -83,7 +83,7 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
 
     onUpdateData({ reminders: [...(data.reminders || []), newReminder] });
     setIsModalOpen(false);
-    setForm({ category: 'general', title: '', content: '', date: new Date().toISOString().split('T')[0], alarmTime: '' });
+    setForm({ category: 'general', title: '', content: '', date: todayLocal(), alarmTime: '' });
   };
 
   const deleteReminder = (id: string) => {

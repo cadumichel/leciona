@@ -47,6 +47,8 @@ objetivo.
   usuário.
 - **Datas**: `YYYY-MM-DDT00:00:00.000Z` representa um dia do calendário (não um instante). Use
   `getSafeDate` e `formatDateBR` (`utils.ts`).
+  Para a data de **hoje**, use `todayLocal()` (`utils.ts`); nunca `new Date().toISOString()`, que
+  depois das 21h no Brasil já dá o dia seguinte.
 - **Grade em vigor numa data**: `getSchedulesForDate` (`utils/schedule.ts`).
 - **Aulas, pendências e bloqueios** (feriado, recesso, evento que suspende aula):
   `utils/lessonStats.ts` (`getLessonDisplayItems`, `isLessonBlocked`).

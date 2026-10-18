@@ -1,18 +1,24 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Regra principal: cada usuário só acessa seus próprios dados
+    // Cada usuário só acessa o próprio documento.
+    // As cópias de segurança (users/{uid}/backups/...) não casam com esta regra e ficam bloqueadas
+    // para o app: só o servidor do conector (Firebase Admin) as lê e grava.
     match /users/{userId} {
-      // Leitura e escrita apenas para o usuário autenticado correspondente
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      
-      // Validações adicionais para prevenir dados maliciosos
-      allow write: if request.auth != null 
-        && request.auth.uid == userId
-        && request.resource.data.size() < 5000000 // Máximo 5MB por documento
-        && request.resource.data.keys().hasAll(['profile', 'schools', 'settings']); // Campos obrigatórios
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // O app sempre grava o documento inteiro, com estes campos (inclusive "Excluir todos os
+      // dados", que grava o documento vazio). O Firestore já limita o documento a 1 MiB.
+      allow create, update: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.keys().hasAll(['profile', 'schools', 'settings'])
+        && request.resource.data.profile is map
+        && request.resource.data.schools is list
+        && request.resource.data.settings is map;
+
+      // O app nunca apaga o documento; impedir evita perder tudo por engano
+      allow delete: if false;
     }
-    
+
     // Bloqueia tudo que não foi explicitamente permitido
     match /{document=**} {
       allow read, write: if false;

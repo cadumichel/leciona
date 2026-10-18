@@ -1,6 +1,7 @@
 import React from 'react';
 import { Cloud, Check, RefreshCw } from 'lucide-react';
 
+import { todayLocal } from '../utils';
 interface SyncStatusProps {
     isSaving: boolean;
     lastSyncedAt: Date | string | null;
@@ -10,7 +11,7 @@ const SyncStatus: React.FC<SyncStatusProps> = ({ isSaving, lastSyncedAt }) => {
     const formatTime = (date: Date | string | null) => {
         if (!date) return '';
         const dateObj = typeof date === 'string' && date.includes(':')
-            ? new Date(`${new Date().toISOString().split('T')[0]}T${date}`) // Hack para string de hora
+            ? new Date(`${todayLocal()}T${date}`) // Hack para string de hora
             : new Date(date);
 
         if (isNaN(dateObj.getTime())) {

@@ -14,6 +14,7 @@ import { db } from '../services/firebaseConnection';
 import { downloadCSV, downloadICS, formatDateBR } from '../utils';
 import { getClassName, isSameClassRef } from '../utils/classRefs';
 import { buildLogRows, buildAssessmentRows } from '../utils/exportRows';
+import { latestGrade } from '../utils/grades';
 import { QuickStartGuide, INITIAL_DATA } from '../App';
 import TermsOfUseModal from './TermsOfUseModal';
 import SchoolManagement from './SchoolManagement';
@@ -688,7 +689,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
             if (record) {
                record.students.forEach(student => {
                   // Find grade
-                  const gradeEntry = data.grades.find(g => g.studentId === student.id && g.assessmentId === assessment.id);
+                  const gradeEntry = latestGrade(data.grades, student.id, assessment.id);
                   if (gradeEntry || student.active) { // Exporta se tiver nota OU se aluno estiver ativo (mesmo sem nota = vazio)
                      gradeRows.push({
                         Escola: schoolName,

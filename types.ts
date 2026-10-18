@@ -242,8 +242,9 @@ export interface GradingConfig {
   schoolId: string;
   classId: string;
   termIndex: number;
-  formula: 'arithmetic' | 'weighted' | 'custom'; // Adicionado 'custom'
+  formula: 'arithmetic' | 'weighted' | 'custom' | 'sum';
   customFormula?: string; // Fórmula personalizada (ex: "(N1 + N2)/2")
+  columnOrder?: string[]; // Número fixo de cada coluna: columnOrder[0] é N1 (utils/grades.ts)
 }
 
 export interface AdvancedModes {

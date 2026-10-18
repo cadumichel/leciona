@@ -784,23 +784,27 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                       <span className="data-[compact=true]:text-[10px] text-[13px] font-black text-white leading-tight mt-0.5">{dayMonth}</span>
                     </div>
 
-                    {/* CENTER: Class name + assessment title */}
+                    {/* CENTER: "Turma - título" e, abaixo, o conteúdo da avaliação */}
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
-                      <p className="data-[compact=true]:text-[10px] text-[13px] font-black text-slate-700 dark:text-white leading-tight truncate">{evtClassName}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <p className="data-[compact=true]:text-[8px] text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate">{event.title}</p>
+                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0">
+                        <p className="text-[13px] font-black text-slate-700 dark:text-white leading-tight truncate max-w-full">{evtClassName} - {event.title}</p>
                         {event.kind && (
                           <span className="text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300">
                             {KIND_LABELS[event.kind]}
                           </span>
                         )}
                         <span
-                          className="data-[compact=true]:hidden text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0"
+                          className="text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0"
                           style={{ backgroundColor: color + `22`, color }}
                         >
                           {event.type === `test` ? `Prova` : `Trabalho`}
                         </span>
                       </div>
+                      {event.description && event.description.trim() && (
+                        <p className="mt-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400 leading-snug line-clamp-2 break-words" title={event.description}>
+                          {event.description}
+                        </p>
+                      )}
                     </div>
 
                     {/* RIGHT: Slot label + shift name */}
@@ -818,14 +822,6 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                       )}
                     </div>
                   </div>
-
-                  {/* Assunto da avaliação: linha própria, largura toda (até 2 linhas) */}
-                  {event.description && event.description.trim() && (
-                    <p className="px-3 pb-2 -mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium flex items-start gap-1 leading-snug" title={event.description}>
-                      <BookOpen size={10} className="text-slate-300 shrink-0 mt-[2px]" />
-                      <span className="line-clamp-2 break-words">{event.description}</span>
-                    </p>
-                  )}
 
                   {/* Rodapé: situação, escola e indicador */}
                   <div className="mt-auto border-t border-slate-50 dark:border-slate-800 px-3 py-1.5 flex items-center gap-2">

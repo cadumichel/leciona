@@ -53,6 +53,8 @@ export default defineConfig({
 
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Login e servidor do conector do Claude não podem cair na página do app guardada offline
+        navigateFallbackDenylist: [/^\/api\//, /^\/\.well-known\//],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

@@ -167,6 +167,31 @@ describe('sincronização (hooks/useSyncedData)', () => {
     await waitFor(() => expect(result.current.saveStatus).toBe('saved'));
   });
 
+  it('avisos de conta: sabe quando está desconectado e desde quando a gravação falha', async () => {
+    const { result } = renderHook(() => useSyncedData(opts));
+    expect(result.current.authReady).toBe(false); // ainda não sabe: não mostra aviso antes da hora
+    await waitFor(() => expect(fb.authCb).toBeTruthy());
+    act(() => fb.authCb!(null));
+    expect(result.current.authReady).toBe(true);
+    expect(result.current.user).toBeNull();
+
+    // Conectado, mas a nuvem recusa: marca o início da falha e mantém enquanto continuar falhando
+    fb.setDoc.mockImplementation(async () => { throw Object.assign(new Error('denied'), { code: 'permission-denied' }); });
+    act(() => fb.authCb!(USER));
+    await waitFor(() => expect(fb.snapCb).toBeTruthy());
+    act(() => fb.snapCb!(snap(cloudDoc())));
+    act(() => result.current.updateData({ logs: [log('A')] }));
+    await waitFor(() => expect(result.current.errorSince).not.toBeNull());
+    const since = result.current.errorSince;
+    await waitFor(() => expect(fb.setDoc.mock.calls.length).toBeGreaterThanOrEqual(2), { timeout: 2000 });
+    expect(result.current.errorSince).toBe(since);
+
+    // Voltou a gravar: some o aviso
+    fb.setDoc.mockImplementation(async () => {});
+    await waitFor(() => expect(result.current.saveStatus).toBe('saved'), { timeout: 2000 });
+    expect(result.current.errorSince).toBeNull();
+  });
+
   it('dado novo de outro aparelho chegando enquanto há edição local: fica com os dois', async () => {
     fb.setDoc.mockImplementation(() => new Promise(() => {}));
     const { result } = renderHook(() => useSyncedData(opts));

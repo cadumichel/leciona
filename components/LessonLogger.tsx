@@ -45,6 +45,7 @@ import { getClassName } from '../utils/classRefs';
 import { getLessonDisplayItems, deriveStatsFromLessons, LessonDisplayItem } from '../utils/lessonStats';
 import { sanitizeText, LIMITS } from '../utils/validation';
 import { findPreviousLesson } from '../utils/retrospective';
+import { DisconnectedNotice } from './ConnectionWarnings';
 import { countRemainingLessons } from '../utils/remainingLessons';
 import { useToast } from '../hooks/useToast';
 
@@ -55,6 +56,9 @@ interface LessonLoggerProps {
   onClearInitialLesson: () => void;
   defaultShowPendencies?: boolean;
   onClearShowPendencies?: () => void;
+  /** Conta Google desconectada: mostra o aviso na janela de registro */
+  disconnected?: boolean;
+  onConnect?: () => void;
 }
 
 type ViewMode = 'day' | 'registered' | 'future';
@@ -214,7 +218,9 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
   initialLessonData,
   onClearInitialLesson,
   defaultShowPendencies,
-  onClearShowPendencies
+  onClearShowPendencies,
+  disconnected,
+  onConnect
 }) => {
   // ... (Estados iniciais mantidos) ...
   const [viewMode, setViewMode] = useState<ViewMode>('day');
@@ -2186,6 +2192,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             )}
           </div>
         )}
+
+        {disconnected && <DisconnectedNotice onConnect={onConnect} />}
 
         {/* Recess/Event Read-Only Mode Banner */}
         {isReadOnlyRecess && (

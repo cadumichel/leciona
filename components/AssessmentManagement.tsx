@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { isHoliday, getHolidayName, getDayOfWeekFromDate, getSafeDate, toSafeISO } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
+import { DisconnectedNotice } from './ConnectionWarnings';
 import {
   KIND_LABELS, buildRecovery, checkAssessmentDate, linkedAssessments, nextLessonDate, parentCandidates,
   recoveryPolicyOf, secondCallModeOf, suggestRecovery, termRecoveryContent
@@ -15,6 +16,9 @@ import {
 interface AssessmentManagementProps {
   data: AppData;
   onUpdateData: (newData: Partial<AppData>) => void;
+  /** Conta Google desconectada: mostra o aviso na janela de cadastro */
+  disconnected?: boolean;
+  onConnect?: () => void;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -51,7 +55,7 @@ function fmtShort(dateStr: string): string {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpdateData }) => {
+const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpdateData, disconnected, onConnect }) => {
 
   // ── Modal State ──────────────────────────────────────────────────────────
   const [isAdding, setIsAdding] = useState(false);
@@ -927,6 +931,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
               </div>
 
               <div className="overflow-y-auto flex-1 pr-1 pb-1 custom-scrollbar">
+                {disconnected && <DisconnectedNotice onConnect={onConnect} />}
                 <div className="space-y-3">
                   {/* Type */}
                   <div className="grid grid-cols-2 gap-3">

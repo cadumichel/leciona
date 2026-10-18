@@ -24,6 +24,7 @@ import ReminderManagement from './components/ReminderManagement';
 
 import GradesManagement from './components/GradesManagement'; // Novo Componente
 import SyncStatus from './components/SyncStatus'; // Componente de Status de Sync
+import { ConnectionBanner, DisconnectedPopup } from './components/ConnectionWarnings';
 import { ToastProvider, useToast } from './hooks/useToast';
 import { useSyncedData } from './hooks/useSyncedData';
 import { useAsyncLock } from './utils/validation';
@@ -86,7 +87,7 @@ const App: React.FC = () => {
   const { runWithLock } = useAsyncLock();
 
   // Dados + sincronização (hooks/useSyncedData.ts)
-  const { data, user, saveStatus, lastSavedTime, updateData, logout, restoreData, startNewSchoolYear, requestSync } =
+  const { data, user, authReady, errorSince, saveStatus, lastSavedTime, updateData, logout, restoreData, startNewSchoolYear, requestSync } =
     useSyncedData({ showError, showWarning });
 
   // Tema: aplica na hora (antes só depois do primeiro salvamento, ~2s após abrir)
@@ -264,6 +265,9 @@ const App: React.FC = () => {
   }, [data, updateData]);
 
   const isSyncing = saveStatus === 'saving';
+  // Conta Google desconectada: o que se registra fica só neste aparelho (components/ConnectionWarnings.tsx)
+  const disconnected = authReady && !user;
+  const connectAccount = () => { void handleLogin(); };
 
   // Lógica de Onboarding
   const isOnboarding = !data.profile.setupCompleted;
@@ -379,6 +383,10 @@ const App: React.FC = () => {
           </div>
         </header>
 
+        {!isOnboarding && (
+          <ConnectionBanner disconnected={disconnected} errorSince={errorSince} onConnect={connectAccount} onRetry={requestSync} />
+        )}
+
         <div className="px-3 py-3 lg:px-8 lg:py-8 max-w-6xl mx-auto w-full">
           {activeTab === 'dashboard' && (
             <>
@@ -406,12 +414,16 @@ const App: React.FC = () => {
               onClearInitialLesson={() => setPreSelectedLesson(null)}
               defaultShowPendencies={autoShowPendencies}
               onClearShowPendencies={() => setAutoShowPendencies(false)}
+              disconnected={disconnected}
+              onConnect={connectAccount}
             />
           )}
           {activeTab === 'assessments' && (
             <AssessmentManagement
               data={data}
               onUpdateData={updateData}
+              disconnected={disconnected}
+              onConnect={connectAccount}
             />
           )}
           {activeTab === 'grades' && <GradesManagement data={data} onUpdateData={updateData} />}
@@ -438,6 +450,8 @@ const App: React.FC = () => {
           )}
           </div>
       </main>
+
+      <DisconnectedPopup show={disconnected && !isOnboarding} onConnect={connectAccount} />
 
       {/* GLOBAL NOTIFICATION POPUP */}
       {notificationPopup.isOpen && (

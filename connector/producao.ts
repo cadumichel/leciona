@@ -4,6 +4,7 @@ import { Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { AppData } from '../types';
 import { estimateDocBytes, FIRESTORE_DOC_LIMIT, removeUndefined } from '../utils/sync';
 import { ConsultaError } from './consultas';
+import { CAMPO_COPIA, InfoDaCopia } from './copias';
 import { derivarChave } from './oauth';
 import { criarRotas } from './servidor';
 
@@ -26,6 +27,9 @@ const montar = async () => {
   const emailPermitido = variavel('LECIONA_EMAIL');
   const app = getApps()[0] || initializeApp({ credential: cert(credencial) });
   const db = getFirestore(app);
+  const usuario = (uid: string) => db.collection('users').doc(uid);
+  const copias = (uid: string) => usuario(uid).collection('backups');
+  let uidCache: string | undefined;
 
   return criarRotas({
     chave: await derivarChave(credencial.private_key),
@@ -54,7 +58,35 @@ const montar = async () => {
         tx.update(ref, { ...campos, updatedAt: Timestamp.now() });
       }
       return r;
-    })
+    }),
+    substituirDados: (uid, calcular) => db.runTransaction(async tx => {
+      const ref = usuario(uid);
+      const doc = await tx.get(ref);
+      if (!doc.exists) throw new Error('Documento do professor não encontrado.');
+      const novo = removeUndefined(calcular(doc.data()));
+      if (estimateDocBytes(novo) > FIRESTORE_DOC_LIMIT * 0.98) {
+        throw new ConsultaError('A cópia é grande demais para o limite da nuvem (1 MB). Nada foi restaurado.');
+      }
+      tx.set(ref, { ...novo, updatedAt: Timestamp.now() });
+    }),
+    copias: {
+      // Só o campo de informações (as cópias inteiras podem ter quase 1 MB cada)
+      listar: async uid => (await copias(uid).select(CAMPO_COPIA).get()).docs
+        .map(d => ({ id: d.id, ...(d.get(CAMPO_COPIA) || {}) }) as InfoDaCopia)
+        .filter(c => c.criadaEm && c.resumo),
+      ler: async (uid, id) => {
+        const d = await copias(uid).doc(id).get();
+        return d.exists ? d.data() : null;
+      },
+      gravar: async (uid, id, dados) => { await copias(uid).doc(id).set(removeUndefined(dados)); },
+      apagar: async (uid, ids) => {
+        const lote = db.batch();
+        ids.forEach(id => lote.delete(copias(uid).doc(id)));
+        await lote.commit();
+      }
+    },
+    uidDoProfessor: async () => (uidCache ??= (await getAuth(app).getUserByEmail(emailPermitido)).uid),
+    segredoDoCron: process.env.CRON_SECRET || undefined
   });
 };
 

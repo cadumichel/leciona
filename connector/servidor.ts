@@ -5,6 +5,10 @@ import { AppData } from '../types';
 import {
   ConsultaError, avaliacoesProximas, calendario, conteudoDesdeUltimaAvaliacao, hojeEmBrasilia, listarAvaliacoes, turmasEGrade
 } from './consultas';
+import {
+  CAMPO_COPIA, InfoDaCopia, copiasVencidas, dadosDaCopia, documentoRestaurado, idAntesDeRestaurar, idDaCopiaDiaria,
+  listarParaOClaude, previaDaRestauracao
+} from './copias';
 import { Alteracoes, Lote, Plano, SITUACOES, aplicarPlano, desfazerLote, prepararAvaliacoes, prepararCalendarios, prepararConteudos, prepararEventos, prepararRecessos, prepararSituacoes } from './escrita';
 import {
   Assinatura, Conta, ErroOAuth, assinarLote, assinarPlano, emitirCodigo, lerLote, lerPlano, metadadosDoRecurso, metadadosDoServidor, registrarCliente, trocarToken,
@@ -30,6 +34,19 @@ export interface Dependencias {
    * (se o app gravar no meio, a transação recomeça com os dados novos).
    */
   alterarDados: <R extends { alteracoes: Alteracoes }>(uid: string, calcular: (raw: any) => R) => Promise<R>;
+  /** Troca o documento inteiro (restauração), numa transação */
+  substituirDados: (uid: string, calcular: (raw: any) => any) => Promise<void>;
+  /** Cópias de segurança em users/{uid}/backups */
+  copias: {
+    listar: (uid: string) => Promise<InfoDaCopia[]>;
+    ler: (uid: string, id: string) => Promise<any | null>;
+    gravar: (uid: string, id: string, dados: any) => Promise<void>;
+    apagar: (uid: string, ids: string[]) => Promise<void>;
+  };
+  /** uid da conta em LECIONA_EMAIL (para a cópia diária, que roda sem login) */
+  uidDoProfessor: () => Promise<string>;
+  /** CRON_SECRET da Vercel: se existir, a cópia diária só roda com ele */
+  segredoDoCron?: string;
   agora?: () => Date;
 }
 
@@ -140,6 +157,7 @@ Se faltar informação (ex.: a turma tem aulas seguidas e é preciso escolher a 
 Conteúdo de aula ("hoje na 183 dei…"): use preparar_conteudo. Se a turma tiver aulas seguidas no dia, pergunte se o conteúdo vale para todas ou só para uma. Por padrão o texto é acrescentado ao que já estiver no diário; só use modo "substituir" se o Cadu pedir.
 Calendário: ano letivo, bimestres/trimestres e recesso de meio de ano com preparar_calendario. Feriados nacionais já estão no app; feriado municipal, da escola ou dia sem aula entram como recesso (preparar_recessos; sem escola = todas as escolas). Reuniões, festas, passeios etc. com preparar_eventos; pergunte se o evento suspende as aulas quando não estiver claro.
 Depois de gravar, diga que dá para desfazer e guarde o "codigo_desfazer" para usar em "desfazer_gravacao" se ele pedir.
+Cópias de segurança: o Leciona faz uma cópia automática por dia (guardada por 30 dias). listar_copias mostra as cópias; preparar_restauracao só se o Cadu pedir para voltar os dados a uma data. Restaurar apaga o que foi feito depois da cópia: deixe isso claro na prévia.
 Situação das avaliações: Pendente (vai acontecer, alunos ainda não avisados) → Agendada (comunicada aos alunos) → Pronta (enviada para a coordenação e impressão; os alunos já sabem). "Falta elaborar" = ainda não está Pronta.`;
 
 const somenteLeitura = { readOnlyHint: true, openWorldHint: false };
@@ -149,7 +167,26 @@ export interface Escrita {
   uid: string;
   assinatura: Assinatura;
   alterarDados: Dependencias['alterarDados'];
+  substituirDados: Dependencias['substituirDados'];
+  carregarDados: Dependencias['carregarDados'];
+  copias: Dependencias['copias'];
+  agora: () => Date;
 }
+
+/** Restaura uma cópia, guardando antes o estado atual (para desfazer). */
+const restaurarCopia = async (escrita: Escrita, copiaId: string, descricao: string): Promise<Lote> => {
+  const copia = await escrita.copias.ler(escrita.uid, copiaId);
+  if (!copia) throw new ConsultaError('Essa cópia não existe mais (as cópias são guardadas por 30 dias).');
+  const agora = escrita.agora();
+  const atual = await escrita.carregarDados(escrita.uid);
+  const antesId = idAntesDeRestaurar(agora);
+  await escrita.copias.gravar(escrita.uid, antesId, dadosDaCopia(atual, { criadaEm: agora.toISOString(), tipo: 'antes-de-restaurar' }));
+  await escrita.substituirDados(escrita.uid, raw => documentoRestaurado(raw, copia, agora.getTime()));
+  return {
+    em: agora.getTime(), resumo: [descricao], criados: { events: [], logs: [] }, situacoesAnteriores: [],
+    restauracao: { desfazerCom: antesId }
+  };
+};
 
 export const criarServidorMcp = (dados: AppData, hoje: string, escrita?: Escrita) => {
   const servidor = new McpServer({ name: 'leciona', version: '1.0.0' }, { instructions: INSTRUCOES });
@@ -354,6 +391,34 @@ const registrarEscrita = (servidor: McpServer, dados: AppData, hoje: string, esc
     annotations: preparo
   }, async ({ eventos }) => previa(() => prepararEventos(dados, eventos as any, hoje)));
 
+  servidor.registerTool('listar_copias', {
+    title: 'Listar cópias de segurança',
+    description: 'Cópias de segurança do Leciona (uma automática por dia, guardadas por 30 dias), com as quantidades de cada uma. Só leitura.',
+    inputSchema: {},
+    annotations: { readOnlyHint: true, openWorldHint: false }
+  }, async () => texto({ hoje, copias: listarParaOClaude(await escrita.copias.listar(escrita.uid)) }));
+
+  servidor.registerTool('preparar_restauracao', {
+    title: 'Preparar restauração de cópia',
+    description: 'Prévia de voltar os dados do Leciona a uma cópia de segurança (por data ou id da cópia). Mostra o que muda em números. Use só se o Cadu pedir. NÃO grava: devolve um código para confirmar_gravacao.',
+    inputSchema: { copia: z.string().describe('Data (AAAA-MM-DD) da cópia automática ou o id de listar_copias') },
+    annotations: preparo
+  }, async ({ copia }) => {
+    const copias = await escrita.copias.listar(escrita.uid);
+    const info = copias.find(c => c.id === copia) || copias.find(c => c.tipo === 'diaria' && c.criadaEm.slice(0, 10) === copia);
+    if (!info) return falha(`Não há cópia "${copia}". Use listar_copias para ver as disponíveis.`);
+    const atual = await escrita.carregarDados(escrita.uid);
+    const p = previaDaRestauracao(atual, info);
+    const plano: Plano = { resumo: [p.descricao], criar: { events: [], logs: [] }, situacoes: [], restaurar: { copia: info.id, descricao: p.descricao } };
+    return texto({
+      hoje,
+      previa: [{ pedido: 1, ok: true, descricao: p.descricao, avisos: [...p.avisos, ...p.diferencas] }],
+      vai_gravar: plano.resumo,
+      codigo_confirmacao: await assinarPlano(escrita.assinatura, escrita.uid, plano),
+      proximo_passo: 'Mostre a prévia ao Cadu, deixando claro que o que foi feito depois da cópia será perdido. Só confirme se ele concordar. O código vale 1 hora.'
+    });
+  });
+
   servidor.registerTool('confirmar_gravacao', {
     title: 'Confirmar gravação',
     description: 'Grava no Leciona exatamente o que a prévia mostrou. Use SÓ depois que o Cadu confirmar a prévia. Devolve um codigo_desfazer.',
@@ -362,6 +427,20 @@ const registrarEscrita = (servidor: McpServer, dados: AppData, hoje: string, esc
   }, async ({ codigo }) => {
     const plano = await lerPlano(escrita.assinatura, escrita.uid, codigo) as Plano | null;
     if (!plano) return falha('Código de confirmação inválido ou vencido (vale 1 hora). Prepare a prévia de novo.');
+    if (plano.restaurar) {
+      try {
+        const lote = await restaurarCopia(escrita, plano.restaurar.copia, plano.restaurar.descricao);
+        return texto({
+          gravado: true,
+          resumo: lote.resumo,
+          codigo_desfazer: await assinarLote(escrita.assinatura, escrita.uid, lote),
+          proximo_passo: 'Avise o Cadu que os dados foram restaurados e aparecem nos aparelhos em instantes. Dá para desfazer com o codigo_desfazer.'
+        });
+      } catch (e) {
+        if (e instanceof ConsultaError) return falha(e.message);
+        throw e;
+      }
+    }
     try {
       const r = await escrita.alterarDados(escrita.uid, raw => aplicarPlano(raw, plano));
       if (r.jaGravado) return texto({ gravado: false, mensagem: 'Isso já tinha sido gravado; nada foi duplicado.' });
@@ -385,6 +464,15 @@ const registrarEscrita = (servidor: McpServer, dados: AppData, hoje: string, esc
   }, async ({ codigo_desfazer }) => {
     const lote = await lerLote(escrita.assinatura, escrita.uid, codigo_desfazer) as Lote | null;
     if (!lote) return falha('Código para desfazer inválido ou vencido (vale 30 dias).');
+    if (lote.restauracao) {
+      try {
+        await restaurarCopia(escrita, lote.restauracao.desfazerCom, 'Desfazer a restauração');
+        return texto({ desfeito: true, o_que_era: lote.resumo, avisos: ['Os dados voltaram ao estado de antes da restauração.'] });
+      } catch (e) {
+        if (e instanceof ConsultaError) return falha(e.message);
+        throw e;
+      }
+    }
     const r = await escrita.alterarDados(escrita.uid, raw => desfazerLote(raw, lote));
     return texto({ desfeito: r.desfeito, o_que_era: lote.resumo, avisos: r.avisos });
   });
@@ -453,6 +541,27 @@ export const criarRotas = (deps: Dependencias) => {
       }
     },
 
+    /** Cópia diária (Vercel Cron). Só faz uma por dia; apaga as com mais de 30 dias. */
+    copiaDiaria: async (req: Request) => {
+      if (deps.segredoDoCron && req.headers.get('authorization') !== `Bearer ${deps.segredoDoCron}`) {
+        return json({ error: 'unauthorized' }, 401);
+      }
+      const agora = deps.agora?.() ?? new Date();
+      const hoje = hojeEmBrasilia(agora);
+      const uid = await deps.uidDoProfessor();
+      const id = idDaCopiaDiaria(hoje);
+      const copias = await deps.copias.listar(uid);
+      let feita = false;
+      if (!copias.some(c => c.id === id)) {
+        const dados = await deps.carregarDados(uid);
+        await deps.copias.gravar(uid, id, dadosDaCopia(dados, { criadaEm: agora.toISOString(), tipo: 'diaria' }));
+        feita = true;
+      }
+      const vencidas = copiasVencidas(copias, hoje);
+      if (vencidas.length) await deps.copias.apagar(uid, vencidas);
+      return json({ ok: true, copia: id, feita, apagadas: vencidas.length });
+    },
+
     mcp: async (req: Request) => {
       const conta = await verificarAcesso(assinatura(req), deps.emailPermitido, req.headers.get('authorization'));
       if (!conta) return naoAutorizado(req);
@@ -461,7 +570,9 @@ export const criarRotas = (deps: Dependencias) => {
       }
       const dados = await deps.carregarDados(conta.uid);
       const servidor = criarServidorMcp(dados, hojeEmBrasilia(deps.agora?.()), {
-        uid: conta.uid, assinatura: assinatura(req), alterarDados: deps.alterarDados
+        uid: conta.uid, assinatura: assinatura(req), alterarDados: deps.alterarDados,
+        substituirDados: deps.substituirDados, carregarDados: deps.carregarDados, copias: deps.copias,
+        agora: () => deps.agora?.() ?? new Date()
       });
       // Sem sessão: cada chamada é independente (funções da Vercel não guardam estado)
       const transporte = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });

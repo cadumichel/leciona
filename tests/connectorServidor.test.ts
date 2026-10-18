@@ -18,6 +18,9 @@ const ORIGEM = 'https://leciona.vercel.app';
 const CALLBACK = 'https://claude.ai/api/mcp/auth_callback';
 const EMAIL = 'prof@exemplo.com';
 let agora = new Date('2026-10-21T15:00:00Z');
+const copiasGuardadas = new Map<string, any>();
+let segredoDoCron: string | undefined;
+const copiaJson = (x: any) => JSON.parse(JSON.stringify(x));
 
 const rotas = (emailPermitido = EMAIL) => criarRotas({
   chave: new Uint8Array(32).fill(7),
@@ -38,7 +41,21 @@ const rotas = (emailPermitido = EMAIL) => criarRotas({
     const r = calcular(dados);
     Object.assign(dados, JSON.parse(JSON.stringify(r.alteracoes)));
     return r;
-  }
+  },
+  substituirDados: async (uid, calcular) => {
+    expect(uid).toBe('uid-prof');
+    const novo = copiaJson(calcular(dados));
+    Object.keys(dados).forEach(k => delete dados[k]);
+    Object.assign(dados, novo);
+  },
+  copias: {
+    listar: async () => [...copiasGuardadas.entries()].map(([id, c]) => ({ id, ...c._copia })),
+    ler: async (_uid, id) => (copiasGuardadas.has(id) ? copiaJson(copiasGuardadas.get(id)) : null),
+    gravar: async (_uid, id, d) => { copiasGuardadas.set(id, copiaJson(d)); },
+    apagar: async (_uid, ids) => { ids.forEach(id => copiasGuardadas.delete(id)); }
+  },
+  uidDoProfessor: async () => 'uid-prof',
+  segredoDoCron
 });
 
 const VERIFICADOR = 'verificador-pkce-de-teste-com-mais-de-43-caracteres-0123456789';
@@ -200,8 +217,8 @@ describe('conector: servidor MCP', () => {
     const { result } = await resp.json();
     expect(result.tools.map((t: any) => t.name).sort()).toEqual([
       'avaliacoes_proximas', 'calendario', 'confirmar_gravacao', 'conteudo_desde_ultima_avaliacao', 'desfazer_gravacao',
-      'listar_avaliacoes', 'preparar_avaliacoes', 'preparar_calendario', 'preparar_conteudo', 'preparar_eventos',
-      'preparar_recessos', 'preparar_situacao', 'turmas_e_grade'
+      'listar_avaliacoes', 'listar_copias', 'preparar_avaliacoes', 'preparar_calendario', 'preparar_conteudo', 'preparar_eventos',
+      'preparar_recessos', 'preparar_restauracao', 'preparar_situacao', 'turmas_e_grade'
     ]);
     const gravam = result.tools.filter((t: any) => !t.annotations?.readOnlyHint).map((t: any) => t.name).sort();
     expect(gravam).toEqual(['confirmar_gravacao', 'desfazer_gravacao']);
@@ -285,5 +302,63 @@ describe('conector: gravação pelo servidor MCP', () => {
     expect(trocado.erro).toBe(true);
     await chamar(access_token, 'desfazer_gravacao', { codigo_desfazer: ok.codigo_desfazer });
     expect(dados.events.find((e: any) => e.id === 'p')).toMatchObject({ prepared: false });
+  });
+});
+
+describe('conector: cópias de segurança', () => {
+  const chamar = async (token: string, name: string, args: unknown) => {
+    const resp = await rotas().mcp(mcp(token, { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name, arguments: args } }));
+    const { result } = await resp.json();
+    return { erro: !!result.isError, texto: result.content[0].text as string, json: () => JSON.parse(result.content[0].text) };
+  };
+  const cron = (auth?: string) => rotas().copiaDiaria(new Request(`${ORIGEM}/api/backup`, { headers: auth ? { Authorization: auth } : {} }));
+
+  it('faz uma cópia por dia e apaga as com mais de 30 dias', async () => {
+    copiasGuardadas.set('2026-09-01', { _copia: { criadaEm: '2026-09-01T06:00:00.000Z', tipo: 'diaria', resumo: {} } });
+    const r1 = await (await cron()).json();
+    expect(r1).toMatchObject({ ok: true, copia: '2026-10-21', feita: true, apagadas: 1 });
+    expect(copiasGuardadas.has('2026-09-01')).toBe(false);
+    expect(copiasGuardadas.get('2026-10-21')._copia).toMatchObject({ tipo: 'diaria', resumo: { avaliacoes: 1, turmas: 1 } });
+    expect(copiasGuardadas.get('2026-10-21')).not.toHaveProperty('updatedAt');
+    expect((await (await cron()).json()).feita).toBe(false);
+  });
+
+  it('com CRON_SECRET, só roda com o segredo', async () => {
+    segredoDoCron = 'segredo-de-teste';
+    expect((await cron()).status).toBe(401);
+    expect((await cron('Bearer segredo-de-teste')).status).toBe(200);
+    segredoDoCron = undefined;
+  });
+
+  it('lista, mostra a prévia em números, restaura e desfaz', async () => {
+    const { access_token } = await entrar();
+    // Depois da cópia de hoje, entra uma avaliação nova
+    dados.events.push({ id: 'nova', type: 'test', schoolId: 'C', classId: 'c183', slotId: 's1', date: '2026-11-03T00:00:00.000Z',
+      title: 'P3', description: '', blocksClasses: false, _m: 1 });
+
+    const lista = (await chamar(access_token, 'listar_copias', {})).json();
+    expect(lista.copias).toEqual([expect.objectContaining({ id: '2026-10-21', descricao: 'cópia automática de 21/10/2026' })]);
+    expect(JSON.stringify(lista)).not.toMatch(/P2 Era|Cônsul/);
+
+    const previa = (await chamar(access_token, 'preparar_restauracao', { copia: '2026-10-21' })).json();
+    expect(previa.previa[0].avisos).toContain('avaliações: 2 agora → 1 depois de restaurar');
+    expect(dados.events).toHaveLength(2); // a prévia não grava
+
+    const feito = (await chamar(access_token, 'confirmar_gravacao', { codigo: previa.codigo_confirmacao })).json();
+    expect(feito.gravado).toBe(true);
+    expect(dados.events.map((e: any) => e.id)).toEqual(['p']);
+    expect(dados._deleted.nova).toBeGreaterThan(0); // some também dos outros aparelhos
+    expect([...copiasGuardadas.keys()].some(k => k.startsWith('antes-de-restaurar-'))).toBe(true);
+
+    const desfeito = (await chamar(access_token, 'desfazer_gravacao', { codigo_desfazer: feito.codigo_desfazer })).json();
+    expect(desfeito.desfeito).toBe(true);
+    expect(dados.events.map((e: any) => e.id).sort()).toEqual(['nova', 'p']);
+  });
+
+  it('recusa cópia que não existe', async () => {
+    const { access_token } = await entrar();
+    const r = await chamar(access_token, 'preparar_restauracao', { copia: '2025-01-01' });
+    expect(r.erro).toBe(true);
+    expect(r.texto).toMatch(/Não há cópia/);
   });
 });

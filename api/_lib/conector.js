@@ -56,7 +56,37 @@ var formatDateBR = (dateStr) => {
 };
 
 // utils/sync.ts
+var SYNCED_COLLECTIONS = [
+  "schools",
+  "students",
+  "classRecords",
+  "schedules",
+  "scheduleVersions",
+  "logs",
+  "events",
+  "calendars",
+  "reminders",
+  "grades",
+  "customAssessments",
+  "gradingConfigs"
+];
 var TOMBSTONE_TTL_MS = 180 * 24 * 60 * 60 * 1e3;
+var prepareRestore = (current, backup, now = Date.now()) => {
+  const tombstones = { ...backup._deleted || {} };
+  for (const key of SYNCED_COLLECTIONS) {
+    const keep = new Set((backup[key] || []).map((i) => i && i.id));
+    (current[key] || []).forEach((i) => {
+      if (i && i.id && !keep.has(i.id)) tombstones[i.id] = now;
+    });
+  }
+  const restored = { ...backup };
+  for (const key of SYNCED_COLLECTIONS) {
+    restored[key] = (backup[key] || []).map((i) => i && i.id ? { ...i, _m: now } : i);
+  }
+  restored._fieldM = { profile: now, settings: now };
+  if (Object.keys(tombstones).length > 0) restored._deleted = tombstones;
+  return restored;
+};
 var removeUndefined = (obj) => {
   if (obj === void 0) return void 0;
   if (obj === null) return null;
@@ -393,6 +423,65 @@ var calendario = (data, opcoes) => {
     })
   };
 };
+
+// connector/copias.ts
+var DIAS_GUARDADOS = 30;
+var CAMPO_COPIA = "_copia";
+var qtd = (raw, campo) => Array.isArray(raw?.[campo]) ? raw[campo].length : 0;
+var resumoDosDados = (raw) => ({
+  escolas: (raw?.schools || []).filter((s) => s && !s.deleted).length,
+  turmas: (raw?.schools || []).filter((s) => s && !s.deleted).reduce((n, s) => n + (s.classes || []).filter((c) => typeof c === "string" || !c.deleted).length, 0),
+  avaliacoes: (raw?.events || []).filter((e) => e?.type === "test" || e?.type === "work").length,
+  eventos: (raw?.events || []).filter((e) => e && e.type !== "test" && e.type !== "work").length,
+  registrosDoDiario: qtd(raw, "logs"),
+  lembretes: qtd(raw, "reminders"),
+  notas: qtd(raw, "grades")
+});
+var idDaCopiaDiaria = (hoje) => hoje;
+var idAntesDeRestaurar = (agora) => `antes-de-restaurar-${agora.toISOString().replace(/[:.]/g, "-")}`;
+var dadosDaCopia = (raw, info) => {
+  const { updatedAt, [CAMPO_COPIA]: _antiga, ...dados } = raw || {};
+  return { ...dados, [CAMPO_COPIA]: { ...info, resumo: resumoDosDados(dados) } };
+};
+var dadosSemInfo = (copia) => {
+  const { [CAMPO_COPIA]: _info, updatedAt, ...dados } = copia || {};
+  return dados;
+};
+var copiasVencidas = (copias, hoje) => {
+  const limite = somarDias(hoje, -DIAS_GUARDADOS);
+  return copias.filter((c) => c.criadaEm.slice(0, 10) < limite).map((c) => c.id);
+};
+var descreverCopia = (c) => c.tipo === "diaria" ? `c\xF3pia autom\xE1tica de ${formatDateBR(c.criadaEm.slice(0, 10))}` : `c\xF3pia feita antes da restaura\xE7\xE3o de ${formatDateBR(c.criadaEm.slice(0, 10))} \xE0s ${c.criadaEm.slice(11, 16)} (UTC)`;
+var previaDaRestauracao = (atual, copia) => {
+  const agora = resumoDosDados(atual);
+  const depois = copia.resumo;
+  const nomes = {
+    escolas: "escolas",
+    turmas: "turmas",
+    avaliacoes: "avalia\xE7\xF5es",
+    eventos: "eventos",
+    registrosDoDiario: "registros do di\xE1rio",
+    lembretes: "lembretes",
+    notas: "notas lan\xE7adas"
+  };
+  const diferencas = Object.keys(nomes).filter((k) => agora[k] !== depois[k]).map((k) => `${nomes[k]}: ${agora[k]} agora \u2192 ${depois[k]} depois de restaurar`);
+  return {
+    descricao: `Restaurar a ${descreverCopia(copia)}`,
+    avisos: [
+      "Tudo o que foi feito no app depois dessa c\xF3pia ser\xE1 perdido em todos os aparelhos.",
+      "Antes de restaurar, o conector guarda uma c\xF3pia do estado atual: d\xE1 para desfazer."
+    ],
+    diferencas: diferencas.length ? diferencas : ["As quantidades s\xE3o iguais; podem mudar textos e datas."]
+  };
+};
+var documentoRestaurado = (atual, copia, agora = Date.now()) => {
+  const restaurado = prepareRestore(dadosSemInfo(atual), dadosSemInfo(copia), agora);
+  for (const marca of ["_wipedAt", "_yearResetAt", "_schoolYear"]) {
+    if (atual?.[marca] !== void 0) restaurado[marca] = atual[marca];
+  }
+  return restaurado;
+};
+var listarParaOClaude = (copias) => [...copias].sort((a, b) => b.criadaEm.localeCompare(a.criadaEm)).map((c) => ({ id: c.id, descricao: descreverCopia(c), resumo: c.resumo }));
 
 // connector/oauth.ts
 import { SignJWT, jwtVerify, base64url } from "jose";
@@ -1362,8 +1451,25 @@ Se faltar informa\xE7\xE3o (ex.: a turma tem aulas seguidas e \xE9 preciso escol
 Conte\xFAdo de aula ("hoje na 183 dei\u2026"): use preparar_conteudo. Se a turma tiver aulas seguidas no dia, pergunte se o conte\xFAdo vale para todas ou s\xF3 para uma. Por padr\xE3o o texto \xE9 acrescentado ao que j\xE1 estiver no di\xE1rio; s\xF3 use modo "substituir" se o Cadu pedir.
 Calend\xE1rio: ano letivo, bimestres/trimestres e recesso de meio de ano com preparar_calendario. Feriados nacionais j\xE1 est\xE3o no app; feriado municipal, da escola ou dia sem aula entram como recesso (preparar_recessos; sem escola = todas as escolas). Reuni\xF5es, festas, passeios etc. com preparar_eventos; pergunte se o evento suspende as aulas quando n\xE3o estiver claro.
 Depois de gravar, diga que d\xE1 para desfazer e guarde o "codigo_desfazer" para usar em "desfazer_gravacao" se ele pedir.
+C\xF3pias de seguran\xE7a: o Leciona faz uma c\xF3pia autom\xE1tica por dia (guardada por 30 dias). listar_copias mostra as c\xF3pias; preparar_restauracao s\xF3 se o Cadu pedir para voltar os dados a uma data. Restaurar apaga o que foi feito depois da c\xF3pia: deixe isso claro na pr\xE9via.
 Situa\xE7\xE3o das avalia\xE7\xF5es: Pendente (vai acontecer, alunos ainda n\xE3o avisados) \u2192 Agendada (comunicada aos alunos) \u2192 Pronta (enviada para a coordena\xE7\xE3o e impress\xE3o; os alunos j\xE1 sabem). "Falta elaborar" = ainda n\xE3o est\xE1 Pronta.`;
 var somenteLeitura = { readOnlyHint: true, openWorldHint: false };
+var restaurarCopia = async (escrita, copiaId, descricao) => {
+  const copia = await escrita.copias.ler(escrita.uid, copiaId);
+  if (!copia) throw new ConsultaError("Essa c\xF3pia n\xE3o existe mais (as c\xF3pias s\xE3o guardadas por 30 dias).");
+  const agora = escrita.agora();
+  const atual = await escrita.carregarDados(escrita.uid);
+  const antesId = idAntesDeRestaurar(agora);
+  await escrita.copias.gravar(escrita.uid, antesId, dadosDaCopia(atual, { criadaEm: agora.toISOString(), tipo: "antes-de-restaurar" }));
+  await escrita.substituirDados(escrita.uid, (raw) => documentoRestaurado(raw, copia, agora.getTime()));
+  return {
+    em: agora.getTime(),
+    resumo: [descricao],
+    criados: { events: [], logs: [] },
+    situacoesAnteriores: [],
+    restauracao: { desfazerCom: antesId }
+  };
+};
 var criarServidorMcp = (dados, hoje, escrita) => {
   const servidor = new McpServer({ name: "leciona", version: "1.0.0" }, { instructions: INSTRUCOES });
   const responder = (consulta) => {
@@ -1544,6 +1650,32 @@ var registrarEscrita = (servidor, dados, hoje, escrita) => {
     },
     annotations: preparo
   }, async ({ eventos }) => previa(() => prepararEventos(dados, eventos, hoje)));
+  servidor.registerTool("listar_copias", {
+    title: "Listar c\xF3pias de seguran\xE7a",
+    description: "C\xF3pias de seguran\xE7a do Leciona (uma autom\xE1tica por dia, guardadas por 30 dias), com as quantidades de cada uma. S\xF3 leitura.",
+    inputSchema: {},
+    annotations: { readOnlyHint: true, openWorldHint: false }
+  }, async () => texto({ hoje, copias: listarParaOClaude(await escrita.copias.listar(escrita.uid)) }));
+  servidor.registerTool("preparar_restauracao", {
+    title: "Preparar restaura\xE7\xE3o de c\xF3pia",
+    description: "Pr\xE9via de voltar os dados do Leciona a uma c\xF3pia de seguran\xE7a (por data ou id da c\xF3pia). Mostra o que muda em n\xFAmeros. Use s\xF3 se o Cadu pedir. N\xC3O grava: devolve um c\xF3digo para confirmar_gravacao.",
+    inputSchema: { copia: z.string().describe("Data (AAAA-MM-DD) da c\xF3pia autom\xE1tica ou o id de listar_copias") },
+    annotations: preparo
+  }, async ({ copia }) => {
+    const copias = await escrita.copias.listar(escrita.uid);
+    const info = copias.find((c) => c.id === copia) || copias.find((c) => c.tipo === "diaria" && c.criadaEm.slice(0, 10) === copia);
+    if (!info) return falha(`N\xE3o h\xE1 c\xF3pia "${copia}". Use listar_copias para ver as dispon\xEDveis.`);
+    const atual = await escrita.carregarDados(escrita.uid);
+    const p = previaDaRestauracao(atual, info);
+    const plano = { resumo: [p.descricao], criar: { events: [], logs: [] }, situacoes: [], restaurar: { copia: info.id, descricao: p.descricao } };
+    return texto({
+      hoje,
+      previa: [{ pedido: 1, ok: true, descricao: p.descricao, avisos: [...p.avisos, ...p.diferencas] }],
+      vai_gravar: plano.resumo,
+      codigo_confirmacao: await assinarPlano(escrita.assinatura, escrita.uid, plano),
+      proximo_passo: "Mostre a pr\xE9via ao Cadu, deixando claro que o que foi feito depois da c\xF3pia ser\xE1 perdido. S\xF3 confirme se ele concordar. O c\xF3digo vale 1 hora."
+    });
+  });
   servidor.registerTool("confirmar_gravacao", {
     title: "Confirmar grava\xE7\xE3o",
     description: "Grava no Leciona exatamente o que a pr\xE9via mostrou. Use S\xD3 depois que o Cadu confirmar a pr\xE9via. Devolve um codigo_desfazer.",
@@ -1552,6 +1684,20 @@ var registrarEscrita = (servidor, dados, hoje, escrita) => {
   }, async ({ codigo }) => {
     const plano = await lerPlano(escrita.assinatura, escrita.uid, codigo);
     if (!plano) return falha("C\xF3digo de confirma\xE7\xE3o inv\xE1lido ou vencido (vale 1 hora). Prepare a pr\xE9via de novo.");
+    if (plano.restaurar) {
+      try {
+        const lote = await restaurarCopia(escrita, plano.restaurar.copia, plano.restaurar.descricao);
+        return texto({
+          gravado: true,
+          resumo: lote.resumo,
+          codigo_desfazer: await assinarLote(escrita.assinatura, escrita.uid, lote),
+          proximo_passo: "Avise o Cadu que os dados foram restaurados e aparecem nos aparelhos em instantes. D\xE1 para desfazer com o codigo_desfazer."
+        });
+      } catch (e) {
+        if (e instanceof ConsultaError) return falha(e.message);
+        throw e;
+      }
+    }
     try {
       const r = await escrita.alterarDados(escrita.uid, (raw) => aplicarPlano(raw, plano));
       if (r.jaGravado) return texto({ gravado: false, mensagem: "Isso j\xE1 tinha sido gravado; nada foi duplicado." });
@@ -1574,6 +1720,15 @@ var registrarEscrita = (servidor, dados, hoje, escrita) => {
   }, async ({ codigo_desfazer }) => {
     const lote = await lerLote(escrita.assinatura, escrita.uid, codigo_desfazer);
     if (!lote) return falha("C\xF3digo para desfazer inv\xE1lido ou vencido (vale 30 dias).");
+    if (lote.restauracao) {
+      try {
+        await restaurarCopia(escrita, lote.restauracao.desfazerCom, "Desfazer a restaura\xE7\xE3o");
+        return texto({ desfeito: true, o_que_era: lote.resumo, avisos: ["Os dados voltaram ao estado de antes da restaura\xE7\xE3o."] });
+      } catch (e) {
+        if (e instanceof ConsultaError) return falha(e.message);
+        throw e;
+      }
+    }
     const r = await escrita.alterarDados(escrita.uid, (raw) => desfazerLote(raw, lote));
     return texto({ desfeito: r.desfeito, o_que_era: lote.resumo, avisos: r.avisos });
   });
@@ -1635,6 +1790,26 @@ var criarRotas = (deps) => {
         return erroOAuth(e);
       }
     },
+    /** Cópia diária (Vercel Cron). Só faz uma por dia; apaga as com mais de 30 dias. */
+    copiaDiaria: async (req) => {
+      if (deps.segredoDoCron && req.headers.get("authorization") !== `Bearer ${deps.segredoDoCron}`) {
+        return json({ error: "unauthorized" }, 401);
+      }
+      const agora = deps.agora?.() ?? /* @__PURE__ */ new Date();
+      const hoje = hojeEmBrasilia(agora);
+      const uid = await deps.uidDoProfessor();
+      const id = idDaCopiaDiaria(hoje);
+      const copias = await deps.copias.listar(uid);
+      let feita = false;
+      if (!copias.some((c) => c.id === id)) {
+        const dados = await deps.carregarDados(uid);
+        await deps.copias.gravar(uid, id, dadosDaCopia(dados, { criadaEm: agora.toISOString(), tipo: "diaria" }));
+        feita = true;
+      }
+      const vencidas = copiasVencidas(copias, hoje);
+      if (vencidas.length) await deps.copias.apagar(uid, vencidas);
+      return json({ ok: true, copia: id, feita, apagadas: vencidas.length });
+    },
     mcp: async (req) => {
       const conta = await verificarAcesso(assinatura(req), deps.emailPermitido, req.headers.get("authorization"));
       if (!conta) return naoAutorizado(req);
@@ -1645,7 +1820,11 @@ var criarRotas = (deps) => {
       const servidor = criarServidorMcp(dados, hojeEmBrasilia(deps.agora?.()), {
         uid: conta.uid,
         assinatura: assinatura(req),
-        alterarDados: deps.alterarDados
+        alterarDados: deps.alterarDados,
+        substituirDados: deps.substituirDados,
+        carregarDados: deps.carregarDados,
+        copias: deps.copias,
+        agora: () => deps.agora?.() ?? /* @__PURE__ */ new Date()
       });
       const transporte = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: void 0, enableJsonResponse: true });
       await servidor.connect(transporte);
@@ -1669,6 +1848,9 @@ var montar = async () => {
   const emailPermitido = variavel("LECIONA_EMAIL");
   const app = getApps()[0] || initializeApp({ credential: cert(credencial) });
   const db = getFirestore(app);
+  const usuario = (uid) => db.collection("users").doc(uid);
+  const copias = (uid) => usuario(uid).collection("backups");
+  let uidCache;
   return criarRotas({
     chave: await derivarChave(credencial.private_key),
     emailPermitido,
@@ -1695,7 +1877,35 @@ var montar = async () => {
         tx.update(ref, { ...campos, updatedAt: Timestamp.now() });
       }
       return r;
-    })
+    }),
+    substituirDados: (uid, calcular) => db.runTransaction(async (tx) => {
+      const ref = usuario(uid);
+      const doc = await tx.get(ref);
+      if (!doc.exists) throw new Error("Documento do professor n\xE3o encontrado.");
+      const novo = removeUndefined(calcular(doc.data()));
+      if (estimateDocBytes(novo) > FIRESTORE_DOC_LIMIT * 0.98) {
+        throw new ConsultaError("A c\xF3pia \xE9 grande demais para o limite da nuvem (1 MB). Nada foi restaurado.");
+      }
+      tx.set(ref, { ...novo, updatedAt: Timestamp.now() });
+    }),
+    copias: {
+      // Só o campo de informações (as cópias inteiras podem ter quase 1 MB cada)
+      listar: async (uid) => (await copias(uid).select(CAMPO_COPIA).get()).docs.map((d) => ({ id: d.id, ...d.get(CAMPO_COPIA) || {} })).filter((c) => c.criadaEm && c.resumo),
+      ler: async (uid, id) => {
+        const d = await copias(uid).doc(id).get();
+        return d.exists ? d.data() : null;
+      },
+      gravar: async (uid, id, dados) => {
+        await copias(uid).doc(id).set(removeUndefined(dados));
+      },
+      apagar: async (uid, ids) => {
+        const lote = db.batch();
+        ids.forEach((id) => lote.delete(copias(uid).doc(id)));
+        await lote.commit();
+      }
+    },
+    uidDoProfessor: async () => uidCache ??= (await getAuth(app).getUserByEmail(emailPermitido)).uid,
+    segredoDoCron: process.env.CRON_SECRET || void 0
   });
 };
 var obterRotas = () => {

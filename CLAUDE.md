@@ -106,5 +106,12 @@ conector: `https://leciona.vercel.app/api/mcp`.
 - Feriado municipal ou da escola = recesso no calendário da escola (os nacionais já estão no app).
 - Nunca ler nem gravar nomes de alunos, notas, chamada, ocorrências ou observações do diário.
 
+**Cópias de segurança**: `connector/copias.ts` + `api/backup.ts` (Vercel Cron às 6h UTC, ver
+`vercel.json`). Uma cópia por dia em `users/{uid}/backups/{AAAA-MM-DD}`, guardadas por 30 dias; só o
+servidor acessa (as regras do Firestore bloqueiam o app). O Claude lista e restaura
+(`listar_copias`, `preparar_restauracao`, com prévia só em números); antes de restaurar guarda o
+estado atual (`antes-de-restaurar-…`), e desfazer volta a ele. `CRON_SECRET` (opcional, na Vercel)
+protege a rota da cópia.
+
 **Alertas**: tarefas agendadas no app do Claude (domingo 10h, segunda 6h30, terça 12h45, sexta
 12h30) que usam `avaliacoes_proximas` com 7 dias. O texto delas fica no próprio app do Claude.

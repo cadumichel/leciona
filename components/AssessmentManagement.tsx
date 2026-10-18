@@ -7,6 +7,10 @@ import {
 } from 'lucide-react';
 import { isHoliday, getHolidayName, getDayOfWeekFromDate, getSafeDate, toSafeISO } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
+import {
+  KIND_LABELS, buildRecovery, checkAssessmentDate, linkedAssessments, nextLessonDate, parentCandidates,
+  recoveryPolicyOf, secondCallModeOf, suggestRecovery, termRecoveryContent
+} from '../utils/recovery';
 
 interface AssessmentManagementProps {
   data: AppData;
@@ -55,6 +59,12 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     type: 'test', title: '', date: new Date().toLocaleDateString('en-CA'),
     schoolId: '', classId: '', slotId: '', description: ''
   });
+  // Recuperação e 2ª chamada (utils/recovery.ts)
+  const [formKind, setFormKind] = useState<'regular' | 'recovery' | 'term_recovery' | 'second_call'>('regular');
+  const [createRec, setCreateRec] = useState(true);
+  const [recDate, setRecDate] = useState('');
+  const [recSlotId, setRecSlotId] = useState('');
+  const [descTouched, setDescTouched] = useState(false);
   const [dateWarning, setDateWarning] = useState('');
   const [isInvalidDate, setIsInvalidDate] = useState(false);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
@@ -174,6 +184,58 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     return { restrictedAvailableSlots: uniqueSlots, isOutOfClassDay: outOfClass };
   }, [activeSchool, newEvent.date, newEvent.classId, data.schedules, isInvalidDate]);
 
+  // ── Recuperação: regra da escola e sugestões ──────────────────────────────
+  const recoveryPolicy = recoveryPolicyOf(activeSchool);
+  const secondCallOffSchedule = formKind === 'second_call' && secondCallModeOf(activeSchool) === 'off_schedule';
+  const offerRec = !newEvent.id && formKind === 'regular' && newEvent.type === 'test' && recoveryPolicy === 'parallel';
+  const recCheck = useMemo(() => {
+    if (!offerRec || !createRec || !activeSchool || !newEvent.classId || !recDate) return null;
+    return checkAssessmentDate(data, activeSchool, newEvent.classId, recDate);
+  }, [offerRec, createRec, activeSchool, newEvent.classId, recDate, data]);
+  const recSuggestion = useMemo(() => {
+    if (!offerRec || !activeSchool || !newEvent.classId || !newEvent.date) return null;
+    return suggestRecovery(data, activeSchool, newEvent.classId, newEvent.date);
+  }, [offerRec, activeSchool, newEvent.classId, newEvent.date, data]);
+
+  // Data sugerida da REC acompanha a data da prova (o professor confirma ou troca)
+  useEffect(() => {
+    if (recSuggestion) { setRecDate(recSuggestion.date); setRecSlotId(''); }
+  }, [recSuggestion?.date]);
+  // Aula da REC: a mesma da prova, se a turma tiver aula nesse horário; senão a primeira do dia
+  useEffect(() => {
+    if (!recCheck) return;
+    if (recCheck.lessons.some(l => l.id === recSlotId)) return;
+    const same = recCheck.lessons.find(l => l.id === newEvent.slotId);
+    setRecSlotId(same ? same.id : (recCheck.lessons[0]?.id || ''));
+  }, [recCheck, newEvent.slotId]);
+
+  // REC trimestral: conteúdo das provas do trimestre (enquanto o professor não editar a descrição)
+  useEffect(() => {
+    if (formKind !== 'term_recovery' || descTouched || !newEvent.schoolId || !newEvent.classId || !newEvent.date) return;
+    const content = termRecoveryContent(data, newEvent.schoolId, newEvent.classId, newEvent.date);
+    setNewEvent(prev => ({ ...prev, description: content }));
+  }, [formKind, descTouched, newEvent.schoolId, newEvent.classId, newEvent.date, data.events]);
+
+  const secondCallOptions = useMemo(
+    () => (formKind === 'second_call' && newEvent.schoolId && newEvent.classId ? parentCandidates(data, newEvent.schoolId, newEvent.classId) : []),
+    [formKind, newEvent.schoolId, newEvent.classId, data]
+  );
+
+  const chooseSecondCallParent = (parentId: string) => {
+    const parent = data.events.find(e => e.id === parentId);
+    setNewEvent(prev => ({
+      ...prev, parentId,
+      title: parent ? `2ª chamada — ${parent.title}` : prev.title,
+      description: parent?.description || '',
+      type: parent?.type || prev.type
+    }));
+  };
+
+  // Pode salvar? (a 2ª chamada no contraturno não tem aula; a 2ª chamada precisa da avaliação original)
+  const canSave = !!newEvent.title && !!newEvent.classId && !isInvalidDate &&
+    (secondCallOffSchedule || !!newEvent.slotId) &&
+    (formKind !== 'second_call' || !!newEvent.parentId);
+
   // ── Available slots for copy ──────────────────────────────────────────────
   const copyTargetSchool = useMemo(
     () => (data.schools || []).find(s => s.id === copyData.targetSchoolId),
@@ -214,7 +276,9 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSaveEvent = () => {
-    if (!newEvent.title || !newEvent.classId || !newEvent.slotId || isInvalidDate) return;
+    const needsSlot = !secondCallOffSchedule;
+    if (!newEvent.title || !newEvent.classId || (needsSlot && !newEvent.slotId) || isInvalidDate) return;
+    if (formKind === 'second_call' && !newEvent.parentId) return;
     const safeDateISO = toSafeISO(newEvent.date!);
     const eventId = newEvent.id || crypto.randomUUID();
     let currentLogs = [...data.logs];
@@ -226,20 +290,45 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
         currentLogs = currentLogs.filter(l => !(l.date.split('T')[0] === orig.date.split('T')[0] && l.schoolId === orig.schoolId && l.slotId === orig.slotId));
       }
     }
+    // Ao editar, mantém o que não está no formulário (situação, peso, nota máxima, ligações)
+    const original = newEvent.id ? data.events.find(e => e.id === newEvent.id) : undefined;
+    const kind = formKind === 'regular' ? undefined : formKind;
     const event: SchoolEvent = {
+      ...(original || {}),
       id: eventId, title: newEvent.title!, date: safeDateISO,
-      schoolId: newEvent.schoolId!, classId: newEvent.classId!, slotId: newEvent.slotId,
+      schoolId: newEvent.schoolId!, classId: newEvent.classId!,
       type: newEvent.type as 'test' | 'work', description: newEvent.description || '', blocksClasses: false
-    };
-    const newLog: LessonLog = {
-      id: crypto.randomUUID(), date: safeDateISO, schoolId: event.schoolId,
-      classId: event.classId!, slotId: event.slotId!,
-      subject: `Avaliação: ${event.title}`, homework: '', notes: event.description || ''
-    };
-    currentLogs = currentLogs.filter(l =>
-      !(l.date.split('T')[0] === newEvent.date && l.schoolId === event.schoolId && l.slotId === event.slotId)
-    );
-    onUpdateData({ events: [...currentEvents, event], logs: [...currentLogs, newLog] });
+    } as SchoolEvent;
+    if (needsSlot && newEvent.slotId) event.slotId = newEvent.slotId; else delete event.slotId;
+    if (kind) event.kind = kind; else delete event.kind;
+    if ((kind === 'second_call' || kind === 'recovery') && newEvent.parentId) event.parentId = newEvent.parentId;
+    else delete event.parentId;
+
+    const newEvents: SchoolEvent[] = [event];
+    if (event.slotId) {
+      currentLogs = currentLogs.filter(l =>
+        !(l.date.split('T')[0] === newEvent.date && l.schoolId === event.schoolId && l.slotId === event.slotId)
+      );
+      currentLogs.push({
+        id: crypto.randomUUID(), date: safeDateISO, schoolId: event.schoolId,
+        classId: event.classId!, slotId: event.slotId,
+        subject: `Avaliação: ${event.title}`, homework: '', notes: event.description || ''
+      });
+    }
+
+    // REC paralela criada junto com a prova (só no cadastro novo)
+    if (offerRec && createRec && recDate && recSlotId) {
+      const rec = buildRecovery(event, recDate, recSlotId, crypto.randomUUID());
+      newEvents.push(rec);
+      const hasLog = currentLogs.some(l => l.date.split('T')[0] === recDate && l.schoolId === rec.schoolId && l.slotId === recSlotId);
+      if (!hasLog) {
+        currentLogs.push({
+          id: crypto.randomUUID(), date: rec.date, schoolId: rec.schoolId, classId: rec.classId!, slotId: recSlotId,
+          subject: `Avaliação: ${rec.title}`, homework: '', notes: rec.description || ''
+        });
+      }
+    }
+    onUpdateData({ events: [...currentEvents, ...newEvents], logs: currentLogs });
     setSaveSuccess(true);
     if (!newEvent.id) setNewEvent(prev => ({ ...prev, id: eventId }));
     setTimeout(() => {
@@ -256,14 +345,16 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     const event = data.events.find(e => e.id === eventId);
     if (!event) return;
 
-    const currentEvents = data.events.filter(e => e.id !== eventId);
-    const currentGrades = data.grades.filter(g => g.assessmentId !== eventId);
+    // A REC e a 2ª chamada ligadas a esta avaliação saem junto
+    const removed = [event, ...linkedAssessments(data.events, eventId)];
+    const removedIds = new Set(removed.map(e => e.id));
+    const currentEvents = data.events.filter(e => !removedIds.has(e.id));
+    const currentGrades = data.grades.filter(g => !removedIds.has(g.assessmentId));
 
-    // Remover o registro de diário (LessonLog) que foi gerado automaticamente para esta avaliação
-    const safeDateStr = event.date.split('T')[0];
-    const currentLogs = data.logs.filter(l =>
-      !(l.date.split('T')[0] === safeDateStr && l.schoolId === event.schoolId && l.slotId === event.slotId && l.subject.startsWith('Avaliação:'))
-    );
+    // Remover o registro de diário (LessonLog) que foi gerado automaticamente para cada avaliação
+    const currentLogs = data.logs.filter(l => !removed.some(e =>
+      e.slotId && l.date.split('T')[0] === e.date.split('T')[0] && l.schoolId === e.schoolId && l.slotId === e.slotId && l.subject.startsWith('Avaliação:')
+    ));
 
     onUpdateData({ events: currentEvents, grades: currentGrades, logs: currentLogs });
     setDeletingEventId(null);
@@ -461,6 +552,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       schoolId: (data.schools || [])[0]?.id || '', classId: '', slotId: '', description: ''
     });
     setDateWarning(''); setIsInvalidDate(false);
+    setFormKind('regular'); setCreateRec(true); setRecDate(''); setRecSlotId(''); setDescTouched(false);
     setIsAdding(true);
   };
 
@@ -469,9 +561,11 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     setNewEvent({
       id: event.id, title: event.title, date: event.date.split('T')[0],
       schoolId: event.schoolId, classId: event.classId, slotId: event.slotId,
-      type: event.type, description: event.description
+      type: event.type, description: event.description, parentId: event.parentId
     });
     setDateWarning(''); setIsInvalidDate(false);
+    setFormKind(event.kind || 'regular');
+    setCreateRec(false); setDescTouched(true);
     setIsAdding(true);
   };
 
@@ -691,6 +785,11 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                       <p className="data-[compact=true]:text-[10px] text-[13px] font-black text-slate-700 dark:text-white leading-tight truncate">{evtClassName}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <p className="data-[compact=true]:text-[8px] text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate">{event.title}</p>
+                        {event.kind && (
+                          <span className="text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300">
+                            {KIND_LABELS[event.kind]}
+                          </span>
+                        )}
                         <span
                           className="data-[compact=true]:hidden text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0"
                           style={{ backgroundColor: color + `22`, color }}
@@ -835,6 +934,28 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                     <button onClick={() => setNewEvent({ ...newEvent, type: 'work' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'work' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Trabalho</button>
                   </div>
 
+                  {/* Recuperação / 2ª chamada */}
+                  {newEvent.id ? (
+                    formKind !== 'regular' && (
+                      <p className="text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg px-3 py-2">
+                        {KIND_LABELS[formKind]}{newEvent.parentId && ` — ligada a "${data.events.find(e => e.id === newEvent.parentId)?.title || 'avaliação apagada'}"`}
+                      </p>
+                    )
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      {([['regular', 'Regular'], ['term_recovery', 'REC trimestral'], ['second_call', '2ª chamada']] as const).map(([k, label]) => (
+                        <button key={k} type="button"
+                          onClick={() => {
+                            setFormKind(k); setDescTouched(false);
+                            setNewEvent(prev => ({ ...prev, parentId: undefined, description: '', title: k === 'term_recovery' ? 'REC trimestral' : (k === 'regular' ? '' : prev.title) }));
+                          }}
+                          className={`py-2 rounded-lg font-black uppercase text-[8px] tracking-tight border-2 transition-all ${formKind === k ? 'bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-slate-50 dark:bg-slate-800 border-transparent text-slate-400'}`}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Title */}
                   <div>
                     <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Assunto / Título</label>
@@ -862,6 +983,18 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                     </div>
                   </div>
 
+                  {formKind === 'second_call' && !newEvent.id && (
+                    <div>
+                      <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Avaliação original</label>
+                      <select value={newEvent.parentId || ''} onChange={e => chooseSecondCallParent(e.target.value)} disabled={!newEvent.classId}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm disabled:opacity-50">
+                        <option value="">{newEvent.classId ? (secondCallOptions.length ? 'Escolha a avaliação...' : 'Nenhuma avaliação dessa turma') : 'Selecione a turma'}</option>
+                        {secondCallOptions.map(e => <option key={e.id} value={e.id}>{e.title} ({e.date.split('T')[0].split('-').reverse().slice(0, 2).join('/')})</option>)}
+                      </select>
+                      <p className="text-[8px] text-slate-400 font-bold mt-1 ml-1">O título e o conteúdo vêm da avaliação original.</p>
+                    </div>
+                  )}
+
                   {/* Date + Slot */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -871,17 +1004,65 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                     </div>
                     <div>
                       <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Horário (Slot)</label>
+                      {secondCallOffSchedule ? (
+                        <p className="text-[9px] font-bold text-slate-500 bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2.5">Contraturno: fora das suas aulas (sem registro no diário)</p>
+                      ) : (
                       <select disabled={!newEvent.classId || isInvalidDate} value={newEvent.slotId} onChange={e => setNewEvent(prev => ({ ...prev, slotId: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white disabled:opacity-50 text-sm">
                         <option value="">{restrictedAvailableSlots.length > 0 ? 'Escolha o horário...' : (newEvent.classId ? 'Nenhum horário' : 'Selecione a turma')}</option>
                         {restrictedAvailableSlots.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
                       </select>
+                      )}
                     </div>
                   </div>
+
+                  {/* REC paralela automática */}
+                  {offerRec && (
+                    <div className="rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50/60 dark:bg-indigo-900/10 p-3 space-y-2">
+                      <label className="flex items-center gap-2 text-[10px] font-black uppercase text-indigo-700 dark:text-indigo-300 cursor-pointer">
+                        <input type="checkbox" checked={createRec} onChange={e => setCreateRec(e.target.checked)} className="accent-indigo-600" />
+                        Criar a recuperação (REC) automaticamente
+                      </label>
+                      {createRec && (
+                        <>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Data da REC</label>
+                              <input type="date" value={recDate} onChange={e => { setRecDate(e.target.value); setRecSlotId(''); }}
+                                className={`w-full bg-white dark:bg-slate-800 border-none rounded-lg px-3 py-2 font-bold dark:text-white text-sm ${recCheck?.blocked ? 'ring-2 ring-pink-500' : ''}`} />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Aula da REC</label>
+                              <select value={recSlotId} onChange={e => setRecSlotId(e.target.value)} disabled={!recCheck?.lessons.length}
+                                className="w-full bg-white dark:bg-slate-800 border-none rounded-lg px-3 py-2 font-bold dark:text-white text-sm disabled:opacity-50">
+                                <option value="">{recCheck?.lessons.length ? 'Escolha a aula...' : 'Sem aula nesse dia'}</option>
+                                {(recCheck?.lessons || []).map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          {recCheck && recCheck.warnings.length > 0 && (
+                            <ul className="text-[9px] font-bold text-amber-700 dark:text-amber-300 space-y-0.5 ml-1">
+                              {recCheck.warnings.map(w => <li key={w}>⚠️ {w}</li>)}
+                            </ul>
+                          )}
+                          {recCheck && (recCheck.blocked || !recCheck.lessons.length) && activeSchool && newEvent.classId && (() => {
+                            const next = nextLessonDate(data, activeSchool, newEvent.classId, recDate);
+                            return next && next !== recDate ? (
+                              <button type="button" onClick={() => { setRecDate(next); setRecSlotId(''); }}
+                                className="text-[9px] font-black uppercase text-indigo-600 underline ml-1">
+                                Usar a próxima aula da turma: {next.split('-').reverse().join('/')}
+                              </button>
+                            ) : null;
+                          })()}
+                          {!recSlotId && <p className="text-[8px] font-bold text-slate-400 ml-1">Sem aula escolhida, a REC não é criada.</p>}
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {/* Description */}
                   <div>
                     <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Descrição / Observações</label>
-                    <textarea value={newEvent.description} onChange={e => setNewEvent(prev => ({ ...prev, description: e.target.value }))} rows={2} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm resize-none" placeholder="Capítulos, observações..." />
+                    <textarea value={newEvent.description} onChange={e => { setDescTouched(true); setNewEvent(prev => ({ ...prev, description: e.target.value })); }} rows={2} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm resize-none" placeholder="Capítulos, observações..." />
                   </div>
                 </div>
 
@@ -1008,11 +1189,11 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   <button onClick={() => { setIsAdding(false); setIsCopyOpen(false); }} className="flex-1 py-3 font-black text-slate-400 uppercase text-[9px]">Cancelar</button>
                   <button
                     onClick={handleSaveEvent}
-                    disabled={!newEvent.title || !newEvent.slotId || isInvalidDate}
+                    disabled={!canSave}
                     className={`flex-1 py-3 rounded-lg font-black uppercase text-[9px] tracking-tight transition-all duration-300 flex items-center justify-center gap-2
                   ${saveSuccess
                         ? 'bg-green-500 text-white shadow-lg shadow-green-200 scale-105'
-                        : (!newEvent.title || !newEvent.slotId || isInvalidDate)
+                        : (!canSave)
                           ? 'bg-slate-100 text-slate-300'
                           : 'bg-blue-600 text-white shadow-xl shadow-blue-100 hover:brightness-110'
                       }`}

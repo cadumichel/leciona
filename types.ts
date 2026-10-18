@@ -24,6 +24,12 @@ export interface School {
   shifts: Shift[];
   deleted?: boolean;
   deletedAt?: string;
+  /** Recuperação: nenhuma, paralela (uma REC por prova) ou trimestral (utils/recovery.ts) */
+  recoveryPolicy?: 'none' | 'parallel' | 'term';
+  /** Dias entre a prova e a REC paralela (padrão 15) */
+  recoveryDelayDays?: number;
+  /** 2ª chamada: numa aula do professor ou no contraturno (sem aula) */
+  secondCallMode?: 'in_class' | 'off_schedule';
 }
 
 export interface SchoolClass {
@@ -178,6 +184,10 @@ export interface SchoolEvent {
   maxGrade?: number; // Nota máxima (default: 10)
   scheduled?: boolean; // Se a avaliação já foi comunicada/agendada com os alunos
   prepared?: boolean; // Se a avaliação já foi elaborada/enviada para impressão
+  /** REC paralela, REC trimestral ou 2ª chamada (sem kind = avaliação regular) */
+  kind?: 'recovery' | 'term_recovery' | 'second_call';
+  /** Avaliação original da REC ou da 2ª chamada */
+  parentId?: string;
 }
 
 export interface Term {

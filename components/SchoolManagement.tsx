@@ -188,7 +188,10 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
         color: newSchool.color!,
         classes: newSchool.classes || [],
         subjects: [],
-        shifts: newSchool.shifts || []
+        shifts: newSchool.shifts || [],
+        ...(newSchool.recoveryPolicy ? { recoveryPolicy: newSchool.recoveryPolicy } : {}),
+        ...(newSchool.recoveryDelayDays ? { recoveryDelayDays: newSchool.recoveryDelayDays } : {}),
+        ...(newSchool.secondCallMode ? { secondCallMode: newSchool.secondCallMode } : {})
       };
       onUpdateData({ schools: [...data.schools, schoolToAdd] });
     }
@@ -615,6 +618,43 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                           />
                         </div>
                       </div>
+                    </div>
+
+                    {/* Recuperação e 2ª chamada (utils/recovery.ts) */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">Recuperação</label>
+                      <select
+                        value={newSchool.recoveryPolicy || 'none'}
+                        onChange={e => setNewSchool({ ...newSchool, recoveryPolicy: e.target.value as School['recoveryPolicy'] })}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm bg-white"
+                      >
+                        <option value="none">Nenhuma automática</option>
+                        <option value="parallel">Paralela: uma REC para cada prova</option>
+                        <option value="term">Trimestral: no fim do trimestre</option>
+                      </select>
+                      {(newSchool.recoveryPolicy === 'parallel') && (
+                        <div className="flex items-center gap-2 mt-2 text-xs text-slate-600">
+                          <span>REC</span>
+                          <input
+                            type="number" min={1} max={60}
+                            value={newSchool.recoveryDelayDays || 15}
+                            onChange={e => setNewSchool({ ...newSchool, recoveryDelayDays: Math.max(1, parseInt(e.target.value) || 15) })}
+                            className="w-16 px-2 py-1 border border-slate-200 rounded-lg text-sm text-center"
+                          />
+                          <span>dias depois da prova</span>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">2ª chamada</label>
+                      <select
+                        value={newSchool.secondCallMode || 'in_class'}
+                        onChange={e => setNewSchool({ ...newSchool, secondCallMode: e.target.value as School['secondCallMode'] })}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm bg-white"
+                      >
+                        <option value="in_class">Numa aula minha</option>
+                        <option value="off_schedule">No contraturno (fora das minhas aulas)</option>
+                      </select>
                     </div>
                   </div>
 

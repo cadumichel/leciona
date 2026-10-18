@@ -797,6 +797,15 @@ var redirecionamentoPermitido = (uri) => {
   }
   return url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
 };
+var enderecoRecusado = (uri) => {
+  if (!uri) return "Endere\xE7o de retorno n\xE3o permitido.";
+  try {
+    const url = new URL(uri);
+    return `Endere\xE7o de retorno n\xE3o permitido: ${url.protocol}//${url.host}${url.pathname}`;
+  } catch {
+    return `Endere\xE7o de retorno n\xE3o permitido: ${uri.slice(0, 120)}`;
+  }
+};
 var urlsDoServidor = (origem) => ({
   emissor: origem,
   recurso: `${origem}/api/mcp`,
@@ -840,7 +849,7 @@ var ErroOAuth = class extends Error {
 var validarPedido = (p, origem) => {
   if (!p.client_id) throw new ErroOAuth("invalid_request", "Falta client_id.");
   if (!p.redirect_uri || !redirecionamentoPermitido(p.redirect_uri)) {
-    throw new ErroOAuth("invalid_request", "Endere\xE7o de retorno n\xE3o permitido.");
+    throw new ErroOAuth("invalid_request", enderecoRecusado(p.redirect_uri));
   }
   if (p.response_type !== "code") throw new ErroOAuth("unsupported_response_type", "Use response_type=code.");
   if (!p.code_challenge || p.code_challenge_method !== "S256") {
@@ -933,7 +942,8 @@ var verificarAcesso = async (a, emailPermitido, cabecalho) => {
 var registrarCliente = (corpo) => {
   const uris = corpo?.redirect_uris;
   if (!Array.isArray(uris) || !uris.length || !uris.every((u) => typeof u === "string" && redirecionamentoPermitido(u))) {
-    throw new ErroOAuth("invalid_redirect_uri", "Endere\xE7o de retorno n\xE3o permitido.");
+    const recusado = Array.isArray(uris) ? uris.find((u) => typeof u !== "string" || !redirecionamentoPermitido(u)) : void 0;
+    throw new ErroOAuth("invalid_redirect_uri", enderecoRecusado(typeof recusado === "string" ? recusado : void 0));
   }
   return {
     client_id: `leciona-${crypto.randomUUID()}`,

@@ -387,7 +387,8 @@ const App: React.FC = () => {
           <ConnectionBanner disconnected={disconnected} errorSince={errorSince} onConnect={connectAccount} onRetry={requestSync} />
         )}
 
-        <div className="px-3 py-3 lg:px-8 lg:py-8 max-w-6xl mx-auto w-full">
+        {/* No computador, as telas (menos o Início) têm menos margem em cima */}
+        <div className={`px-3 py-3 lg:px-8 ${activeTab === 'dashboard' ? 'lg:py-8' : 'lg:py-5'} max-w-6xl mx-auto w-full`}>
           {activeTab === 'dashboard' && (
             <>
               {data.settings.showQuickStartGuide && (

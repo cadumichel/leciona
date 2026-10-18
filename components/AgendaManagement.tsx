@@ -28,7 +28,7 @@ interface AgendaManagementProps {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function formatMonthHeader(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00');
+  const d = new Date(dateStr.split('T')[0] + 'T12:00:00');
   return d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase());
 }
 
@@ -346,13 +346,13 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4 md:space-y-6 pb-20">
+    <div className="space-y-4 md:space-y-6 lg:space-y-3 pb-20">
 
-      {/* ── Header ── */}
-      <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* ── Header (no computador, faixa compacta) ── */}
+      <div className="bg-white dark:bg-slate-900 p-4 md:p-6 lg:px-4 lg:py-2.5 rounded-2xl lg:rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
-            <Calendar className="text-orange-500 w-5 h-5" /> Agenda Escolar
+            <Calendar className="text-orange-500 w-5 h-5 lg:w-4 lg:h-4" /> Agenda Escolar
           </h3>
           <p className="text-[9px] text-slate-500 font-black uppercase tracking-tight mt-0.5">
             {filteredEvents.length} evento{filteredEvents.length !== 1 ? 's' : ''}{' '}
@@ -363,17 +363,17 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
         </div>
         <button
           onClick={() => setIsAddingEvent(true)}
-          className="bg-orange-500 text-white px-5 py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight shadow-lg shadow-orange-100 hover:brightness-110 transition-all flex items-center gap-2 self-start sm:self-auto shrink-0"
+          className="bg-orange-500 text-white px-5 py-2.5 lg:px-4 lg:py-2 rounded-lg lg:rounded-md font-black uppercase text-[9px] tracking-tight shadow-lg lg:shadow-md shadow-orange-100 hover:brightness-110 transition-all flex items-center gap-2 self-start sm:self-auto shrink-0"
         >
           <Plus size={15} /> Novo Evento
         </button>
       </div>
 
       {/* ── Filter Toolbar ── */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-3 md:p-4 space-y-3">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl lg:rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm p-3 md:p-4 lg:p-2.5 space-y-3 lg:space-y-2">
 
-        {/* Search row */}
-        <div className="relative">
+        {/* Search row (no computador, a busca fica na linha de baixo) */}
+        <div className="relative lg:hidden">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -434,7 +434,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
         </div>
 
         {/* Layout + Status row */}
-        <div className="flex items-center gap-3 pt-1 border-t border-slate-100 dark:border-slate-800 flex-wrap">
+        <div className="flex items-center gap-3 pt-1 lg:pt-2 border-t border-slate-100 dark:border-slate-800 flex-wrap">
 
           {/* Cards per row */}
           <div className="flex items-center gap-1.5">
@@ -490,12 +490,29 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
               </button>
             ))}
           </div>
+
+          {/* Busca no computador: ocupa o resto da linha */}
+          <div className="relative flex-1 min-w-[180px] hidden lg:block">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Buscar evento..."
+              className="w-full pl-8 pr-8 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-md border-none text-xs font-bold dark:text-white placeholder:text-slate-400 placeholder:font-normal"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X size={13} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* ── Grouped Event List ── */}
       {grouped.length === 0 ? (
-        <div className="py-16 bg-white dark:bg-slate-900 rounded-2xl border-2 border-dashed border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center gap-4 text-center">
+        <div className="py-16 bg-white dark:bg-slate-900 rounded-2xl lg:rounded-lg border-2 border-dashed border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center gap-4 text-center">
           <CalendarDays size={40} className="text-slate-300 dark:text-slate-700" />
           <div>
             <p className="text-slate-500 font-black uppercase text-[10px] tracking-tight">
@@ -515,7 +532,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
         </div>
       ) : (
         grouped.map(month => (
-          <div key={month.key} className="space-y-3">
+          <div key={month.key} className="space-y-3 lg:space-y-2">
 
             {/* Month header */}
             <div className="flex items-center gap-3">
@@ -535,7 +552,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
                 )}
 
                 {/* Cards grid */}
-                <div className={`grid gap-3 ${gridClass}`}>
+                <div className={`grid gap-3 lg:gap-2 ${gridClass}`}>
                   {week.events.map(event => {
                     const school = data.schools.find(s => s.id === event.schoolId);
                     const eventColor = school ? school.color : '#f97316';
@@ -545,7 +562,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
                     return (
                       <div
                         key={event.id}
-                        className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm transition-all flex items-start gap-3 hover:shadow-md relative overflow-hidden"
+                        className="bg-white dark:bg-slate-900 p-3 lg:p-2.5 rounded-xl lg:rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm transition-all flex items-start gap-3 hover:shadow-md relative overflow-hidden"
                         style={{ borderColor: `${eventColor}40` }}
                       >
                         {/* Past indicator strip */}

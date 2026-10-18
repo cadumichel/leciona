@@ -59,6 +59,16 @@ objetivo.
 - **Início**: `components/Dashboard.tsx` + `utils/dashboardWeb.ts` (linha do dia e grade semanal).
 - **Virada do ano letivo**: `utils/newSchoolYear.ts` + `components/NewSchoolYearWizard.tsx`.
 - **Planilhas exportadas**: `utils/exportRows.ts`.
+- **Retrospectiva do Diário** (janela de registro da aula): `utils/retrospective.ts`. Mostra a aula
+  imediatamente anterior da turma pela grade (sem feriados, recessos e aulas removidas; aulas extras
+  contam), mesmo sem conteúdo ("Sem conteúdo cadastrado"). Nunca pular para o último registro.
+- **Notas** (`components/GradesManagement.tsx` + `utils/grades.ts`):
+  - Média aritmética e ponderada contam cada nota proporcionalmente à nota máxima (3 de 3 = 10);
+    a opção "Soma" soma as notas como lançadas; avaliação sem nota fica fora do cálculo.
+  - Fórmula personalizada: N1, N2… são fixos por coluna (`GradingConfig.columnOrder`); coluna nova
+    ganha o próximo número e número de coluna apagada não é reaproveitado.
+  - Editar nota mantém o mesmo id (`setGrade`); com notas repetidas vale a mais recente
+    (`latestGrade`). Nunca gerar id novo ao editar um item sincronizado.
 
 ## Conector do Leciona para o Claude (etapas 1 e 2 prontas)
 Servidor MCP remoto no próprio projeto da Vercel: o Claude lê e grava no Leciona. Endereço do
@@ -98,8 +108,3 @@ conector: `https://leciona.vercel.app/api/mcp`.
 
 **Alertas**: tarefas agendadas no app do Claude (domingo 10h, segunda 6h30, terça 12h45, sexta
 12h30) que usam `avaliacoes_proximas` com 7 dias. O texto delas fica no próprio app do Claude.
-
-## Pendente: notas (`components/GradesManagement.tsx`)
-- `maxGrade` é ignorado no cálculo; falta a opção de soma.
-- A fórmula personalizada (N1…Nn) se desloca quando colunas são adicionadas.
-- Os ids das notas são regenerados.

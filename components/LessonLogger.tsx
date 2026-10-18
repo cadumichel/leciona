@@ -2029,9 +2029,9 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
   if (activeLesson) {
     return (
-      <div className="max-w-2xl mx-auto p-5 md:p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-right-4">
+      <div className="max-w-2xl lg:max-w-3xl mx-auto p-5 md:p-6 lg:px-5 lg:py-4 bg-white dark:bg-slate-900 rounded-2xl lg:rounded-lg shadow-xl border border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-right-4">
         {/* ... (cabeçalho e resto do formulário mantidos) ... */}
-        <div className="flex justify-between items-center mb-6 md:mb-8">
+        <div className="flex justify-between items-center mb-6 md:mb-8 lg:mb-2">
           <button onClick={() => setActiveLesson(null)} className="flex items-center gap-2 text-[9px] md:text-[10px] font-black uppercase text-slate-500 hover:text-slate-800 transition-colors"><ArrowLeft size={16} /> Voltar</button>
 
           <div className="flex items-center gap-2">
@@ -2077,8 +2077,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
 
         </div>
-        <div className="flex items-center gap-4 md:gap-6 mb-6 md:mb-8">
-          <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl flex items-center justify-center text-white font-black text-xl md:text-2xl shadow-lg" style={{ backgroundColor: activeLesson.institution.color }}>{activeLesson.institution.name[0]}</div>
+        <div className="flex items-center gap-4 md:gap-6 lg:gap-4 mb-6 md:mb-8 lg:mb-3">
+          <div className="w-12 h-12 md:w-16 md:h-16 lg:w-11 lg:h-11 rounded-2xl lg:rounded-lg flex items-center justify-center text-white font-black text-xl md:text-2xl lg:text-xl shadow-lg lg:shadow-md" style={{ backgroundColor: activeLesson.institution.color }}>{activeLesson.institution.name[0]}</div>
           <div>
             {(() => {
               const school = activeLesson.institution as School;
@@ -2135,7 +2135,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               return (
                 <>
                   <div className="flex items-center gap-3">
-                    <h3 className="text-lg md:text-2xl font-black uppercase text-slate-800 dark:text-white tracking-tight">
+                    <h3 className="text-lg md:text-2xl lg:text-xl font-black uppercase text-slate-800 dark:text-white tracking-tight">
                       {title}
                     </h3>
                     {activeLesson.date < getYYYYMMDD(new Date()) && (
@@ -2149,7 +2149,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                       </span>
                     )}
                   </div>
-                  <p className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase mt-1">
+                  <p className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase mt-1 lg:mt-0.5">
                     {subtitle}
                   </p>
                 </>
@@ -2159,15 +2159,15 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
         </div>
 
         {lastLessonInfo && (
-          <div className="mb-6 md:mb-8 p-4 md:p-6 rounded-xl border border-primary/20 bg-primary-light" style={{ backgroundColor: 'var(--primary-light)' }}>
-            <div className="flex items-center gap-2 mb-2 md:mb-3">
+          <div className="mb-6 md:mb-8 lg:mb-2 p-4 md:p-6 lg:px-4 lg:py-2.5 rounded-xl lg:rounded-lg border border-primary/20 bg-primary-light" style={{ backgroundColor: 'var(--primary-light)' }}>
+            <div className="flex items-center gap-2 mb-2 md:mb-3 lg:mb-1">
               <History size={12} className="text-primary md:w-3.5 md:h-3.5" />
               <span className="text-[9px] md:text-[10px] font-black text-primary uppercase tracking-tight">Retrospectiva</span>
             </div>
             {lastLessonInfo.subject ? (
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-300 italic mb-2">"{lastLessonInfo.subject}"</p>
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-300 italic mb-2 lg:mb-1 lg:line-clamp-2">"{lastLessonInfo.subject}"</p>
             ) : (
-              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 mb-2">{lastLessonInfo.hasContent ? 'Sem conteúdo cadastrado (só tarefa)' : 'Sem conteúdo cadastrado'}</p>
+              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 lg:mb-1">{lastLessonInfo.hasContent ? 'Sem conteúdo cadastrado (só tarefa)' : 'Sem conteúdo cadastrado'}</p>
             )}
             <div className="flex gap-4">
               {lastLessonInfo.homework && <div className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase">Tarefa: {lastLessonInfo.homework}</div>}
@@ -2177,7 +2177,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
         )}
 
         {remainingInfo && activeLesson && (
-          <div className="-mt-4 md:-mt-6 mb-6 md:mb-8 px-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] md:text-[10px] font-bold text-slate-500 dark:text-slate-400">
+          <div className="-mt-4 md:-mt-6 lg:mt-0 mb-6 md:mb-8 lg:mb-3 px-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] md:text-[10px] font-bold text-slate-500 dark:text-slate-400">
             <CalendarRange size={12} className="text-primary shrink-0" />
             <span>
               {remainingInfo.count === 0
@@ -2206,7 +2206,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           </div>
         )}
 
-        <div className="space-y-4 md:space-y-6">
+        <div className="space-y-4 md:space-y-6 lg:space-y-3">
           {/* ... (campos de texto mantidos) ... */}
           {activeLesson.schedule.classId === 'window' ? (
             <div className="bg-slate-50 dark:bg-slate-800/50 p-8 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 text-center">
@@ -2224,24 +2224,24 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           ) : (
             <>
               <div>
-                <label className="block text-[9px] md:text-[10px] font-black text-slate-500 uppercase mb-2 ml-2">Conteúdo da Aula {isFutureDate && <span className="text-primary">(Planejamento)</span>}</label>
-                <textarea value={logForm.subject} onChange={e => setLogForm({ ...logForm, subject: e.target.value })} disabled={isReadOnlyRecess} readOnly={isReadOnlyRecess} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-4 md:p-5 font-bold dark:text-white focus:ring-2 focus:ring-primary outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed" placeholder={isFutureDate ? "Planeje o conteúdo desta aula..." : "O que foi trabalhado hoje?"} rows={4} />
+                <label className="block text-[9px] md:text-[10px] font-black text-slate-500 uppercase mb-2 lg:mb-1 ml-2">Conteúdo da Aula {isFutureDate && <span className="text-primary">(Planejamento)</span>}</label>
+                <textarea value={logForm.subject} onChange={e => setLogForm({ ...logForm, subject: e.target.value })} disabled={isReadOnlyRecess} readOnly={isReadOnlyRecess} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl lg:rounded-lg p-4 md:p-5 lg:p-3 lg:h-24 font-bold dark:text-white focus:ring-2 focus:ring-primary outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed" placeholder={isFutureDate ? "Planeje o conteúdo desta aula..." : "O que foi trabalhado hoje?"} rows={4} />
               </div>
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid md:grid-cols-2 gap-4 lg:gap-3">
                 <div>
-                  <label className="block text-[9px] md:text-[10px] font-black text-slate-500 uppercase mb-2 ml-2">Tarefa de Casa</label>
-                  <input value={logForm.homework} onChange={e => setLogForm({ ...logForm, homework: e.target.value })} disabled={isReadOnlyRecess} readOnly={isReadOnlyRecess} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 md:p-4 font-bold dark:text-white focus:ring-2 focus:ring-primary outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed" placeholder="Ex: Exercícios pág. 42" />
+                  <label className="block text-[9px] md:text-[10px] font-black text-slate-500 uppercase mb-2 lg:mb-1 ml-2">Tarefa de Casa</label>
+                  <input value={logForm.homework} onChange={e => setLogForm({ ...logForm, homework: e.target.value })} disabled={isReadOnlyRecess} readOnly={isReadOnlyRecess} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl lg:rounded-lg p-3 md:p-4 lg:p-2.5 font-bold dark:text-white focus:ring-2 focus:ring-primary outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed" placeholder="Ex: Exercícios pág. 42" />
                 </div>
                 <div>
-                  <label className="block text-[9px] md:text-[10px] font-black text-slate-500 uppercase mb-2 ml-2">Notas Extras</label>
-                  <input value={logForm.notes} onChange={e => setLogForm({ ...logForm, notes: e.target.value })} disabled={isReadOnlyRecess} readOnly={isReadOnlyRecess} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-3 md:p-4 font-bold dark:text-white focus:ring-2 focus:ring-primary outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed" placeholder="Observações..." />
+                  <label className="block text-[9px] md:text-[10px] font-black text-slate-500 uppercase mb-2 lg:mb-1 ml-2">Notas Extras</label>
+                  <input value={logForm.notes} onChange={e => setLogForm({ ...logForm, notes: e.target.value })} disabled={isReadOnlyRecess} readOnly={isReadOnlyRecess} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl lg:rounded-lg p-3 md:p-4 lg:p-2.5 font-bold dark:text-white focus:ring-2 focus:ring-primary outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed" placeholder="Observações..." />
                 </div>
               </div>
             </>
           )}
 
           <div>
-            <div className="flex flex-wrap items-center gap-3 mb-2 ml-2">
+            <div className="flex flex-wrap items-center gap-3 mb-2 lg:mb-1 ml-2">
               {activeLesson.type !== 'private' && !isReadOnlyRecess && (
                 <button
                   onClick={() => setCopyData(prev => ({ ...prev, isOpen: true, targetDate: getYYYYMMDD(new Date()) }))}
@@ -2335,7 +2335,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           </div>
 
           {consecutiveSlots.length > 0 && (
-            <div className={`flex items-center gap-3 p-4 rounded-xl border transition-all animate-in fade-in ${replicateLog ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-900/40' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800'}`}>
+            <div className={`flex items-center gap-3 p-4 lg:px-3 lg:py-2 rounded-xl lg:rounded-lg border transition-all animate-in fade-in ${replicateLog ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-900/40' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800'}`}>
               <Copy size={20} className={replicateLog ? 'text-blue-500' : 'text-slate-400'} />
               <div className="flex-1">
                 <span className={`block text-[10px] font-black uppercase tracking-tight mb-0.5 ${replicateLog ? 'text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}`}>Preencher automaticamente aulas em sequência?</span>
@@ -2408,7 +2408,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             <button
               onClick={handleSaveLog}
               disabled={saveStatus === 'loading' || saveStatus === 'success'}
-              className={`w-full py-4 md:py-4 text-white rounded-xl font-black uppercase text-[10px] md:text-xs tracking-tight shadow-xl mt-4 flex items-center justify-center gap-2 transition-all ${saveStatus === 'success'
+              className={`w-full py-4 md:py-4 lg:py-3 text-white rounded-xl lg:rounded-lg font-black uppercase text-[10px] md:text-xs tracking-tight shadow-xl lg:shadow-md mt-4 lg:mt-1 flex items-center justify-center gap-2 transition-all ${saveStatus === 'success'
                 ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20'
                 : 'bg-primary hover:opacity-90'
                 }`}
@@ -2751,11 +2751,11 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
   // ... (Restante do arquivo mantido, renderização do grid) ...
   return (
-    <div className="space-y-4 md:space-y-6 max-w-6xl mx-auto pb-20">
+    <div className="space-y-4 md:space-y-6 lg:space-y-3 max-w-6xl mx-auto pb-20">
       {viewMode === 'day' && pendingLessons.length > 0 && !data.settings.hideUnregisteredClassesOnDiary && (
-        <button onClick={() => setShowPendencies(!showPendencies)} className={`w-full flex items-center justify-between p-4 md:p-5 rounded-xl md:rounded-2xl border-2 transition-all shadow-md hover:shadow-lg ${showPendencies ? 'bg-red-600 text-white border-red-700' : 'bg-white dark:bg-slate-900 border-red-100 dark:border-red-900/30'}`}>
+        <button onClick={() => setShowPendencies(!showPendencies)} className={`w-full flex items-center justify-between p-4 md:p-5 lg:px-4 lg:py-2.5 rounded-xl md:rounded-2xl lg:rounded-lg border-2 transition-all shadow-md hover:shadow-lg ${showPendencies ? 'bg-red-600 text-white border-red-700' : 'bg-white dark:bg-slate-900 border-red-100 dark:border-red-900/30'}`}>
           <div className="flex items-center gap-4">
-            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center ${showPendencies ? 'bg-white/20' : 'bg-red-50 dark:bg-red-900/40 text-red-600'}`}>
+            <div className={`w-10 h-10 md:w-12 md:h-12 lg:w-9 lg:h-9 rounded-xl md:rounded-2xl lg:rounded-lg flex items-center justify-center ${showPendencies ? 'bg-white/20' : 'bg-red-50 dark:bg-red-900/40 text-red-600'}`}>
               <AlertTriangle size={20} className="md:w-6 md:h-6" />
             </div>
             <div className="text-left">
@@ -2786,9 +2786,9 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       )}
 
       {/* ... (Menu de Abas) ... */}
-      <div className="flex bg-white dark:bg-slate-900 p-1 md:p-1.5 rounded-xl md:rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm w-full overflow-hidden">
+      <div className="flex bg-white dark:bg-slate-900 p-1 md:p-1.5 lg:p-1 rounded-xl md:rounded-2xl lg:rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm w-full overflow-hidden">
         {[{ id: 'day', label: 'Diário', icon: History }, { id: 'registered', label: 'Histórico', icon: CheckCircle2 }, { id: 'future', label: 'Planejamento', icon: CalendarDays }].map(tab => (
-          <button key={tab.id} onClick={() => setViewMode(tab.id as any)} className={`flex-1 flex items-center justify-center gap-2 px-2 md:px-4 py-2.5 md:py-3 rounded-2xl text-[9px] md:text-[10px] font-black uppercase transition-all ${viewMode === tab.id ? 'bg-primary text-white shadow-lg' : 'text-slate-500'}`}><tab.icon size={14} className="md:w-3.5 md:h-3.5" /> {tab.label}</button>
+          <button key={tab.id} onClick={() => setViewMode(tab.id as any)} className={`flex-1 flex items-center justify-center gap-2 px-2 md:px-4 py-2.5 md:py-3 lg:py-2 rounded-2xl lg:rounded-md text-[9px] md:text-[10px] font-black uppercase transition-all ${viewMode === tab.id ? 'bg-primary text-white shadow-lg lg:shadow-md' : 'text-slate-500'}`}><tab.icon size={14} className="md:w-3.5 md:h-3.5" /> {tab.label}</button>
         ))}
       </div>
 
@@ -2955,27 +2955,27 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
         {viewMode === 'day' && (
           <div className="w-full">
             {/* Navegação de Dias */}
-            <div className="mb-4 md:mb-6 flex items-center justify-between gap-2 md:gap-4">
+            <div className="mb-4 md:mb-6 lg:mb-3 flex items-center justify-between gap-2 md:gap-4 lg:gap-3">
               <button
                 onClick={handlePrevDay}
                 disabled={selectedDate <= activeCalendarRange.start}
-                className={`p-3 md:p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 transition-colors shadow-sm ${selectedDate <= activeCalendarRange.start ? 'opacity-50 cursor-not-allowed text-slate-300' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-400 hover:text-primary'}`}
+                className={`p-3 md:p-4 lg:p-3 bg-white dark:bg-slate-900 rounded-2xl lg:rounded-lg border border-slate-100 dark:border-slate-800 transition-colors shadow-sm ${selectedDate <= activeCalendarRange.start ? 'opacity-50 cursor-not-allowed text-slate-300' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-400 hover:text-primary'}`}
               >
                 <ChevronLeft size={20} />
               </button>
 
-              <div className={`flex-1 flex flex-col items-center justify-center p-3 md:p-4 rounded-xl border-2 transition-all ${isFutureDate ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-100 dark:border-purple-800/50' : selectedDate < getYYYYMMDD(new Date()) ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/50' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 shadow-sm'}`}>
-                <div className="flex items-center gap-2 mb-1">
+              <div className={`flex-1 flex flex-col items-center justify-center p-3 md:p-4 lg:py-1.5 rounded-xl lg:rounded-lg border-2 transition-all ${isFutureDate ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-100 dark:border-purple-800/50' : selectedDate < getYYYYMMDD(new Date()) ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/50' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 shadow-sm'}`}>
+                <div className="flex items-center gap-2 mb-1 lg:mb-0">
                   <CalendarDays size={14} className={isFutureDate ? "text-purple-500" : selectedDate < getYYYYMMDD(new Date()) ? "text-amber-500" : "text-slate-400"} />
                   <span className={`text-[9px] font-black uppercase tracking-tight ${isFutureDate ? 'text-purple-600 dark:text-purple-300' : selectedDate < getYYYYMMDD(new Date()) ? 'text-amber-600 dark:text-amber-300' : 'text-slate-400 dark:text-slate-500'}`}>
                     {isFutureDate ? 'Modo Planejamento' : selectedDate < getYYYYMMDD(new Date()) ? 'Modo Histórico' : 'Visualização Diária'}
                   </span>
                 </div>
-                <h3 className={`text-sm md:text-lg font-black uppercase ${isFutureDate ? 'text-purple-700 dark:text-purple-200' : selectedDate < getYYYYMMDD(new Date()) ? 'text-amber-700 dark:text-amber-200' : 'text-slate-800 dark:text-white'}`}>
+                <h3 className={`text-sm md:text-lg lg:text-base font-black uppercase ${isFutureDate ? 'text-purple-700 dark:text-purple-200' : selectedDate < getYYYYMMDD(new Date()) ? 'text-amber-700 dark:text-amber-200' : 'text-slate-800 dark:text-white'}`}>
                   {new Date(selectedDate + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
                 </h3>
                 {selectedDate !== getYYYYMMDD(new Date()) && (
-                  <button onClick={() => setSelectedDate(getYYYYMMDD(new Date()))} className="mt-1 flex items-center gap-1 text-[9px] font-black uppercase text-blue-500 hover:text-blue-600 transition-colors">
+                  <button onClick={() => setSelectedDate(getYYYYMMDD(new Date()))} className="mt-1 lg:mt-0 flex items-center gap-1 text-[9px] font-black uppercase text-blue-500 hover:text-blue-600 transition-colors">
                     <RotateCcw size={10} /> Voltar para Hoje
                   </button>
                 )}
@@ -2984,7 +2984,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               <button
                 onClick={handleNextDay}
                 disabled={selectedDate >= activeCalendarRange.end}
-                className={`p-3 md:p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 transition-colors shadow-sm ${selectedDate >= activeCalendarRange.end ? 'opacity-50 cursor-not-allowed text-slate-300' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-400 hover:text-primary'}`}
+                className={`p-3 md:p-4 lg:p-3 bg-white dark:bg-slate-900 rounded-2xl lg:rounded-lg border border-slate-100 dark:border-slate-800 transition-colors shadow-sm ${selectedDate >= activeCalendarRange.end ? 'opacity-50 cursor-not-allowed text-slate-300' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-400 hover:text-primary'}`}
               >
                 <ChevronRight size={20} />
               </button>
@@ -2993,8 +2993,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             {/* Grid Diário Panorâmico */}
             <div className="flex flex-col md:flex-row gap-4 md:gap-4 w-full">
               {integratedPanoramicColumns.sortedKeys.length > 0 ? integratedPanoramicColumns.sortedKeys.map(key => (
-                <div key={key} className="flex-1 w-full space-y-2 md:space-y-3 min-w-0">
-                  <div className="flex items-center gap-2 md:gap-3 px-2 py-1.5 md:px-4 md:py-2 bg-slate-100 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                <div key={key} className="flex-1 w-full space-y-2 md:space-y-3 lg:space-y-2 min-w-0">
+                  <div className="flex items-center gap-2 md:gap-3 px-2 py-1.5 md:px-4 md:py-2 lg:py-1.5 bg-slate-100 dark:bg-slate-800/50 rounded-xl lg:rounded-lg border border-slate-200 dark:border-slate-700">
                     <Clock size={12} className="text-primary md:w-3.5 md:h-3.5" />
                     <h3 className="text-[9px] md:text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-tight">{key}</h3>
                     <span className="ml-auto text-[7px] md:text-[8px] font-black bg-white dark:bg-slate-700 text-slate-500 px-2 py-0.5 rounded-lg">
@@ -3021,7 +3021,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                             item.schedule && handleOpenLog(item.schedule, selectedDate);
                           }
                         }}
-                        className={`w-full flex items-center gap-1.5 md:gap-2 p-1.5 md:p-2 rounded-lg md:rounded-xl border-2 transition-all text-left group relative ${(item as any).isExtra && item.log?.type !== 'regular' ? 'ring-2 ring-indigo-400 dark:ring-indigo-600 ring-offset-1' : ''
+                        className={`w-full flex items-center gap-1.5 md:gap-2 lg:gap-2.5 p-1.5 md:p-2 lg:py-1.5 rounded-lg md:rounded-xl lg:rounded-lg border-2 transition-all text-left group relative ${(item as any).isExtra && item.log?.type !== 'regular' ? 'ring-2 ring-indigo-400 dark:ring-indigo-600 ring-offset-1' : ''
                           } ${item.slot.type === 'break' ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-900/30' : item.isFree ? 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 opacity-60 grayscale' : item.isActive ? 'bg-primary/5 border-primary shadow-lg scale-[1.02] z-10' : item.isWindow ? 'bg-slate-200 dark:bg-slate-800/80 border-slate-300 dark:border-slate-600 shadow-sm' : item.log ? (isFutureDate ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800 border-dashed' : 'bg-white dark:bg-slate-900 border-green-100 dark:border-green-900/20') : 'bg-white dark:bg-slate-900 border-slate-50 dark:border-slate-800 hover:border-blue-100'}`}
                       >
                         {/* Badge para aulas extras (Exceto Regular) */}
@@ -3031,7 +3031,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                           </span>
                         )}
 
-                        <div className="w-6 h-6 md:w-10 md:h-10 rounded-lg md:rounded-xl flex items-center justify-center text-white font-black text-[10px] md:text-sm shadow-md shrink-0" style={{ backgroundColor: item.inst.color }}>
+                        <div className="w-6 h-6 md:w-10 md:h-10 lg:w-9 lg:h-9 rounded-lg md:rounded-xl lg:rounded-md flex items-center justify-center text-white font-black text-[10px] md:text-sm shadow-md shrink-0" style={{ backgroundColor: item.inst.color }}>
                           {item.inst.name[0]}
                         </div>
                         <div className="overflow-hidden flex-1 min-w-0">
@@ -3101,11 +3101,11 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             {/* Self-Healing: Remove Duplicate Logs on Mount */}
 
 
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
+            <div className="mt-6 lg:mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8 lg:mb-4">
               {/* OPÇÃO 1: AULA REGULAR (Para reposições ou aulas manuais que DEVEM contar na carga horária) */}
               <button
                 onClick={() => handleAddLesson('regular')}
-                className="flex items-center justify-center gap-2 p-4 rounded-xl border-2 border-dashed border-slate-300 text-slate-400 hover:bg-slate-50 hover:text-slate-600 hover:border-slate-400 transition-all group"
+                className="flex items-center justify-center gap-2 p-4 lg:p-2.5 rounded-xl lg:rounded-lg border-2 border-dashed border-slate-300 text-slate-400 hover:bg-slate-50 hover:text-slate-600 hover:border-slate-400 transition-all group"
               >
                 <Plus size={18} className="group-hover:scale-110 transition-transform" />
                 <span className="text-[10px] font-black uppercase tracking-tight">Adicionar Aula Regular</span>
@@ -3114,7 +3114,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               {/* OPÇÃO 2: AULA EXTRA (Para reforço, eventos ou substituições) */}
               <button
                 onClick={() => handleAddLesson('extra')}
-                className="flex items-center justify-center gap-2 p-4 rounded-xl border-2 border-dashed border-slate-300 text-slate-400 hover:bg-slate-50 hover:text-slate-600 hover:border-slate-400 transition-all group"
+                className="flex items-center justify-center gap-2 p-4 lg:p-2.5 rounded-xl lg:rounded-lg border-2 border-dashed border-slate-300 text-slate-400 hover:bg-slate-50 hover:text-slate-600 hover:border-slate-400 transition-all group"
               >
                 <Plus size={18} className="group-hover:scale-110 transition-transform" />
                 <span className="text-[10px] font-black uppercase tracking-tight">Aula Extra / Substituição</span>

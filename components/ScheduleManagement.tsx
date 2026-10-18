@@ -321,10 +321,10 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
   if (!data) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 lg:space-y-3">
 
       {/* --- BOX DE VERSÕES --- */}
-      <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-slate-50 dark:bg-slate-800/50 p-4 lg:px-4 lg:py-2.5 rounded-xl lg:rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h3 className="text-xs font-black uppercase text-slate-500 tracking-tight mb-1 flex items-center gap-2">
             <Layers size={14} /> Versão da Grade
@@ -460,7 +460,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
 
 
       <div
-        className="flex flex-col md:flex-row md:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors relative overflow-hidden"
+        className="flex flex-col md:flex-row md:items-center gap-4 bg-white dark:bg-slate-900 p-4 lg:py-2.5 rounded-xl lg:rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm transition-colors relative overflow-hidden"
         // ... (rest of component, replacing data.schedules with currentVersion.schedules)
         style={{
           backgroundColor: activeColor ? activeColor + '15' : undefined,
@@ -523,7 +523,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
           <p className="text-slate-500 font-medium">Cadastre escolas ou alunos para gerenciar horários.</p>
         </div>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-8 lg:space-y-3">
           {activeInstitution.type === 'student' && institutionShifts[0]?.slots?.length === 0 && (
             <div className="bg-amber-50 dark:bg-amber-900/10 p-10 text-center rounded-2xl border border-amber-100 dark:border-amber-900/30">
               <Clock className="mx-auto text-amber-400 mb-3" size={32} />
@@ -550,12 +550,12 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
             const sortedShifts = sortShiftsByTime(institutionShifts);
 
             return sortedShifts.map(shift => (
-              <div key={shift.id} className="bg-white dark:bg-slate-900 p-3 md:p-5 rounded-xl md:rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 animate-in fade-in duration-300">
-                <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-4 md:mb-5 flex items-center gap-2 uppercase tracking-tight text-xs">
+              <div key={shift.id} className="bg-white dark:bg-slate-900 p-3 md:p-5 lg:p-3 rounded-xl md:rounded-2xl lg:rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 animate-in fade-in duration-300">
+                <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-4 md:mb-5 lg:mb-2 flex items-center gap-2 uppercase tracking-tight text-xs">
                   {activeInstitution.type === 'school' ? <LayoutGrid className="text-primary" size={18} /> : <User className="text-primary" size={18} />}
                   {activeInstitution.type === 'school' ? `Turno: ${shift.name}` : `Horários de ${activeInstitution.data.name}`}
                 </h3>
-                <div className="grid gap-1 md:gap-2"> {/* Extrema compactação em mobile: gap-1 */}
+                <div className="grid gap-1 md:gap-2 lg:gap-1"> {/* Extrema compactação em mobile: gap-1 */}
                   {(shift.slots || []).map(slot => {
                     const currentSchedule = editedSchedules.find(s =>
                       Number(s.dayOfWeek) === Number(selectedDay) &&
@@ -602,7 +602,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
 
                     return (
                       <div key={slot.id}
-                        className={`relative flex items-center gap-2 p-1.5 md:p-2 rounded-r-xl border-y border-r transition-all ${ // Compact padding p-1.5 mobile
+                        className={`relative flex items-center gap-2 p-1.5 md:p-2 lg:py-1 rounded-r-xl lg:rounded-r-md border-y border-r transition-all ${ // Compact padding p-1.5 mobile
                           slot.type === 'break'
                             ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 opacity-60 ml-1'
                             : hasConflict
@@ -613,8 +613,8 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                           borderLeft: `4px solid ${studentConflict ? studentConflict.studentColor : otherSchoolConflict ? otherSchoolConflict.schoolColor : (activeInstitution.type === 'school' && !hasConflict) ? activeInstitution.data.color : 'transparent'}`
                         }}
                       >
-                        <div className="w-16 md:w-20 shrink-0"> {/* Width ainda menor no mobile */}
-                          <p className="text-[8px] md:text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight mb-0.5">{slot.label}</p>
+                        <div className="w-16 md:w-20 lg:w-36 shrink-0 lg:flex lg:items-baseline lg:gap-2"> {/* Width ainda menor no mobile; no computador, numa linha só */}
+                          <p className="text-[8px] md:text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight mb-0.5 lg:mb-0">{slot.label}</p>
                           <p className="text-[9px] md:text-[10px] font-bold text-slate-600 dark:text-slate-400">{slot.startTime} - {slot.endTime}</p>
                         </div>
 

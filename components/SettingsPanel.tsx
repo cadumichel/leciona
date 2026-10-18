@@ -1104,12 +1104,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          )}
 
          {/* Navegação Interna de Ajustes */}
-         <div className="flex flex-wrap justify-between md:justify-center md:flex-nowrap p-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm gap-1 overflow-x-auto">
+         <div className="flex flex-wrap justify-between md:justify-center md:flex-nowrap p-1 bg-white dark:bg-slate-900 rounded-xl lg:rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm gap-1 overflow-x-auto">
             {tabs.map((tab, index) => (
                <React.Fragment key={tab.id}>
                   <button
                      onClick={() => setActiveSubTab(tab.id as any)}
-                     className={`flex-1 md:flex-none flex items-center justify-center gap-1.5 md:gap-2 px-1.5 md:px-5 py-2 rounded-lg text-[9px] md:text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeSubTab === tab.id ? 'bg-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                     className={`flex-1 md:flex-none flex items-center justify-center gap-1.5 md:gap-2 px-1.5 md:px-5 py-2 rounded-lg lg:rounded-md text-[9px] md:text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeSubTab === tab.id ? 'bg-primary text-white shadow-lg lg:shadow-md' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                         }`}
                   >
                      <tab.icon size={14} className="md:w-4 md:h-4" /> <span className="truncate">{tab.label}</span>

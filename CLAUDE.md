@@ -25,7 +25,7 @@ objetivo.
 
 ## Comandos
 - `npm test`: testes (vitest, fuso America/Sao_Paulo; ficam em `tests/`).
-- `npx tsc --noEmit -p .`: tipos. Já existem ~27 erros antigos; **não adicione novos**.
+- `npx tsc --noEmit -p .`: tipos. Já existem ~22 erros antigos; **não adicione novos**.
 - `npx vite build`: build de produção.
 - `npm run dev`: app local.
 
@@ -50,6 +50,11 @@ objetivo.
   Para a data de **hoje**, use `todayLocal()` (`utils.ts`); nunca `new Date().toISOString()`, que
   depois das 21h no Brasil já dá o dia seguinte.
 - **Grade em vigor numa data**: `getSchedulesForDate` (`utils/schedule.ts`).
+- **Mudança de grade** (nova versão, edição ou exclusão de versão): `utils/scheduleChange.ts`
+  (`planScheduleChange`, `applyScheduleDecisions`) + janela "Ajustar Planejamento Futuro"
+  (`components/MigrationWizard.tsx`). Nada antes da data da versão nem depois da versão seguinte
+  muda; a correspondência é pela ordem das aulas da turma na semana (horários reais), nunca dois
+  itens no mesmo horário; avaliações vão junto com o registro "Avaliação:".
 - **Aulas, pendências e bloqueios** (feriado, recesso, evento que suspende aula):
   `utils/lessonStats.ts` (`getLessonDisplayItems`, `isLessonBlocked`).
 - **Avaliações**: `events` com `type` `test`/`work`; `slotId` = a aula em que acontece. Ao

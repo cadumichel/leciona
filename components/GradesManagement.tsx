@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { AppData, CustomAssessment, GradeEntry, SchoolEvent, GradingConfig } from '../types';
 import { calculateStudentResult, columnNumbers, frozenColumnOrder, latestGrade, setGrade } from '../utils/grades';
 
+import { todayLocal } from '../utils';
 import {
    GraduationCap,
    ChevronDown,
@@ -31,7 +32,7 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
    const [isAddColumnModalOpen, setIsAddColumnModalOpen] = useState(false);
 
    // Inclui data no formulário de nova coluna
-   const [newColumnForm, setNewColumnForm] = useState({ title: '', weight: 1, maxGrade: 10, date: new Date().toISOString().split('T')[0] });
+   const [newColumnForm, setNewColumnForm] = useState({ title: '', weight: 1, maxGrade: 10, date: todayLocal() });
    const [tempCustomFormula, setTempCustomFormula] = useState('');
 
    // Inicializa a seleção padrão
@@ -200,7 +201,7 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
             gradingConfigs: data.gradingConfigs.map(gc => gc.id === storedConfig.id ? { ...gc, columnOrder: [...storedConfig.columnOrder!, newCustom.id] } : gc)
          } : {})
       });
-      setNewColumnForm({ title: '', weight: 1, maxGrade: 10, date: new Date().toISOString().split('T')[0] });
+      setNewColumnForm({ title: '', weight: 1, maxGrade: 10, date: todayLocal() });
       setIsAddColumnModalOpen(false);
    };
 

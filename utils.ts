@@ -6,6 +6,17 @@ export const isWeekend = (date: Date): boolean => {
   return day === 0 || day === 6;
 };
 
+/**
+ * Data de hoje (AAAA-MM-DD) no fuso do aparelho. Não usar new Date().toISOString(): ela dá a data
+ * de Londres, e depois das 21h no Brasil já é o dia seguinte.
+ */
+export const todayLocal = (date: Date = new Date()): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 // Helper seguro para criar objeto Date a partir de string
 export const getSafeDate = (dateStr: string): Date => {
   if (!dateStr) return new Date();

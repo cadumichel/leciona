@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AppData, Student, PrivateSchedule, DayOfWeek } from '../types';
 import { COLORS, DAYS_OF_WEEK_NAMES } from '../constants';
-import { checkTimeOverlap, getNearestClassDate } from '../utils';
+import { checkTimeOverlap, getNearestClassDate, todayLocal } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName } from '../utils/classRefs';
 import { Plus, Trash2, Edit3, Save, X, Clock, User, GraduationCap, ChevronRight, Calendar, DollarSign, Download, CreditCard, FileText, BookText, History } from 'lucide-react';
@@ -20,7 +20,7 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
   // New state for inline payment registration
   const [paymentForm, setPaymentForm] = useState({
     amount: '',
-    date: new Date().toISOString().split('T')[0],
+    date: todayLocal(),
     reference: ''
   });
 
@@ -30,7 +30,7 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
     name: '',
     subject: '',
     color: COLORS[6],
-    startDate: new Date().toISOString().split('T')[0],
+    startDate: todayLocal(),
     schedules: []
   });
 
@@ -41,7 +41,7 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
       name: '',
       subject: '',
       color: COLORS[6],
-      startDate: new Date().toISOString().split('T')[0],
+      startDate: todayLocal(),
       schedules: []
     });
     setIsModalOpen(true);
@@ -77,7 +77,7 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
         name: student.name || '',
         subject: student.subject || '',
         color: student.color || COLORS[6],
-        startDate: student.startDate || new Date().toISOString().split('T')[0],
+        startDate: student.startDate || todayLocal(),
         schedules: Array.isArray(student.schedules)
           ? student.schedules.map((s: any) => ({
             id: s.id || crypto.randomUUID(),
@@ -101,7 +101,7 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
       // Reset payment form
       setPaymentForm({
         amount: student.paymentConfig?.value ? String(student.paymentConfig.value) : '',
-        date: new Date().toISOString().split('T')[0],
+        date: todayLocal(),
         reference: ''
       });
       setActiveTab(initialTab);
@@ -170,7 +170,7 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
         name: newStudent.name!,
         subject: newStudent.subject!,
         color: newStudent.color || COLORS[0],
-        startDate: newStudent.startDate || new Date().toISOString().split('T')[0],
+        startDate: newStudent.startDate || todayLocal(),
         schedules: newStudent.schedules || [],
         paymentConfig: newStudent.paymentConfig, // Include payment config
         payments: newStudent.payments || [] // Include payments if any
@@ -202,7 +202,7 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `pagamentos_${newStudent.name}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `pagamentos_${newStudent.name}_${todayLocal()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -463,7 +463,7 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-2 ml-1">Início das Aulas</label>
                         <input
                           type="date"
-                          value={newStudent?.startDate || new Date().toISOString().split('T')[0]}
+                          value={newStudent?.startDate || todayLocal()}
                           onChange={e => setNewStudent({ ...newStudent, startDate: e.target.value })}
                           className="w-full bg-slate-50 border-none rounded-lg px-4 py-3 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
                         />

@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebaseConnection';
-import { downloadCSV, downloadICS, formatDateBR } from '../utils';
+import { downloadCSV, downloadICS, formatDateBR, todayLocal } from '../utils';
 import { getClassName, isSameClassRef } from '../utils/classRefs';
 import { buildLogRows, buildAssessmentRows } from '../utils/exportRows';
 import { latestGrade } from '../utils/grades';
@@ -577,7 +577,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
          if (logs.length === 0) return alert('Sem registros para exportar com os filtros atuais.');
 
-         downloadCSV(buildLogRows(data, logs), `diario_aulas_${new Date().toISOString().split('T')[0]}`);
+         downloadCSV(buildLogRows(data, logs), `diario_aulas_${todayLocal()}`);
 
       } else if (type === 'privateLessons') {
          // Filtra apenas os logs de alunos particulares (que têm studentId)
@@ -600,7 +600,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                Tarefa: l.homework,
                Notas: l.notes
             };
-         }), `aulas_particulares_${new Date().toISOString().split('T')[0]}`);
+         }), `aulas_particulares_${todayLocal()}`);
 
       } else if (type === 'assessments') {
          const assessments = data.events.filter(e => {
@@ -613,7 +613,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
          if (assessments.length === 0) return alert('Sem avaliações para exportar com os filtros atuais.');
 
-         downloadCSV(buildAssessmentRows(data, assessments), `avaliacoes_${new Date().toISOString().split('T')[0]}`);
+         downloadCSV(buildAssessmentRows(data, assessments), `avaliacoes_${todayLocal()}`);
 
       } else if (type === 'occurrences') {
          const logs = filterLogs(data.logs);
@@ -642,7 +642,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          });
 
          if (allOccurrences.length === 0) return alert('Sem ocorrências para exportar com os filtros atuais.');
-         downloadCSV(allOccurrences, `ocorrencias_${new Date().toISOString().split('T')[0]}`);
+         downloadCSV(allOccurrences, `ocorrencias_${todayLocal()}`);
 
       } else if (type === 'attendance') {
          const logs = filterLogs(data.logs).filter(l => l.attendance && l.attendance.length > 0);
@@ -666,7 +666,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          });
 
          if (attendanceRecords.length === 0) return alert('Sem registros de chamada para exportar.');
-         downloadCSV(attendanceRecords, `chamada_${new Date().toISOString().split('T')[0]}`);
+         downloadCSV(attendanceRecords, `chamada_${todayLocal()}`);
 
       } else if (type === 'grades') {
          // Filtra Configurações de Notas/Colunas
@@ -706,7 +706,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          });
 
          if (gradeRows.length === 0) return alert('Sem notas lançadas para exportar.');
-         downloadCSV(gradeRows, `notas_${new Date().toISOString().split('T')[0]}`);
+         downloadCSV(gradeRows, `notas_${todayLocal()}`);
 
       } else {
          // Calendar ICS
@@ -735,7 +735,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `leciona_backup_${new Date().toISOString().split('T')[0]}.json`;
+      link.download = `leciona_backup_${todayLocal()}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -817,8 +817,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
    const addTerm = () => {
       const newTerm: Term = {
          name: 'Novo Período',
-         start: calForm.start || new Date().toISOString().split('T')[0],
-         end: calForm.end || new Date().toISOString().split('T')[0]
+         start: calForm.start || todayLocal(),
+         end: calForm.end || todayLocal()
       };
       setCalForm({ ...calForm, terms: [...(calForm.terms || []), newTerm] });
    };
@@ -831,7 +831,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       const newRecess: Recess = {
          id: crypto.randomUUID(),
          name: '',
-         date: new Date().toISOString().split('T')[0]
+         date: todayLocal()
       };
       setCalForm({ ...calForm, extraRecesses: [...(calForm.extraRecesses || []), newRecess] });
    };
@@ -1266,6 +1266,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                  <MessageSquare size={12} /> Popup no App
                               </button>
                            </div>
+
+                           {data.settings.alertType !== 'popup' && typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted' && (
+                              <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                                 {Notification.permission === 'denied'
+                                    ? 'As notificações estão bloqueadas neste aparelho. Enquanto isso, os avisos aparecem na tela do app. Para receber notificações, libere-as nas configurações do navegador.'
+                                    : 'Este aparelho ainda não permitiu notificações. Enquanto isso, os avisos aparecem na tela do app.'}
+                                 {Notification.permission === 'default' && (
+                                    <button onClick={() => Notification.requestPermission()} className="block mt-2 underline font-black uppercase text-[9px]">Permitir notificações</button>
+                                 )}
+                              </div>
+                           )}
 
                            {data.settings.alertType !== 'popup' && (
                               <div className="flex gap-2 mb-4 animate-in fade-in slide-in-from-top-1">

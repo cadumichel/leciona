@@ -1,12 +1,12 @@
-import { AppData, School, SchoolClass, SchoolEvent } from '../types';
-import { formatDateBR, getHolidayName, getSafeDate } from '../utils';
+import { AcademicCalendar, AppData, School, SchoolClass, SchoolEvent } from '../types';
+import { deepEqual, formatDateBR, getHolidayName, getSafeDate } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { isLessonBlocked } from '../utils/lessonStats';
 import { lessonNumberInShift } from '../utils/dashboardWeb';
 import { removeUndefined } from '../utils/sync';
 import {
-  ConsultaError, DIAS_SEMANA, avaliacoesDe, calendarioNaData, dia, diaDaSemana, eDaTurma, encontrarTurma, normalizar,
-  validarData
+  ConsultaError, DIAS_SEMANA, avaliacoesDe, calendarioNaData, dia, diaDaSemana, eDaTurma, encontrarEscola, encontrarTurma,
+  escolasAtivas, normalizar, turmasAtivas, validarData
 } from './consultas';
 
 /**
@@ -35,6 +35,8 @@ export interface Plano {
   situacoes: { id: string; situacao: Situacao; descricao: string }[];
   /** Registros do diário que já existem e ganham conteúdo (com o valor visto na prévia) */
   conteudos?: { id: string; subject: string; homework: string; antes: { subject: string; homework: string }; descricao: string }[];
+  /** Calendários (um por escola) criados ou alterados, com o valor visto na prévia (null = novo) */
+  calendarios?: { id: string; novo: any; antes: any | null; descricao: string }[];
 }
 
 /** O que foi gravado, para desfazer. */
@@ -44,6 +46,7 @@ export interface Lote {
   criados: { events: string[]; logs: string[] };
   situacoesAnteriores: { id: string; prepared: boolean; scheduled: boolean; descricao: string }[];
   conteudosAnteriores?: { id: string; subject: string; homework: string; descricao: string }[];
+  calendariosAnteriores?: { id: string; antes: any | null; descricao: string }[];
 }
 
 export interface ItemDaPrevia {
@@ -378,12 +381,336 @@ export const prepararConteudos = (data: AppData, pedidos: PedidoDeConteudo[], ho
   return { itens, plano: plano.resumo.length ? plano : null };
 };
 
+// ── Calendário da escola ──────────────────────────────────────────────────────
+
+/** Calendário (um por escola, como o app) sem o carimbo, para comparar. */
+const semCarimbo = (c: any) => {
+  if (!c) return c;
+  const { _m, ...resto } = c;
+  return resto;
+};
+
+const calendarioDaEscola = (data: AppData, schoolId: string): (AcademicCalendar & { _m?: number }) | undefined =>
+  [...(data.calendars || [])]
+    .filter(c => c.schoolId === schoolId)
+    .sort((a, b) => dia(b.start).localeCompare(dia(a.start)))[0];
+
+const intervaloBR = (a: string, b: string) => `${formatDateBR(a)} a ${formatDateBR(b)}`;
+
+export interface PedidoDeCalendario {
+  escola: string;
+  divisao?: 'bimestres' | 'trimestres' | 'personalizado';
+  /** Início e fim do ano letivo */
+  inicio?: string;
+  fim?: string;
+  periodos?: { nome?: string; inicio: string; fim: string }[];
+  /** null apaga o recesso de meio de ano */
+  recesso_meio_ano?: { inicio: string; fim: string } | null;
+}
+
+/** Junta as mudanças de calendário de um mesmo pedido (cada escola entra uma vez no plano). */
+const registrarCalendario = (plano: Plano, antes: any, novo: any, descricao: string) => {
+  plano.calendarios ??= [];
+  const ja = plano.calendarios.find(c => c.id === novo.id);
+  if (ja) {
+    ja.novo = novo;
+    ja.descricao += `; ${descricao}`;
+  } else {
+    plano.calendarios.push({ id: novo.id, novo, antes: antes ? semCarimbo(antes) : null, descricao });
+  }
+};
+
+/** Calendário atual da escola, já com as mudanças anteriores deste mesmo pedido. */
+const calendarioEmPreparo = (data: AppData, plano: Plano, schoolId: string) => {
+  const atual = calendarioDaEscola(data, schoolId);
+  const emPreparo = plano.calendarios?.find(c => c.novo.schoolId === schoolId);
+  return { atual, base: emPreparo ? emPreparo.novo : atual };
+};
+
+export const prepararCalendarios = (data: AppData, pedidos: PedidoDeCalendario[], agora = Date.now()) => {
+  if (!pedidos.length) throw new ConsultaError('Nenhum calendário informado.');
+  if (pedidos.length > 10) throw new ConsultaError('Envie no máximo 10 escolas por vez.');
+  const plano: Plano = { resumo: [], criar: { events: [], logs: [] }, situacoes: [] };
+  const itens: ItemDaPrevia[] = [];
+
+  pedidos.forEach((p, i) => {
+    const item: ItemDaPrevia = { pedido: i + 1, ok: false, descricao: p.escola, avisos: [] };
+    itens.push(item);
+    try {
+      const school = encontrarEscola(data, p.escola);
+      item.descricao = `Calendário da ${school.name}`;
+      const { atual, base } = calendarioEmPreparo(data, plano, school.id);
+      const inicio = validarData(p.inicio, 'inicio');
+      const fim = validarData(p.fim, 'fim');
+      if (!base && (!inicio || !fim)) {
+        throw new ConsultaError(`A ${school.name} ainda não tem calendário. Para criar, informe o início e o fim do ano letivo.`);
+      }
+      const novo: any = base
+        ? JSON.parse(JSON.stringify(semCarimbo(base)))
+        : { id: novoId(), schoolId: school.id, year: Number(inicio!.slice(0, 4)), division: 'trimestres', start: inicio, end: fim,
+            terms: [], midYearBreak: { start: '', end: '' }, extraRecesses: [] };
+      const mudancas: string[] = [];
+      if (!base) mudancas.push('calendário novo');
+
+      if (inicio) novo.start = inicio;
+      if (fim) novo.end = fim;
+      if (dia(novo.start) > dia(novo.end)) throw new ConsultaError('O início do ano letivo vem depois do fim.');
+      if (base && (dia(base.start) !== dia(novo.start) || dia(base.end) !== dia(novo.end))) {
+        mudancas.push(`ano letivo: ${intervaloBR(novo.start, novo.end)} (era ${intervaloBR(base.start, base.end)})`);
+      } else if (!base) {
+        mudancas.push(`ano letivo: ${intervaloBR(novo.start, novo.end)}`);
+      }
+      novo.year = Number(dia(novo.start).slice(0, 4));
+
+      if (p.divisao && p.divisao !== novo.division) {
+        mudancas.push(`divisão: ${p.divisao}${base ? ` (era ${base.division})` : ''}`);
+        novo.division = p.divisao;
+      }
+      const esperado = novo.division === 'bimestres' ? 4 : novo.division === 'trimestres' ? 3 : 0;
+      const rotulo = novo.division === 'bimestres' ? 'Bimestre' : novo.division === 'trimestres' ? 'Trimestre' : 'Período';
+
+      if (p.periodos) {
+        const periodos = p.periodos.map((t, k) => ({
+          name: (t.nome || '').trim() || `${k + 1}º ${rotulo}`,
+          start: validarData(t.inicio, `periodos[${k + 1}].inicio`)!,
+          end: validarData(t.fim, `periodos[${k + 1}].fim`)!
+        }));
+        periodos.forEach((t, k) => {
+          if (t.start > t.end) throw new ConsultaError(`${t.name}: o início vem depois do fim.`);
+          if (k > 0 && t.start <= periodos[k - 1].end) throw new ConsultaError(`${t.name} começa antes do fim de ${periodos[k - 1].name}.`);
+          if (t.start < dia(novo.start) || t.end > dia(novo.end)) item.avisos.push(`${t.name} sai do ano letivo (${intervaloBR(novo.start, novo.end)}).`);
+        });
+        if (esperado && periodos.length !== esperado) item.avisos.push(`Foram informados ${periodos.length} períodos para ${novo.division} (o normal são ${esperado}).`);
+        const antesTermos = JSON.stringify((base?.terms || []).map((t: any) => [t.name, dia(t.start), dia(t.end)]));
+        if (antesTermos !== JSON.stringify(periodos.map(t => [t.name, t.start, t.end]))) {
+          mudancas.push(`períodos: ${periodos.map(t => `${t.name} ${intervaloBR(t.start, t.end)}`).join('; ')}`);
+          if (base && (base.terms || []).length !== periodos.length && (data.gradingConfigs || []).some(g => g.schoolId === school.id)) {
+            item.avisos.push('O número de períodos mudou e há configurações de notas nessa escola, que usam a posição do período. Confira as notas no app.');
+          }
+        }
+        novo.terms = periodos;
+      } else if (p.divisao && esperado && (novo.terms || []).length !== esperado) {
+        item.avisos.push(`Os períodos não foram informados e continuam ${(novo.terms || []).length}. Informe as datas de cada ${rotulo.toLowerCase()}.`);
+      }
+
+      if (p.recesso_meio_ano !== undefined) {
+        const r = p.recesso_meio_ano;
+        const anterior = novo.midYearBreak?.start ? intervaloBR(novo.midYearBreak.start, novo.midYearBreak.end) : 'nenhum';
+        if (r === null) {
+          if (novo.midYearBreak?.start) mudancas.push(`recesso de meio de ano removido (era ${anterior})`);
+          novo.midYearBreak = { start: '', end: '' };
+        } else {
+          const ri = validarData(r.inicio, 'recesso_meio_ano.inicio')!;
+          const rf = validarData(r.fim, 'recesso_meio_ano.fim')!;
+          if (ri > rf) throw new ConsultaError('O recesso de meio de ano começa depois de terminar.');
+          if (ri !== dia(novo.midYearBreak?.start) || rf !== dia(novo.midYearBreak?.end)) {
+            mudancas.push(`recesso de meio de ano: ${intervaloBR(ri, rf)} (era ${anterior})`);
+          }
+          novo.midYearBreak = { start: ri, end: rf };
+        }
+      }
+
+      if (!mudancas.length) {
+        item.avisos.push('Nada muda no calendário.');
+        item.ok = true;
+        return;
+      }
+      item.descricao += `: ${mudancas.join('; ')}`;
+      registrarCalendario(plano, atual, novo, item.descricao);
+      plano.resumo.push(item.descricao);
+      item.ok = true;
+    } catch (e) {
+      if (!(e instanceof ConsultaError)) throw e;
+      item.erro = e.message;
+    }
+  });
+
+  return { itens, plano: plano.resumo.length ? plano : null };
+};
+
+// ── Recessos e feriados da escola ─────────────────────────────────────────────
+
+export interface PedidoDeRecesso {
+  /** Sem escola = vale para todas (ex.: feriado municipal) */
+  escola?: string;
+  data: string;
+  nome: string;
+}
+
+const temConteudoDeAula = (subject?: string) =>
+  !!(subject || '').trim() && !/^(Avaliação|Evento):/.test(subject || '');
+
+export const prepararRecessos = (data: AppData, pedidos: PedidoDeRecesso[]) => {
+  if (!pedidos.length) throw new ConsultaError('Nenhum recesso informado.');
+  if (pedidos.length > 40) throw new ConsultaError('Envie no máximo 40 recessos por vez.');
+  const plano: Plano = { resumo: [], criar: { events: [], logs: [] }, situacoes: [] };
+  const itens: ItemDaPrevia[] = [];
+
+  pedidos.forEach((p, i) => {
+    const item: ItemDaPrevia = { pedido: i + 1, ok: false, descricao: `${p.nome} (${p.data})`, avisos: [] };
+    itens.push(item);
+    try {
+      const d = validarData(p.data, 'data')!;
+      const nome = (p.nome || '').trim();
+      if (!nome) throw new ConsultaError('Informe o nome do recesso ou feriado.');
+      const feriado = getHolidayName(getSafeDate(d));
+      if (feriado) throw new ConsultaError(`${formatDateBR(d)} já é feriado nacional no app (${feriado}); não precisa cadastrar.`);
+      const escolas = p.escola ? [encontrarEscola(data, p.escola)] : escolasAtivas(data);
+      item.descricao = `"${nome}" em ${quando(d)}`;
+
+      const incluidas: string[] = [];
+      for (const school of escolas) {
+        const { atual, base } = calendarioEmPreparo(data, plano, school.id);
+        if (!base) {
+          item.avisos.push(`${school.name}: ainda não tem calendário cadastrado; não incluída.`);
+          continue;
+        }
+        if ((base.extraRecesses || []).some((r: any) => dia(r.date) === d)) {
+          item.avisos.push(`${school.name}: já tem recesso nesse dia; não incluída.`);
+          continue;
+        }
+        if (d < dia(base.start) || d > dia(base.end)) item.avisos.push(`${school.name}: a data está fora do ano letivo.`);
+        const doDia = (data.logs || []).filter(l => !l.studentId && l.schoolId === school.id && dia(l.date) === d && l.status !== 'removed');
+        const comConteudo = doDia.filter(l => temConteudoDeAula(l.subject)).length;
+        if (comConteudo) item.avisos.push(`${school.name}: há ${comConteudo} registro(s) de conteúdo no diário nesse dia; eles continuam lá, mas o dia passa a contar como sem aula.`);
+        const provas = avaliacoesDe(data, school).filter(e => dia(e.date) === d);
+        if (provas.length) item.avisos.push(`${school.name}: há avaliação nesse dia (${provas.map(e => `"${e.title}"`).join(', ')}); remarque no app.`);
+        const novo = JSON.parse(JSON.stringify(semCarimbo(base)));
+        novo.extraRecesses = [...(novo.extraRecesses || []), { id: novoId(), name: nome, date: d }];
+        registrarCalendario(plano, atual, novo, `recesso "${nome}" em ${formatDateBR(d)}`);
+        incluidas.push(school.name);
+      }
+      if (!incluidas.length) throw new ConsultaError('Nenhuma escola pôde receber este recesso (veja os avisos).');
+      item.descricao += ` — ${incluidas.join(', ')}`;
+      plano.resumo.push(`Recesso ${item.descricao}`);
+      item.ok = true;
+    } catch (e) {
+      if (!(e instanceof ConsultaError)) throw e;
+      item.erro = e.message;
+    }
+  });
+
+  return { itens, plano: plano.resumo.length ? plano : null };
+};
+
+// ── Eventos (reunião, festa, passeio…) ────────────────────────────────────────
+
+const TIPOS_EVENTO: Record<string, { tipo: string; rotulo: string }> = {
+  reuniao: { tipo: 'meeting', rotulo: 'Reunião' },
+  festividade: { tipo: 'festivity', rotulo: 'Festividade' },
+  passeio: { tipo: 'trip', rotulo: 'Passeio' },
+  material: { tipo: 'material', rotulo: 'Material' },
+  outro: { tipo: 'other', rotulo: 'Outro' }
+};
+
+export interface PedidoDeEvento {
+  escola: string;
+  data: string;
+  tipo: keyof typeof TIPOS_EVENTO;
+  titulo: string;
+  descricao?: string;
+  /** Suspende as aulas (da escola toda, de um turno ou de uma turma) */
+  suspende_aulas?: boolean;
+  turno?: string;
+  turma?: string;
+}
+
+export const prepararEventos = (data: AppData, pedidos: PedidoDeEvento[], hoje: string, agora = Date.now()) => {
+  if (!pedidos.length) throw new ConsultaError('Nenhum evento informado.');
+  if (pedidos.length > 40) throw new ConsultaError('Envie no máximo 40 eventos por vez.');
+  const plano: Plano = { resumo: [], criar: { events: [], logs: [] }, situacoes: [] };
+  const itens: ItemDaPrevia[] = [];
+
+  pedidos.forEach((p, i) => {
+    const item: ItemDaPrevia = { pedido: i + 1, ok: false, descricao: `${p.titulo} (${p.data})`, avisos: [] };
+    itens.push(item);
+    try {
+      const d = validarData(p.data, 'data')!;
+      const titulo = (p.titulo || '').trim();
+      if (!titulo) throw new ConsultaError('Informe o título do evento.');
+      const tipo = TIPOS_EVENTO[p.tipo];
+      if (!tipo) throw new ConsultaError('Tipo deve ser reuniao, festividade, passeio, material ou outro.');
+      const school = encontrarEscola(data, p.escola);
+      const cls = p.turma ? encontrarTurma(data, p.turma, school.name).cls : undefined;
+      let shift: School['shifts'][number] | undefined;
+      if (p.turno) {
+        const alvo = normalizar(p.turno);
+        const achados = school.shifts.filter(s => normalizar(s.name).includes(alvo));
+        if (achados.length !== 1) throw new ConsultaError(`Turno "${p.turno}" não encontrado. Turnos da ${school.name}: ${school.shifts.map(s => s.name).join(', ')}.`);
+        shift = achados[0];
+      }
+      if (cls && shift) throw new ConsultaError('Informe a turma ou o turno, não os dois.');
+      const suspende = !!p.suspende_aulas;
+      const alcance = cls ? `turma ${cls.name}` : shift ? `turno ${shift.name}` : 'escola toda';
+      item.descricao = `${tipo.rotulo} "${titulo}" — ${school.name}, ${quando(d)}${suspende ? `, suspende as aulas (${alcance})` : cls ? `, turma ${cls.name}` : ''}`;
+
+      const feriado = getHolidayName(getSafeDate(d));
+      if (feriado) item.avisos.push(`${formatDateBR(d)} é feriado (${feriado}).`);
+      if ((data.calendars || []).some(c => c.schoolId === school.id) && !calendarioNaData(data, school.id, d)) {
+        item.avisos.push('A data está fora do ano letivo cadastrado para essa escola.');
+      }
+      if (d < hoje) item.avisos.push('A data já passou.');
+      const repetido = (data.events || []).some(e =>
+        e.schoolId === school.id && dia(e.date) === d && e.type !== 'test' && e.type !== 'work' && normalizar(e.title) === normalizar(titulo));
+      if (repetido || plano.criar.events.some(e => e.schoolId === school.id && dia(e.date) === d && normalizar(e.title) === normalizar(titulo))) {
+        throw new ConsultaError(`Já existe "${titulo}" nesse dia nessa escola.`);
+      }
+
+      const novosLogs: Item[] = [];
+      if (suspende) {
+        const semana = diaDaSemana(d);
+        const aulas = getSchedulesForDate(data, d).filter(s =>
+          s.schoolId === school.id && Number(s.dayOfWeek) === semana && s.classId !== 'window' &&
+          (cls ? eDaTurma(data, school, cls, s.classId) : shift ? s.shiftId === shift.id : true));
+        const slotsAfetados = new Set(aulas.map(s => s.slotId));
+        const doDia = (data.logs || []).filter(l => !l.studentId && l.schoolId === school.id && dia(l.date) === d && slotsAfetados.has(l.slotId) && l.status !== 'removed');
+        if (doDia.some(l => temConteudoDeAula(l.subject) || (l.homework || '').trim())) {
+          throw new ConsultaError('Já há conteúdo registrado no diário nas aulas desse dia (no alcance do evento). Como no app, remova esses registros antes de suspender as aulas.');
+        }
+        const provas = avaliacoesDe(data, school, cls).filter(e => dia(e.date) === d && (!shift || shift.slots.some(sl => sl.id === e.slotId)));
+        if (provas.length) item.avisos.push(`Há avaliação nesse dia (${provas.map(e => `"${e.title}"`).join(', ')}); remarque no app.`);
+        for (const s of aulas) {
+          if ((data.logs || []).some(l => !l.studentId && l.schoolId === school.id && dia(l.date) === d && l.slotId === s.slotId)) continue;
+          const turma = turmasAtivas(school).find(c => eDaTurma(data, school, c, s.classId));
+          novosLogs.push({
+            id: novoId(), date: diaISO(d), schoolId: school.id, classId: turma ? turma.id : s.classId, slotId: s.slotId,
+            subject: `Evento: ${titulo}`, homework: '', notes: 'Aula substituída por evento escolar.', _m: agora
+          });
+        }
+        if (!aulas.length) item.avisos.push('Não há aulas na grade nesse dia (no alcance do evento).');
+        else item.avisos.push(`${aulas.length} aula(s) desse dia ficam marcadas como "Evento: ${titulo}" no diário.`);
+      }
+
+      plano.criar.events.push(removeUndefined({
+        id: novoId(), schoolId: school.id, date: diaISO(d), type: tipo.tipo, title: titulo,
+        description: (p.descricao || '').trim(), blocksClasses: suspende,
+        blocksShift: suspende && !cls,
+        slotId: suspende && shift ? shift.id : undefined,
+        classId: cls ? cls.id : undefined,
+        _m: agora
+      }));
+      plano.criar.logs.push(...novosLogs);
+      plano.resumo.push(item.descricao);
+      item.ok = true;
+    } catch (e) {
+      if (!(e instanceof ConsultaError)) throw e;
+      item.erro = e.message;
+    }
+  });
+
+  return { itens, plano: plano.resumo.length ? plano : null };
+};
+
 // ── Aplicar e desfazer ────────────────────────────────────────────────────────
 
 /** Campos do documento que a gravação altera (o resto do documento não é tocado). */
-export type Alteracoes = Partial<Record<'events' | 'logs' | '_deleted', unknown>>;
+export type Alteracoes = Partial<Record<'events' | 'logs' | 'calendars' | '_deleted', unknown>>;
 
 const lapides = (raw: any): Record<string, number> => ({ ...(raw._deleted || {}) });
+const semCarimboItem = (i: any) => {
+  const { _m, ...resto } = i || {};
+  return resto;
+};
 
 /** Grava o plano no documento lido agora (dentro de uma transação). Confirmar de novo não duplica. */
 export const aplicarPlano = (raw: any, plano: Plano, agora = Date.now()) => {
@@ -443,14 +770,36 @@ export const aplicarPlano = (raw: any, plano: Plano, agora = Date.now()) => {
   }
   if (conteudosAnteriores.length) lote.conteudosAnteriores = conteudosAnteriores;
 
+  const calendars: Item[] = [...(raw.calendars || [])];
+  const calendariosAnteriores: NonNullable<Lote['calendariosAnteriores']> = [];
+  let calendarioJaGravado = false;
+  for (const c of plano.calendarios || []) {
+    const idx = calendars.findIndex(x => x?.id === c.id);
+    const atual = idx >= 0 ? semCarimboItem(calendars[idx]) : null;
+    if (atual && deepEqual(atual, c.novo)) { calendarioJaGravado = true; continue; }
+    if (c.antes === null ? atual !== null : !atual || !deepEqual(atual, c.antes)) {
+      lote.resumo.push(`Não gravado (o calendário mudou no app depois da prévia; prepare de novo): ${c.descricao}`);
+      continue;
+    }
+    if (c.antes === null && mortos[c.id] !== undefined) {
+      throw new ConsultaError('Esta prévia já foi gravada e desfeita. Prepare de novo.');
+    }
+    calendariosAnteriores.push({ id: c.id, antes: atual, descricao: c.descricao });
+    if (idx >= 0) calendars[idx] = { ...c.novo, _m: agora };
+    else calendars.push({ ...c.novo, _m: agora });
+  }
+  if (calendariosAnteriores.length) lote.calendariosAnteriores = calendariosAnteriores;
+
   lote.resumo.unshift(...plano.resumo);
   const mudouEventos = lote.criados.events.length + lote.situacoesAnteriores.length > 0;
   const mudouLogs = lote.criados.logs.length + conteudosAnteriores.length > 0;
+  const mudouCalendarios = calendariosAnteriores.length > 0;
   const alteracoes: Alteracoes = {};
   if (mudouEventos) alteracoes.events = events;
   if (mudouLogs) alteracoes.logs = logs;
-  const mudou = mudouEventos || mudouLogs;
-  return { alteracoes, lote, jaGravado: !mudou && (jaGravado || plano.situacoes.length > 0 || conteudoJaGravado) };
+  if (mudouCalendarios) alteracoes.calendars = calendars;
+  const mudou = mudouEventos || mudouLogs || mudouCalendarios;
+  return { alteracoes, lote, jaGravado: !mudou && (jaGravado || plano.situacoes.length > 0 || conteudoJaGravado || calendarioJaGravado) };
 };
 
 /** Desfaz um lote: apaga o que foi criado (com lápide) e volta as situações anteriores. */
@@ -497,9 +846,26 @@ export const desfazerLote = (raw: any, lote: Lote, agora = Date.now()) => {
     mudouLogs = true;
   }
 
+  let calendars: Item[] = [...(raw.calendars || [])];
+  let mudouCalendarios = false;
+  for (const c of lote.calendariosAnteriores || []) {
+    const idx = calendars.findIndex(x => x?.id === c.id);
+    if (idx < 0) { avisos.push(`Calendário não encontrado: ${c.descricao}`); continue; }
+    if ((calendars[idx]._m ?? 0) > lote.em) { avisos.push(`Calendário alterado no app depois; mantido: ${c.descricao}`); continue; }
+    if (c.antes === null) {
+      mortos[c.id] = agora;
+      calendars = calendars.filter((_, k) => k !== idx);
+    } else {
+      calendars[idx] = { ...c.antes, _m: agora };
+    }
+    mudouCalendarios = true;
+  }
+
   const alteracoes: Alteracoes = {};
   if (mudouEventos) alteracoes.events = events;
   if (mudouLogs) alteracoes.logs = logs;
-  if (mudouEventos || mudouLogs) alteracoes._deleted = mortos;
-  return { alteracoes, avisos, desfeito: mudouEventos || mudouLogs };
+  if (mudouCalendarios) alteracoes.calendars = calendars;
+  const desfeito = mudouEventos || mudouLogs || mudouCalendarios;
+  if (desfeito) alteracoes._deleted = mortos;
+  return { alteracoes, avisos, desfeito };
 };

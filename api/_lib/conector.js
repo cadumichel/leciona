@@ -33,6 +33,21 @@ var parseTimeToMinutes = (time) => {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
 };
+var deepEqual = (obj1, obj2) => {
+  if (obj1 === obj2) return true;
+  if (typeof obj1 !== "object" || typeof obj2 !== "object" || obj1 === null || obj2 === null) {
+    return false;
+  }
+  const keys1 = Object.keys(obj1);
+  const keys2 = Object.keys(obj2);
+  if (keys1.length !== keys2.length) return false;
+  for (const key of keys1) {
+    if (!keys2.includes(key) || !deepEqual(obj1[key], obj2[key])) {
+      return false;
+    }
+  }
+  return true;
+};
 var formatDateBR = (dateStr) => {
   if (!dateStr) return "";
   const [y, m, d] = String(dateStr).split("T")[0].split("-");
@@ -819,7 +834,279 @@ var prepararConteudos = (data, pedidos, hoje, agora = Date.now()) => {
   });
   return { itens, plano: plano.resumo.length ? plano : null };
 };
+var semCarimbo = (c) => {
+  if (!c) return c;
+  const { _m, ...resto } = c;
+  return resto;
+};
+var calendarioDaEscola = (data, schoolId) => [...data.calendars || []].filter((c) => c.schoolId === schoolId).sort((a, b) => dia(b.start).localeCompare(dia(a.start)))[0];
+var intervaloBR = (a, b) => `${formatDateBR(a)} a ${formatDateBR(b)}`;
+var registrarCalendario = (plano, antes, novo, descricao) => {
+  plano.calendarios ??= [];
+  const ja = plano.calendarios.find((c) => c.id === novo.id);
+  if (ja) {
+    ja.novo = novo;
+    ja.descricao += `; ${descricao}`;
+  } else {
+    plano.calendarios.push({ id: novo.id, novo, antes: antes ? semCarimbo(antes) : null, descricao });
+  }
+};
+var calendarioEmPreparo = (data, plano, schoolId) => {
+  const atual = calendarioDaEscola(data, schoolId);
+  const emPreparo = plano.calendarios?.find((c) => c.novo.schoolId === schoolId);
+  return { atual, base: emPreparo ? emPreparo.novo : atual };
+};
+var prepararCalendarios = (data, pedidos, agora = Date.now()) => {
+  if (!pedidos.length) throw new ConsultaError("Nenhum calend\xE1rio informado.");
+  if (pedidos.length > 10) throw new ConsultaError("Envie no m\xE1ximo 10 escolas por vez.");
+  const plano = { resumo: [], criar: { events: [], logs: [] }, situacoes: [] };
+  const itens = [];
+  pedidos.forEach((p, i) => {
+    const item = { pedido: i + 1, ok: false, descricao: p.escola, avisos: [] };
+    itens.push(item);
+    try {
+      const school = encontrarEscola(data, p.escola);
+      item.descricao = `Calend\xE1rio da ${school.name}`;
+      const { atual, base } = calendarioEmPreparo(data, plano, school.id);
+      const inicio = validarData(p.inicio, "inicio");
+      const fim = validarData(p.fim, "fim");
+      if (!base && (!inicio || !fim)) {
+        throw new ConsultaError(`A ${school.name} ainda n\xE3o tem calend\xE1rio. Para criar, informe o in\xEDcio e o fim do ano letivo.`);
+      }
+      const novo = base ? JSON.parse(JSON.stringify(semCarimbo(base))) : {
+        id: novoId(),
+        schoolId: school.id,
+        year: Number(inicio.slice(0, 4)),
+        division: "trimestres",
+        start: inicio,
+        end: fim,
+        terms: [],
+        midYearBreak: { start: "", end: "" },
+        extraRecesses: []
+      };
+      const mudancas = [];
+      if (!base) mudancas.push("calend\xE1rio novo");
+      if (inicio) novo.start = inicio;
+      if (fim) novo.end = fim;
+      if (dia(novo.start) > dia(novo.end)) throw new ConsultaError("O in\xEDcio do ano letivo vem depois do fim.");
+      if (base && (dia(base.start) !== dia(novo.start) || dia(base.end) !== dia(novo.end))) {
+        mudancas.push(`ano letivo: ${intervaloBR(novo.start, novo.end)} (era ${intervaloBR(base.start, base.end)})`);
+      } else if (!base) {
+        mudancas.push(`ano letivo: ${intervaloBR(novo.start, novo.end)}`);
+      }
+      novo.year = Number(dia(novo.start).slice(0, 4));
+      if (p.divisao && p.divisao !== novo.division) {
+        mudancas.push(`divis\xE3o: ${p.divisao}${base ? ` (era ${base.division})` : ""}`);
+        novo.division = p.divisao;
+      }
+      const esperado = novo.division === "bimestres" ? 4 : novo.division === "trimestres" ? 3 : 0;
+      const rotulo = novo.division === "bimestres" ? "Bimestre" : novo.division === "trimestres" ? "Trimestre" : "Per\xEDodo";
+      if (p.periodos) {
+        const periodos = p.periodos.map((t, k) => ({
+          name: (t.nome || "").trim() || `${k + 1}\xBA ${rotulo}`,
+          start: validarData(t.inicio, `periodos[${k + 1}].inicio`),
+          end: validarData(t.fim, `periodos[${k + 1}].fim`)
+        }));
+        periodos.forEach((t, k) => {
+          if (t.start > t.end) throw new ConsultaError(`${t.name}: o in\xEDcio vem depois do fim.`);
+          if (k > 0 && t.start <= periodos[k - 1].end) throw new ConsultaError(`${t.name} come\xE7a antes do fim de ${periodos[k - 1].name}.`);
+          if (t.start < dia(novo.start) || t.end > dia(novo.end)) item.avisos.push(`${t.name} sai do ano letivo (${intervaloBR(novo.start, novo.end)}).`);
+        });
+        if (esperado && periodos.length !== esperado) item.avisos.push(`Foram informados ${periodos.length} per\xEDodos para ${novo.division} (o normal s\xE3o ${esperado}).`);
+        const antesTermos = JSON.stringify((base?.terms || []).map((t) => [t.name, dia(t.start), dia(t.end)]));
+        if (antesTermos !== JSON.stringify(periodos.map((t) => [t.name, t.start, t.end]))) {
+          mudancas.push(`per\xEDodos: ${periodos.map((t) => `${t.name} ${intervaloBR(t.start, t.end)}`).join("; ")}`);
+          if (base && (base.terms || []).length !== periodos.length && (data.gradingConfigs || []).some((g) => g.schoolId === school.id)) {
+            item.avisos.push("O n\xFAmero de per\xEDodos mudou e h\xE1 configura\xE7\xF5es de notas nessa escola, que usam a posi\xE7\xE3o do per\xEDodo. Confira as notas no app.");
+          }
+        }
+        novo.terms = periodos;
+      } else if (p.divisao && esperado && (novo.terms || []).length !== esperado) {
+        item.avisos.push(`Os per\xEDodos n\xE3o foram informados e continuam ${(novo.terms || []).length}. Informe as datas de cada ${rotulo.toLowerCase()}.`);
+      }
+      if (p.recesso_meio_ano !== void 0) {
+        const r = p.recesso_meio_ano;
+        const anterior = novo.midYearBreak?.start ? intervaloBR(novo.midYearBreak.start, novo.midYearBreak.end) : "nenhum";
+        if (r === null) {
+          if (novo.midYearBreak?.start) mudancas.push(`recesso de meio de ano removido (era ${anterior})`);
+          novo.midYearBreak = { start: "", end: "" };
+        } else {
+          const ri = validarData(r.inicio, "recesso_meio_ano.inicio");
+          const rf = validarData(r.fim, "recesso_meio_ano.fim");
+          if (ri > rf) throw new ConsultaError("O recesso de meio de ano come\xE7a depois de terminar.");
+          if (ri !== dia(novo.midYearBreak?.start) || rf !== dia(novo.midYearBreak?.end)) {
+            mudancas.push(`recesso de meio de ano: ${intervaloBR(ri, rf)} (era ${anterior})`);
+          }
+          novo.midYearBreak = { start: ri, end: rf };
+        }
+      }
+      if (!mudancas.length) {
+        item.avisos.push("Nada muda no calend\xE1rio.");
+        item.ok = true;
+        return;
+      }
+      item.descricao += `: ${mudancas.join("; ")}`;
+      registrarCalendario(plano, atual, novo, item.descricao);
+      plano.resumo.push(item.descricao);
+      item.ok = true;
+    } catch (e) {
+      if (!(e instanceof ConsultaError)) throw e;
+      item.erro = e.message;
+    }
+  });
+  return { itens, plano: plano.resumo.length ? plano : null };
+};
+var temConteudoDeAula = (subject) => !!(subject || "").trim() && !/^(Avaliação|Evento):/.test(subject || "");
+var prepararRecessos = (data, pedidos) => {
+  if (!pedidos.length) throw new ConsultaError("Nenhum recesso informado.");
+  if (pedidos.length > 40) throw new ConsultaError("Envie no m\xE1ximo 40 recessos por vez.");
+  const plano = { resumo: [], criar: { events: [], logs: [] }, situacoes: [] };
+  const itens = [];
+  pedidos.forEach((p, i) => {
+    const item = { pedido: i + 1, ok: false, descricao: `${p.nome} (${p.data})`, avisos: [] };
+    itens.push(item);
+    try {
+      const d = validarData(p.data, "data");
+      const nome = (p.nome || "").trim();
+      if (!nome) throw new ConsultaError("Informe o nome do recesso ou feriado.");
+      const feriado = getHolidayName(getSafeDate(d));
+      if (feriado) throw new ConsultaError(`${formatDateBR(d)} j\xE1 \xE9 feriado nacional no app (${feriado}); n\xE3o precisa cadastrar.`);
+      const escolas = p.escola ? [encontrarEscola(data, p.escola)] : escolasAtivas(data);
+      item.descricao = `"${nome}" em ${quando(d)}`;
+      const incluidas = [];
+      for (const school of escolas) {
+        const { atual, base } = calendarioEmPreparo(data, plano, school.id);
+        if (!base) {
+          item.avisos.push(`${school.name}: ainda n\xE3o tem calend\xE1rio cadastrado; n\xE3o inclu\xEDda.`);
+          continue;
+        }
+        if ((base.extraRecesses || []).some((r) => dia(r.date) === d)) {
+          item.avisos.push(`${school.name}: j\xE1 tem recesso nesse dia; n\xE3o inclu\xEDda.`);
+          continue;
+        }
+        if (d < dia(base.start) || d > dia(base.end)) item.avisos.push(`${school.name}: a data est\xE1 fora do ano letivo.`);
+        const doDia = (data.logs || []).filter((l) => !l.studentId && l.schoolId === school.id && dia(l.date) === d && l.status !== "removed");
+        const comConteudo = doDia.filter((l) => temConteudoDeAula(l.subject)).length;
+        if (comConteudo) item.avisos.push(`${school.name}: h\xE1 ${comConteudo} registro(s) de conte\xFAdo no di\xE1rio nesse dia; eles continuam l\xE1, mas o dia passa a contar como sem aula.`);
+        const provas = avaliacoesDe(data, school).filter((e) => dia(e.date) === d);
+        if (provas.length) item.avisos.push(`${school.name}: h\xE1 avalia\xE7\xE3o nesse dia (${provas.map((e) => `"${e.title}"`).join(", ")}); remarque no app.`);
+        const novo = JSON.parse(JSON.stringify(semCarimbo(base)));
+        novo.extraRecesses = [...novo.extraRecesses || [], { id: novoId(), name: nome, date: d }];
+        registrarCalendario(plano, atual, novo, `recesso "${nome}" em ${formatDateBR(d)}`);
+        incluidas.push(school.name);
+      }
+      if (!incluidas.length) throw new ConsultaError("Nenhuma escola p\xF4de receber este recesso (veja os avisos).");
+      item.descricao += ` \u2014 ${incluidas.join(", ")}`;
+      plano.resumo.push(`Recesso ${item.descricao}`);
+      item.ok = true;
+    } catch (e) {
+      if (!(e instanceof ConsultaError)) throw e;
+      item.erro = e.message;
+    }
+  });
+  return { itens, plano: plano.resumo.length ? plano : null };
+};
+var TIPOS_EVENTO = {
+  reuniao: { tipo: "meeting", rotulo: "Reuni\xE3o" },
+  festividade: { tipo: "festivity", rotulo: "Festividade" },
+  passeio: { tipo: "trip", rotulo: "Passeio" },
+  material: { tipo: "material", rotulo: "Material" },
+  outro: { tipo: "other", rotulo: "Outro" }
+};
+var prepararEventos = (data, pedidos, hoje, agora = Date.now()) => {
+  if (!pedidos.length) throw new ConsultaError("Nenhum evento informado.");
+  if (pedidos.length > 40) throw new ConsultaError("Envie no m\xE1ximo 40 eventos por vez.");
+  const plano = { resumo: [], criar: { events: [], logs: [] }, situacoes: [] };
+  const itens = [];
+  pedidos.forEach((p, i) => {
+    const item = { pedido: i + 1, ok: false, descricao: `${p.titulo} (${p.data})`, avisos: [] };
+    itens.push(item);
+    try {
+      const d = validarData(p.data, "data");
+      const titulo = (p.titulo || "").trim();
+      if (!titulo) throw new ConsultaError("Informe o t\xEDtulo do evento.");
+      const tipo = TIPOS_EVENTO[p.tipo];
+      if (!tipo) throw new ConsultaError("Tipo deve ser reuniao, festividade, passeio, material ou outro.");
+      const school = encontrarEscola(data, p.escola);
+      const cls = p.turma ? encontrarTurma(data, p.turma, school.name).cls : void 0;
+      let shift;
+      if (p.turno) {
+        const alvo = normalizar(p.turno);
+        const achados = school.shifts.filter((s) => normalizar(s.name).includes(alvo));
+        if (achados.length !== 1) throw new ConsultaError(`Turno "${p.turno}" n\xE3o encontrado. Turnos da ${school.name}: ${school.shifts.map((s) => s.name).join(", ")}.`);
+        shift = achados[0];
+      }
+      if (cls && shift) throw new ConsultaError("Informe a turma ou o turno, n\xE3o os dois.");
+      const suspende = !!p.suspende_aulas;
+      const alcance = cls ? `turma ${cls.name}` : shift ? `turno ${shift.name}` : "escola toda";
+      item.descricao = `${tipo.rotulo} "${titulo}" \u2014 ${school.name}, ${quando(d)}${suspende ? `, suspende as aulas (${alcance})` : cls ? `, turma ${cls.name}` : ""}`;
+      const feriado = getHolidayName(getSafeDate(d));
+      if (feriado) item.avisos.push(`${formatDateBR(d)} \xE9 feriado (${feriado}).`);
+      if ((data.calendars || []).some((c) => c.schoolId === school.id) && !calendarioNaData(data, school.id, d)) {
+        item.avisos.push("A data est\xE1 fora do ano letivo cadastrado para essa escola.");
+      }
+      if (d < hoje) item.avisos.push("A data j\xE1 passou.");
+      const repetido = (data.events || []).some((e) => e.schoolId === school.id && dia(e.date) === d && e.type !== "test" && e.type !== "work" && normalizar(e.title) === normalizar(titulo));
+      if (repetido || plano.criar.events.some((e) => e.schoolId === school.id && dia(e.date) === d && normalizar(e.title) === normalizar(titulo))) {
+        throw new ConsultaError(`J\xE1 existe "${titulo}" nesse dia nessa escola.`);
+      }
+      const novosLogs = [];
+      if (suspende) {
+        const semana = diaDaSemana(d);
+        const aulas = getSchedulesForDate(data, d).filter((s) => s.schoolId === school.id && Number(s.dayOfWeek) === semana && s.classId !== "window" && (cls ? eDaTurma(data, school, cls, s.classId) : shift ? s.shiftId === shift.id : true));
+        const slotsAfetados = new Set(aulas.map((s) => s.slotId));
+        const doDia = (data.logs || []).filter((l) => !l.studentId && l.schoolId === school.id && dia(l.date) === d && slotsAfetados.has(l.slotId) && l.status !== "removed");
+        if (doDia.some((l) => temConteudoDeAula(l.subject) || (l.homework || "").trim())) {
+          throw new ConsultaError("J\xE1 h\xE1 conte\xFAdo registrado no di\xE1rio nas aulas desse dia (no alcance do evento). Como no app, remova esses registros antes de suspender as aulas.");
+        }
+        const provas = avaliacoesDe(data, school, cls).filter((e) => dia(e.date) === d && (!shift || shift.slots.some((sl) => sl.id === e.slotId)));
+        if (provas.length) item.avisos.push(`H\xE1 avalia\xE7\xE3o nesse dia (${provas.map((e) => `"${e.title}"`).join(", ")}); remarque no app.`);
+        for (const s of aulas) {
+          if ((data.logs || []).some((l) => !l.studentId && l.schoolId === school.id && dia(l.date) === d && l.slotId === s.slotId)) continue;
+          const turma = turmasAtivas(school).find((c) => eDaTurma(data, school, c, s.classId));
+          novosLogs.push({
+            id: novoId(),
+            date: diaISO(d),
+            schoolId: school.id,
+            classId: turma ? turma.id : s.classId,
+            slotId: s.slotId,
+            subject: `Evento: ${titulo}`,
+            homework: "",
+            notes: "Aula substitu\xEDda por evento escolar.",
+            _m: agora
+          });
+        }
+        if (!aulas.length) item.avisos.push("N\xE3o h\xE1 aulas na grade nesse dia (no alcance do evento).");
+        else item.avisos.push(`${aulas.length} aula(s) desse dia ficam marcadas como "Evento: ${titulo}" no di\xE1rio.`);
+      }
+      plano.criar.events.push(removeUndefined({
+        id: novoId(),
+        schoolId: school.id,
+        date: diaISO(d),
+        type: tipo.tipo,
+        title: titulo,
+        description: (p.descricao || "").trim(),
+        blocksClasses: suspende,
+        blocksShift: suspende && !cls,
+        slotId: suspende && shift ? shift.id : void 0,
+        classId: cls ? cls.id : void 0,
+        _m: agora
+      }));
+      plano.criar.logs.push(...novosLogs);
+      plano.resumo.push(item.descricao);
+      item.ok = true;
+    } catch (e) {
+      if (!(e instanceof ConsultaError)) throw e;
+      item.erro = e.message;
+    }
+  });
+  return { itens, plano: plano.resumo.length ? plano : null };
+};
 var lapides = (raw) => ({ ...raw._deleted || {} });
+var semCarimboItem = (i) => {
+  const { _m, ...resto } = i || {};
+  return resto;
+};
 var aplicarPlano = (raw, plano, agora = Date.now()) => {
   const mortos = lapides(raw);
   const todos = [...plano.criar.events, ...plano.criar.logs].map((i) => i.id);
@@ -874,14 +1161,38 @@ var aplicarPlano = (raw, plano, agora = Date.now()) => {
     logs[idx] = { ...log, subject: c.subject, homework: c.homework, _m: agora };
   }
   if (conteudosAnteriores.length) lote.conteudosAnteriores = conteudosAnteriores;
+  const calendars = [...raw.calendars || []];
+  const calendariosAnteriores = [];
+  let calendarioJaGravado = false;
+  for (const c of plano.calendarios || []) {
+    const idx = calendars.findIndex((x) => x?.id === c.id);
+    const atual = idx >= 0 ? semCarimboItem(calendars[idx]) : null;
+    if (atual && deepEqual(atual, c.novo)) {
+      calendarioJaGravado = true;
+      continue;
+    }
+    if (c.antes === null ? atual !== null : !atual || !deepEqual(atual, c.antes)) {
+      lote.resumo.push(`N\xE3o gravado (o calend\xE1rio mudou no app depois da pr\xE9via; prepare de novo): ${c.descricao}`);
+      continue;
+    }
+    if (c.antes === null && mortos[c.id] !== void 0) {
+      throw new ConsultaError("Esta pr\xE9via j\xE1 foi gravada e desfeita. Prepare de novo.");
+    }
+    calendariosAnteriores.push({ id: c.id, antes: atual, descricao: c.descricao });
+    if (idx >= 0) calendars[idx] = { ...c.novo, _m: agora };
+    else calendars.push({ ...c.novo, _m: agora });
+  }
+  if (calendariosAnteriores.length) lote.calendariosAnteriores = calendariosAnteriores;
   lote.resumo.unshift(...plano.resumo);
   const mudouEventos = lote.criados.events.length + lote.situacoesAnteriores.length > 0;
   const mudouLogs = lote.criados.logs.length + conteudosAnteriores.length > 0;
+  const mudouCalendarios = calendariosAnteriores.length > 0;
   const alteracoes = {};
   if (mudouEventos) alteracoes.events = events;
   if (mudouLogs) alteracoes.logs = logs;
-  const mudou = mudouEventos || mudouLogs;
-  return { alteracoes, lote, jaGravado: !mudou && (jaGravado || plano.situacoes.length > 0 || conteudoJaGravado) };
+  if (mudouCalendarios) alteracoes.calendars = calendars;
+  const mudou = mudouEventos || mudouLogs || mudouCalendarios;
+  return { alteracoes, lote, jaGravado: !mudou && (jaGravado || plano.situacoes.length > 0 || conteudoJaGravado || calendarioJaGravado) };
 };
 var desfazerLote = (raw, lote, agora = Date.now()) => {
   const mortos = lapides(raw);
@@ -934,11 +1245,33 @@ var desfazerLote = (raw, lote, agora = Date.now()) => {
     logs[idx] = { ...logs[idx], subject: c.subject, homework: c.homework, _m: agora };
     mudouLogs = true;
   }
+  let calendars = [...raw.calendars || []];
+  let mudouCalendarios = false;
+  for (const c of lote.calendariosAnteriores || []) {
+    const idx = calendars.findIndex((x) => x?.id === c.id);
+    if (idx < 0) {
+      avisos.push(`Calend\xE1rio n\xE3o encontrado: ${c.descricao}`);
+      continue;
+    }
+    if ((calendars[idx]._m ?? 0) > lote.em) {
+      avisos.push(`Calend\xE1rio alterado no app depois; mantido: ${c.descricao}`);
+      continue;
+    }
+    if (c.antes === null) {
+      mortos[c.id] = agora;
+      calendars = calendars.filter((_, k) => k !== idx);
+    } else {
+      calendars[idx] = { ...c.antes, _m: agora };
+    }
+    mudouCalendarios = true;
+  }
   const alteracoes = {};
   if (mudouEventos) alteracoes.events = events;
   if (mudouLogs) alteracoes.logs = logs;
-  if (mudouEventos || mudouLogs) alteracoes._deleted = mortos;
-  return { alteracoes, avisos, desfeito: mudouEventos || mudouLogs };
+  if (mudouCalendarios) alteracoes.calendars = calendars;
+  const desfeito = mudouEventos || mudouLogs || mudouCalendarios;
+  if (desfeito) alteracoes._deleted = mortos;
+  return { alteracoes, avisos, desfeito };
 };
 
 // connector/servidor.ts
@@ -1027,6 +1360,7 @@ Grava\xE7\xE3o (sempre em dois passos):
 2. S\xF3 chame "confirmar_gravacao" depois que o Cadu disser claramente que pode gravar. Nunca confirme por conta pr\xF3pria.
 Se faltar informa\xE7\xE3o (ex.: a turma tem aulas seguidas e \xE9 preciso escolher a aula), pergunte ao Cadu antes de preparar de novo.
 Conte\xFAdo de aula ("hoje na 183 dei\u2026"): use preparar_conteudo. Se a turma tiver aulas seguidas no dia, pergunte se o conte\xFAdo vale para todas ou s\xF3 para uma. Por padr\xE3o o texto \xE9 acrescentado ao que j\xE1 estiver no di\xE1rio; s\xF3 use modo "substituir" se o Cadu pedir.
+Calend\xE1rio: ano letivo, bimestres/trimestres e recesso de meio de ano com preparar_calendario. Feriados nacionais j\xE1 est\xE3o no app; feriado municipal, da escola ou dia sem aula entram como recesso (preparar_recessos; sem escola = todas as escolas). Reuni\xF5es, festas, passeios etc. com preparar_eventos; pergunte se o evento suspende as aulas quando n\xE3o estiver claro.
 Depois de gravar, diga que d\xE1 para desfazer e guarde o "codigo_desfazer" para usar em "desfazer_gravacao" se ele pedir.
 Situa\xE7\xE3o das avalia\xE7\xF5es: Pendente \u2192 Agendada (alunos avisados) \u2192 Pronta (elaborada, enviada e alunos avisados).`;
 var somenteLeitura = { readOnlyHint: true, openWorldHint: false };
@@ -1162,6 +1496,54 @@ var registrarEscrita = (servidor, dados, hoje, escrita) => {
     },
     annotations: preparo
   }, async ({ registros }) => previa(() => prepararConteudos(dados, registros, hoje)));
+  servidor.registerTool("preparar_calendario", {
+    title: "Preparar calend\xE1rio da escola",
+    description: "Pr\xE9via da cria\xE7\xE3o ou mudan\xE7a do calend\xE1rio de uma escola: in\xEDcio e fim do ano letivo, divis\xE3o (bimestres/trimestres), datas de cada per\xEDodo e recesso de meio de ano. S\xF3 os campos informados mudam. N\xC3O grava: devolve um c\xF3digo para confirmar_gravacao.",
+    inputSchema: {
+      calendarios: z.array(z.object({
+        escola: z.string(),
+        divisao: z.enum(["bimestres", "trimestres", "personalizado"]).optional(),
+        inicio: data.optional().describe("In\xEDcio do ano letivo"),
+        fim: data.optional().describe("Fim do ano letivo"),
+        periodos: z.array(z.object({
+          nome: z.string().optional().describe('Padr\xE3o: "1\xBA Trimestre", "2\xBA Bimestre"\u2026'),
+          inicio: data,
+          fim: data
+        })).max(8).optional().describe("Todos os per\xEDodos, em ordem (substitui a lista atual)"),
+        recesso_meio_ano: z.object({ inicio: data, fim: data }).nullable().optional().describe("null remove o recesso de meio de ano")
+      })).min(1).max(10)
+    },
+    annotations: preparo
+  }, async ({ calendarios }) => previa(() => prepararCalendarios(dados, calendarios)));
+  servidor.registerTool("preparar_recessos", {
+    title: "Preparar recessos e feriados da escola",
+    description: "Pr\xE9via do cadastro de dias sem aula no calend\xE1rio das escolas: feriado municipal, feriado ou recesso da escola, ponto facultativo. Sem escola, vale para todas. Feriados nacionais j\xE1 est\xE3o no app. N\xC3O grava: devolve um c\xF3digo para confirmar_gravacao.",
+    inputSchema: {
+      recessos: z.array(z.object({
+        escola: z.string().optional().describe("Omitir = todas as escolas"),
+        data,
+        nome: z.string().describe('Ex.: "Anivers\xE1rio de Brusque"')
+      })).min(1).max(40)
+    },
+    annotations: preparo
+  }, async ({ recessos }) => previa(() => prepararRecessos(dados, recessos)));
+  servidor.registerTool("preparar_eventos", {
+    title: "Preparar eventos",
+    description: 'Pr\xE9via do cadastro de eventos na agenda (reuni\xE3o, festividade, passeio, material, outro). Se o evento suspende as aulas (da escola toda, de um turno ou de uma turma), marca as aulas do dia no di\xE1rio como "Evento: X", como o app. N\xC3O grava: devolve um c\xF3digo para confirmar_gravacao.',
+    inputSchema: {
+      eventos: z.array(z.object({
+        escola: z.string(),
+        data,
+        tipo: z.enum(["reuniao", "festividade", "passeio", "material", "outro"]),
+        titulo: z.string(),
+        descricao: z.string().optional(),
+        suspende_aulas: z.boolean().optional().describe("Padr\xE3o: false"),
+        turno: z.string().optional().describe('Ex.: "Vespertino" \u2014 s\xF3 esse turno'),
+        turma: z.string().optional().describe("S\xF3 essa turma")
+      })).min(1).max(40)
+    },
+    annotations: preparo
+  }, async ({ eventos }) => previa(() => prepararEventos(dados, eventos, hoje)));
   servidor.registerTool("confirmar_gravacao", {
     title: "Confirmar grava\xE7\xE3o",
     description: "Grava no Leciona exatamente o que a pr\xE9via mostrou. Use S\xD3 depois que o Cadu confirmar a pr\xE9via. Devolve um codigo_desfazer.",
@@ -1186,7 +1568,7 @@ var registrarEscrita = (servidor, dados, hoje, escrita) => {
   });
   servidor.registerTool("desfazer_gravacao", {
     title: "Desfazer grava\xE7\xE3o",
-    description: "Desfaz uma grava\xE7\xE3o feita pelo conector: apaga o que ela criou e volta situa\xE7\xF5es e conte\xFAdos anteriores. Itens alterados no app depois da grava\xE7\xE3o s\xE3o mantidos.",
+    description: "Desfaz uma grava\xE7\xE3o feita pelo conector: apaga o que ela criou e volta situa\xE7\xF5es, conte\xFAdos e calend\xE1rios anteriores. Itens alterados no app depois da grava\xE7\xE3o s\xE3o mantidos.",
     inputSchema: { codigo_desfazer: z.string() },
     annotations: { ...gravacao, destructiveHint: true }
   }, async ({ codigo_desfazer }) => {

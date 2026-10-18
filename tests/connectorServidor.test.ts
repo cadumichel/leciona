@@ -200,7 +200,8 @@ describe('conector: servidor MCP', () => {
     const { result } = await resp.json();
     expect(result.tools.map((t: any) => t.name).sort()).toEqual([
       'avaliacoes_proximas', 'calendario', 'confirmar_gravacao', 'conteudo_desde_ultima_avaliacao', 'desfazer_gravacao',
-      'listar_avaliacoes', 'preparar_avaliacoes', 'preparar_conteudo', 'preparar_situacao', 'turmas_e_grade'
+      'listar_avaliacoes', 'preparar_avaliacoes', 'preparar_calendario', 'preparar_conteudo', 'preparar_eventos',
+      'preparar_recessos', 'preparar_situacao', 'turmas_e_grade'
     ]);
     const gravam = result.tools.filter((t: any) => !t.annotations?.readOnlyHint).map((t: any) => t.name).sort();
     expect(gravam).toEqual(['confirmar_gravacao', 'desfazer_gravacao']);

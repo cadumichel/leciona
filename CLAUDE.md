@@ -104,6 +104,10 @@ conector: `https://leciona.vercel.app/api/mcp`.
   conta em `LECIONA_EMAIL`. Códigos, tokens, prévias e lotes são JWTs assinados com chave derivada
   da credencial do Firebase Admin (trocar a credencial corta todos os acessos).
 - `connector/servidor.ts`: rotas e ferramentas MCP; `connector/producao.ts`: Firebase Admin.
+- O mesmo conector funciona no chat do Gemini (gemini.google.com → Apps conectados → app
+  personalizado). O retorno do login do Gemini é um endereço próprio da conta do Cadu; só ele é
+  aceito, e o código guarda apenas o SHA-256 dele (`RETORNOS_DO_GEMINI` em `connector/oauth.ts`).
+  Se o login recusar, a mensagem mostra o endereço recusado.
 - `api/*.ts`: funções da Vercel; `vercel.json`: `/.well-known/*` → metadados OAuth.
 - Testes: `tests/connector*.test.ts` e `tests/conectorPacote.test.ts`.
 

@@ -779,11 +779,15 @@ var documentoRestaurado = (atual, copia, agora = Date.now()) => {
 var listarParaOClaude = (copias) => [...copias].sort((a, b) => b.criadaEm.localeCompare(a.criadaEm)).map((c) => ({ id: c.id, descricao: descreverCopia(c), resumo: c.resumo }));
 
 // connector/oauth.ts
+import { createHash } from "node:crypto";
 import { SignJWT, jwtVerify, base64url } from "jose";
 var ESCOPO = "leciona";
 var DURACAO_CODIGO = 5 * 60;
 var DURACAO_ACESSO = 60 * 60;
 var DURACAO_RENOVACAO = 30 * 24 * 60 * 60;
+var RETORNOS_DO_GEMINI = /* @__PURE__ */ new Set([
+  "12625a335778f09ebafa53a60f24618d9d2deec9b84d835fc34f4332367cbcf1"
+]);
 var redirecionamentoPermitido = (uri) => {
   let url;
   try {
@@ -792,6 +796,11 @@ var redirecionamentoPermitido = (uri) => {
     return false;
   }
   if (url.hash) return false;
+  if (url.protocol === "https:" && url.hostname === "oauth-redirect.googleusercontent.com") {
+    if (url.username || url.password || url.port) return false;
+    const exato = `https://${url.hostname}${url.pathname}`;
+    return RETORNOS_DO_GEMINI.has(createHash("sha256").update(exato).digest("hex"));
+  }
   if (url.protocol === "https:" && ["claude.ai", "claude.com"].includes(url.hostname)) {
     return url.pathname === "/api/mcp/auth_callback";
   }

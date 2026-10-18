@@ -100,6 +100,13 @@ describe('conector: endereços de retorno', () => {
     expect(redirecionamentoPermitido('http://claude.ai/api/mcp/auth_callback')).toBe(false);
     expect(redirecionamentoPermitido('javascript:alert(1)')).toBe(false);
   });
+
+  it('Gemini: só o endereço exato da conta do Cadu (outra conta ou outro caminho, não)', () => {
+    const gemini = (conta: string, extra = '') => `https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-${conta}-leciona_vercel_app${extra}`;
+    expect(redirecionamentoPermitido(gemini('111111111111111111111'))).toBe(false);
+    expect(redirecionamentoPermitido('https://oauth-redirect.googleusercontent.com/r/qualquer-coisa')).toBe(false);
+    expect(redirecionamentoPermitido('https://sites.googleusercontent.com/r/user_bound_custom-mcp-1-leciona_vercel_app')).toBe(false);
+  });
 });
 
 describe('conector: metadados e registro', () => {

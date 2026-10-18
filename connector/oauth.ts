@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { SignJWT, jwtVerify, base64url } from 'jose';
 
 /**
@@ -13,11 +14,26 @@ const DURACAO_CODIGO = 5 * 60;
 const DURACAO_ACESSO = 60 * 60;
 const DURACAO_RENOVACAO = 30 * 24 * 60 * 60;
 
-/** Para onde o login pode voltar: o Claude (web/app) e o próprio computador (Claude Code). */
+/**
+ * Retornos do chat do Gemini (gemini.google.com → Apps conectados → app personalizado). O Google usa
+ * um endereço próprio de cada conta ("user_bound_custom-mcp-<conta>-leciona_vercel_app"), então só
+ * o endereço exato da conta do Cadu é aceito; outro número de conta é recusado. Guardamos só a
+ * impressão digital (SHA-256) do endereço, para o número da conta não ficar no repositório público.
+ */
+const RETORNOS_DO_GEMINI = new Set([
+  '12625a335778f09ebafa53a60f24618d9d2deec9b84d835fc34f4332367cbcf1'
+]);
+
+/** Para onde o login pode voltar: o Claude (web/app), o chat do Gemini do Cadu e o próprio computador (Claude Code). */
 export const redirecionamentoPermitido = (uri: string): boolean => {
   let url: URL;
   try { url = new URL(uri); } catch { return false; }
   if (url.hash) return false;
+  if (url.protocol === 'https:' && url.hostname === 'oauth-redirect.googleusercontent.com') {
+    if (url.username || url.password || url.port) return false;
+    const exato = `https://${url.hostname}${url.pathname}`;
+    return RETORNOS_DO_GEMINI.has(createHash('sha256').update(exato).digest('hex'));
+  }
   if (url.protocol === 'https:' && ['claude.ai', 'claude.com'].includes(url.hostname)) {
     return url.pathname === '/api/mcp/auth_callback';
   }

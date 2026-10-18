@@ -5,8 +5,9 @@ import { AppData } from '../types';
 import {
   ConsultaError, avaliacoesProximas, calendario, conteudoDesdeUltimaAvaliacao, hojeEmBrasilia, listarAvaliacoes, turmasEGrade
 } from './consultas';
+import { Alteracoes, Lote, Plano, SITUACOES, aplicarPlano, desfazerLote, prepararAvaliacoes, prepararSituacoes } from './escrita';
 import {
-  Conta, ErroOAuth, emitirCodigo, metadadosDoRecurso, metadadosDoServidor, registrarCliente, trocarToken,
+  Assinatura, Conta, ErroOAuth, assinarLote, assinarPlano, emitirCodigo, lerLote, lerPlano, metadadosDoRecurso, metadadosDoServidor, registrarCliente, trocarToken,
   urlsDoServidor, validarPedido, verificarAcesso
 } from './oauth';
 
@@ -24,6 +25,11 @@ export interface Dependencias {
   verificarLogin: (idToken: string) => Promise<{ uid: string; email?: string; email_verified?: boolean }>;
   /** Lê o documento do professor no Firestore */
   carregarDados: (uid: string) => Promise<AppData>;
+  /**
+   * Lê o documento, calcula as alterações e grava só os campos alterados, numa transação
+   * (se o app gravar no meio, a transação recomeça com os dados novos).
+   */
+  alterarDados: <R extends { alteracoes: Alteracoes }>(uid: string, calcular: (raw: any) => R) => Promise<R>;
   agora?: () => Date;
 }
 
@@ -123,13 +129,27 @@ const paginaDeErro = (mensagem: string, status = 400) =>
 // ── Servidor MCP ──────────────────────────────────────────────────────────────
 
 const INSTRUCOES = `Dados do Leciona, app de rotina docente do prof. Cadu (professor de História em escolas de Brusque/SC).
-Só leitura. Datas no formato AAAA-MM-DD, no fuso de Brasília; cada resposta informa "hoje".
+Datas no formato AAAA-MM-DD, no fuso de Brasília; cada resposta informa "hoje".
 Turmas e escolas podem ser escritas pelo nome (ex.: "183", "3ª Série", "Cônsul"); se o nome existir em mais de uma escola, informe a escola.
-Responda ao Cadu em português simples. Não há dados de alunos (nomes, notas, chamada) neste conector.`;
+Responda ao Cadu em português simples. Não há dados de alunos (nomes, notas, chamada) neste conector.
+
+Gravação (sempre em dois passos):
+1. Use uma ferramenta "preparar_..." e mostre ao Cadu a prévia completa: o que será gravado, os avisos e os itens com erro.
+2. Só chame "confirmar_gravacao" depois que o Cadu disser claramente que pode gravar. Nunca confirme por conta própria.
+Se faltar informação (ex.: a turma tem aulas seguidas e é preciso escolher a aula), pergunte ao Cadu antes de preparar de novo.
+Depois de gravar, diga que dá para desfazer e guarde o "codigo_desfazer" para usar em "desfazer_gravacao" se ele pedir.
+Situação das avaliações: Pendente → Agendada (alunos avisados) → Pronta (elaborada, enviada e alunos avisados).`;
 
 const somenteLeitura = { readOnlyHint: true, openWorldHint: false };
 
-export const criarServidorMcp = (dados: AppData, hoje: string) => {
+/** O que o servidor MCP precisa para gravar (sem isso, só as ferramentas de leitura). */
+export interface Escrita {
+  uid: string;
+  assinatura: Assinatura;
+  alterarDados: Dependencias['alterarDados'];
+}
+
+export const criarServidorMcp = (dados: AppData, hoje: string, escrita?: Escrita) => {
   const servidor = new McpServer({ name: 'leciona', version: '1.0.0' }, { instructions: INSTRUCOES });
 
   const responder = (consulta: () => unknown) => {
@@ -195,8 +215,111 @@ export const criarServidorMcp = (dados: AppData, hoje: string) => {
     annotations: somenteLeitura
   }, async args => responder(() => calendario(dados, args)));
 
+  if (escrita) registrarEscrita(servidor, dados, hoje, escrita);
+
   return servidor;
 };
+
+// ── Ferramentas de gravação ───────────────────────────────────────────────────
+
+const texto = (corpo: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(corpo, null, 1) }] });
+const falha = (mensagem: string) => ({ content: [{ type: 'text' as const, text: mensagem }], isError: true });
+
+const registrarEscrita = (servidor: McpServer, dados: AppData, hoje: string, escrita: Escrita) => {
+  const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use AAAA-MM-DD');
+  const situacao = z.enum(SITUACOES as [string, ...string[]]);
+  const gravacao = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+  const preparo = { readOnlyHint: true, openWorldHint: false };
+
+  const previa = async (calcular: () => { itens: unknown[]; plano: Plano | null }) => {
+    try {
+      const { itens, plano } = calcular();
+      return texto({
+        hoje,
+        previa: itens,
+        ...(plano
+          ? {
+              vai_gravar: plano.resumo,
+              codigo_confirmacao: await assinarPlano(escrita.assinatura, escrita.uid, plano),
+              proximo_passo: 'Mostre a prévia ao Cadu. Só chame confirmar_gravacao com este código depois que ele confirmar. O código vale 1 hora.'
+            }
+          : { vai_gravar: [], proximo_passo: 'Nada a gravar. Resolva os erros com o Cadu e prepare de novo.' })
+      });
+    } catch (e) {
+      if (e instanceof ConsultaError) return falha(e.message);
+      throw e;
+    }
+  };
+
+  servidor.registerTool('preparar_avaliacoes', {
+    title: 'Preparar cadastro de avaliações',
+    description: 'Confere e mostra a prévia do cadastro de uma ou várias provas/trabalhos (ex.: a partir de uma lista, foto ou PDF do calendário da escola). Valida se a turma tem aula no dia, feriado, recesso e repetição. NÃO grava: devolve um código para confirmar_gravacao.',
+    inputSchema: {
+      avaliacoes: z.array(z.object({
+        turma: z.string().describe('Nome da turma, ex.: "183"'),
+        escola: z.string().optional().describe('Nome da escola (necessário se a turma existir em mais de uma)'),
+        data: data.describe('Data da avaliação (AAAA-MM-DD)'),
+        tipo: z.enum(['prova', 'trabalho']),
+        titulo: z.string().describe('Título curto, ex.: "P3" ou "Trabalho Iluminismo"'),
+        descricao: z.string().optional().describe('Conteúdo ou capítulos, ex.: "Cap. 12, 13 e 14"'),
+        aula: z.number().int().min(1).max(12).optional().describe('Número da aula no turno (1ª, 2ª…). Obrigatório quando a turma tem aulas seguidas no dia'),
+        situacao: situacao.optional().describe('Padrão: Pendente')
+      })).min(1).max(40)
+    },
+    annotations: preparo
+  }, async ({ avaliacoes }) => previa(() => prepararAvaliacoes(dados, avaliacoes as any, hoje)));
+
+  servidor.registerTool('preparar_situacao', {
+    title: 'Preparar mudança de situação',
+    description: 'Mostra a prévia da mudança de situação de avaliações (Pendente, Agendada = alunos avisados, Pronta = elaborada, enviada e alunos avisados). NÃO grava: devolve um código para confirmar_gravacao.',
+    inputSchema: {
+      avaliacoes: z.array(z.object({
+        turma: z.string(),
+        escola: z.string().optional(),
+        data: data.describe('Data da avaliação (AAAA-MM-DD)'),
+        titulo: z.string().optional().describe('Só se a turma tiver mais de uma avaliação no dia'),
+        situacao
+      })).min(1).max(40)
+    },
+    annotations: preparo
+  }, async ({ avaliacoes }) => previa(() => prepararSituacoes(dados, avaliacoes as any)));
+
+  servidor.registerTool('confirmar_gravacao', {
+    title: 'Confirmar gravação',
+    description: 'Grava no Leciona exatamente o que a prévia mostrou. Use SÓ depois que o Cadu confirmar a prévia. Devolve um codigo_desfazer.',
+    inputSchema: { codigo: z.string().describe('codigo_confirmacao recebido na prévia') },
+    annotations: gravacao
+  }, async ({ codigo }) => {
+    const plano = await lerPlano(escrita.assinatura, escrita.uid, codigo) as Plano | null;
+    if (!plano) return falha('Código de confirmação inválido ou vencido (vale 1 hora). Prepare a prévia de novo.');
+    try {
+      const r = await escrita.alterarDados(escrita.uid, raw => aplicarPlano(raw, plano));
+      if (r.jaGravado) return texto({ gravado: false, mensagem: 'Isso já tinha sido gravado; nada foi duplicado.' });
+      return texto({
+        gravado: true,
+        resumo: r.lote.resumo,
+        codigo_desfazer: await assinarLote(escrita.assinatura, escrita.uid, r.lote),
+        proximo_passo: 'Avise o Cadu que foi gravado e aparece no app em instantes. Guarde o codigo_desfazer (vale 30 dias).'
+      });
+    } catch (e) {
+      if (e instanceof ConsultaError) return falha(e.message);
+      throw e;
+    }
+  });
+
+  servidor.registerTool('desfazer_gravacao', {
+    title: 'Desfazer gravação',
+    description: 'Desfaz uma gravação feita pelo conector: apaga o que ela criou e volta as situações anteriores. Itens alterados no app depois da gravação são mantidos.',
+    inputSchema: { codigo_desfazer: z.string() },
+    annotations: { ...gravacao, destructiveHint: true }
+  }, async ({ codigo_desfazer }) => {
+    const lote = await lerLote(escrita.assinatura, escrita.uid, codigo_desfazer) as Lote | null;
+    if (!lote) return falha('Código para desfazer inválido ou vencido (vale 30 dias).');
+    const r = await escrita.alterarDados(escrita.uid, raw => desfazerLote(raw, lote));
+    return texto({ desfeito: r.desfeito, o_que_era: lote.resumo, avisos: r.avisos });
+  });
+};
+
 
 // ── Rotas ─────────────────────────────────────────────────────────────────────
 
@@ -267,7 +390,9 @@ export const criarRotas = (deps: Dependencias) => {
         return json({ error: 'method_not_allowed' }, 405, { Allow: 'POST' });
       }
       const dados = await deps.carregarDados(conta.uid);
-      const servidor = criarServidorMcp(dados, hojeEmBrasilia(deps.agora?.()));
+      const servidor = criarServidorMcp(dados, hojeEmBrasilia(deps.agora?.()), {
+        uid: conta.uid, assinatura: assinatura(req), alterarDados: deps.alterarDados
+      });
       // Sem sessão: cada chamada é independente (funções da Vercel não guardam estado)
       const transporte = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
       await servidor.connect(transporte);

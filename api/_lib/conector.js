@@ -1,169 +1,7 @@
 // connector/producao.ts
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
-
-// connector/oauth.ts
-import { SignJWT, jwtVerify, base64url } from "jose";
-var ESCOPO = "leciona";
-var DURACAO_CODIGO = 5 * 60;
-var DURACAO_ACESSO = 60 * 60;
-var DURACAO_RENOVACAO = 30 * 24 * 60 * 60;
-var redirecionamentoPermitido = (uri) => {
-  let url;
-  try {
-    url = new URL(uri);
-  } catch {
-    return false;
-  }
-  if (url.hash) return false;
-  if (url.protocol === "https:" && ["claude.ai", "claude.com"].includes(url.hostname)) {
-    return url.pathname === "/api/mcp/auth_callback";
-  }
-  return url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
-};
-var urlsDoServidor = (origem) => ({
-  emissor: origem,
-  recurso: `${origem}/api/mcp`,
-  autorizar: `${origem}/api/oauth/authorize`,
-  token: `${origem}/api/oauth/token`,
-  registro: `${origem}/api/oauth/register`,
-  metadadosRecurso: `${origem}/.well-known/oauth-protected-resource`
-});
-var metadadosDoRecurso = (origem) => {
-  const u = urlsDoServidor(origem);
-  return {
-    resource: u.recurso,
-    authorization_servers: [u.emissor],
-    scopes_supported: [ESCOPO],
-    bearer_methods_supported: ["header"],
-    resource_name: "Leciona"
-  };
-};
-var metadadosDoServidor = (origem) => {
-  const u = urlsDoServidor(origem);
-  return {
-    issuer: u.emissor,
-    authorization_endpoint: u.autorizar,
-    token_endpoint: u.token,
-    registration_endpoint: u.registro,
-    scopes_supported: [ESCOPO],
-    response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code", "refresh_token"],
-    code_challenge_methods_supported: ["S256"],
-    token_endpoint_auth_methods_supported: ["none"],
-    client_id_metadata_document_supported: true
-  };
-};
-var ErroOAuth = class extends Error {
-  constructor(codigo, mensagem, status = 400) {
-    super(mensagem);
-    this.codigo = codigo;
-    this.status = status;
-  }
-};
-var validarPedido = (p, origem) => {
-  if (!p.client_id) throw new ErroOAuth("invalid_request", "Falta client_id.");
-  if (!p.redirect_uri || !redirecionamentoPermitido(p.redirect_uri)) {
-    throw new ErroOAuth("invalid_request", "Endere\xE7o de retorno n\xE3o permitido.");
-  }
-  if (p.response_type !== "code") throw new ErroOAuth("unsupported_response_type", "Use response_type=code.");
-  if (!p.code_challenge || p.code_challenge_method !== "S256") {
-    throw new ErroOAuth("invalid_request", "PKCE (S256) \xE9 obrigat\xF3rio.");
-  }
-  if (p.resource && p.resource !== urlsDoServidor(origem).recurso) {
-    throw new ErroOAuth("invalid_target", "Recurso desconhecido.");
-  }
-  return {
-    client_id: p.client_id,
-    redirect_uri: p.redirect_uri,
-    code_challenge: p.code_challenge,
-    state: p.state,
-    resource: p.resource,
-    scope: p.scope
-  };
-};
-var emitir = (a, tipo, dados, sub, duracao) => {
-  const agora = Math.floor((a.agora ?? /* @__PURE__ */ new Date()).getTime() / 1e3);
-  return new SignJWT({ ...dados, tipo }).setProtectedHeader({ alg: "HS256" }).setIssuer(a.origem).setAudience(urlsDoServidor(a.origem).recurso).setSubject(sub).setIssuedAt(agora).setExpirationTime(agora + duracao).sign(a.chave);
-};
-var ler = async (a, tipo, token) => {
-  try {
-    const { payload } = await jwtVerify(token, a.chave, {
-      issuer: a.origem,
-      audience: urlsDoServidor(a.origem).recurso,
-      algorithms: ["HS256"],
-      currentDate: a.agora
-    });
-    if (payload.tipo !== tipo || !payload.sub) throw new Error("tipo");
-    return payload;
-  } catch {
-    return null;
-  }
-};
-var emitirCodigo = (a, pedido, conta) => emitir(a, "codigo", {
-  email: conta.email,
-  cid: pedido.client_id,
-  ru: pedido.redirect_uri,
-  cc: pedido.code_challenge
-}, conta.uid, DURACAO_CODIGO);
-var emitirPar = async (a, conta) => ({
-  access_token: await emitir(a, "acesso", { email: conta.email, scope: ESCOPO }, conta.uid, DURACAO_ACESSO),
-  token_type: "Bearer",
-  expires_in: DURACAO_ACESSO,
-  refresh_token: await emitir(a, "renovacao", { email: conta.email }, conta.uid, DURACAO_RENOVACAO),
-  scope: ESCOPO
-});
-var desafioPKCE = async (verificador) => base64url.encode(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verificador))));
-var mesmoEmail = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
-var trocarToken = async (a, emailPermitido, p) => {
-  if (p.grant_type === "authorization_code") {
-    const codigo = p.code && await ler(a, "codigo", p.code);
-    if (!codigo) throw new ErroOAuth("invalid_grant", "C\xF3digo inv\xE1lido ou vencido.");
-    if (p.redirect_uri !== codigo.ru) throw new ErroOAuth("invalid_grant", "redirect_uri diferente do pedido.");
-    if (p.client_id && p.client_id !== codigo.cid) throw new ErroOAuth("invalid_grant", "client_id diferente do pedido.");
-    if (!p.code_verifier || await desafioPKCE(p.code_verifier) !== codigo.cc) {
-      throw new ErroOAuth("invalid_grant", "Verifica\xE7\xE3o PKCE falhou.");
-    }
-    if (!mesmoEmail(codigo.email, emailPermitido)) throw new ErroOAuth("invalid_grant", "Conta sem acesso.");
-    return emitirPar(a, { uid: codigo.sub, email: codigo.email });
-  }
-  if (p.grant_type === "refresh_token") {
-    const renovacao = p.refresh_token && await ler(a, "renovacao", p.refresh_token);
-    if (!renovacao) throw new ErroOAuth("invalid_grant", "Token de renova\xE7\xE3o inv\xE1lido ou vencido.");
-    if (!mesmoEmail(renovacao.email, emailPermitido)) throw new ErroOAuth("invalid_grant", "Conta sem acesso.");
-    return emitirPar(a, { uid: renovacao.sub, email: renovacao.email });
-  }
-  throw new ErroOAuth("unsupported_grant_type", "Tipo de concess\xE3o n\xE3o suportado.");
-};
-var verificarAcesso = async (a, emailPermitido, cabecalho) => {
-  const token = cabecalho?.match(/^Bearer\s+(.+)$/i)?.[1];
-  if (!token) return null;
-  const acesso = await ler(a, "acesso", token);
-  if (!acesso || !mesmoEmail(acesso.email, emailPermitido)) return null;
-  return { uid: acesso.sub, email: acesso.email };
-};
-var registrarCliente = (corpo) => {
-  const uris = corpo?.redirect_uris;
-  if (!Array.isArray(uris) || !uris.length || !uris.every((u) => typeof u === "string" && redirecionamentoPermitido(u))) {
-    throw new ErroOAuth("invalid_redirect_uri", "Endere\xE7o de retorno n\xE3o permitido.");
-  }
-  return {
-    client_id: `leciona-${crypto.randomUUID()}`,
-    client_id_issued_at: Math.floor(Date.now() / 1e3),
-    client_name: typeof corpo.client_name === "string" ? corpo.client_name : void 0,
-    redirect_uris: uris,
-    grant_types: ["authorization_code", "refresh_token"],
-    response_types: ["code"],
-    token_endpoint_auth_method: "none"
-  };
-};
-var derivarChave = async (segredo) => new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`leciona-conector-v1:${segredo}`)));
-
-// connector/servidor.ts
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { z } from "zod";
+import { Timestamp, getFirestore } from "firebase-admin/firestore";
 
 // constants.ts
 var BRAZIL_HOLIDAYS = {
@@ -201,6 +39,25 @@ var formatDateBR = (dateStr) => {
   if (!y || !m || !d) return String(dateStr);
   return `${d}/${m}/${y}`;
 };
+
+// utils/sync.ts
+var TOMBSTONE_TTL_MS = 180 * 24 * 60 * 60 * 1e3;
+var removeUndefined = (obj) => {
+  if (obj === void 0) return void 0;
+  if (obj === null) return null;
+  if (Array.isArray(obj)) return obj.map(removeUndefined).filter((v) => v !== void 0);
+  if (typeof obj === "object" && obj.constructor === Object) {
+    const out = {};
+    for (const k of Object.keys(obj)) {
+      const v = removeUndefined(obj[k]);
+      if (v !== void 0) out[k] = v;
+    }
+    return out;
+  }
+  return obj;
+};
+var estimateDocBytes = (data) => new Blob([JSON.stringify(data)]).size;
+var FIRESTORE_DOC_LIMIT = 1048576;
 
 // utils/classRefs.ts
 var idOf = (c) => typeof c === "string" ? c : c.id;
@@ -522,6 +379,423 @@ var calendario = (data, opcoes) => {
   };
 };
 
+// connector/oauth.ts
+import { SignJWT, jwtVerify, base64url } from "jose";
+var ESCOPO = "leciona";
+var DURACAO_CODIGO = 5 * 60;
+var DURACAO_ACESSO = 60 * 60;
+var DURACAO_RENOVACAO = 30 * 24 * 60 * 60;
+var redirecionamentoPermitido = (uri) => {
+  let url;
+  try {
+    url = new URL(uri);
+  } catch {
+    return false;
+  }
+  if (url.hash) return false;
+  if (url.protocol === "https:" && ["claude.ai", "claude.com"].includes(url.hostname)) {
+    return url.pathname === "/api/mcp/auth_callback";
+  }
+  return url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+};
+var urlsDoServidor = (origem) => ({
+  emissor: origem,
+  recurso: `${origem}/api/mcp`,
+  autorizar: `${origem}/api/oauth/authorize`,
+  token: `${origem}/api/oauth/token`,
+  registro: `${origem}/api/oauth/register`,
+  metadadosRecurso: `${origem}/.well-known/oauth-protected-resource`
+});
+var metadadosDoRecurso = (origem) => {
+  const u = urlsDoServidor(origem);
+  return {
+    resource: u.recurso,
+    authorization_servers: [u.emissor],
+    scopes_supported: [ESCOPO],
+    bearer_methods_supported: ["header"],
+    resource_name: "Leciona"
+  };
+};
+var metadadosDoServidor = (origem) => {
+  const u = urlsDoServidor(origem);
+  return {
+    issuer: u.emissor,
+    authorization_endpoint: u.autorizar,
+    token_endpoint: u.token,
+    registration_endpoint: u.registro,
+    scopes_supported: [ESCOPO],
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
+    code_challenge_methods_supported: ["S256"],
+    token_endpoint_auth_methods_supported: ["none"],
+    client_id_metadata_document_supported: true
+  };
+};
+var ErroOAuth = class extends Error {
+  constructor(codigo, mensagem, status = 400) {
+    super(mensagem);
+    this.codigo = codigo;
+    this.status = status;
+  }
+};
+var validarPedido = (p, origem) => {
+  if (!p.client_id) throw new ErroOAuth("invalid_request", "Falta client_id.");
+  if (!p.redirect_uri || !redirecionamentoPermitido(p.redirect_uri)) {
+    throw new ErroOAuth("invalid_request", "Endere\xE7o de retorno n\xE3o permitido.");
+  }
+  if (p.response_type !== "code") throw new ErroOAuth("unsupported_response_type", "Use response_type=code.");
+  if (!p.code_challenge || p.code_challenge_method !== "S256") {
+    throw new ErroOAuth("invalid_request", "PKCE (S256) \xE9 obrigat\xF3rio.");
+  }
+  if (p.resource && p.resource !== urlsDoServidor(origem).recurso) {
+    throw new ErroOAuth("invalid_target", "Recurso desconhecido.");
+  }
+  return {
+    client_id: p.client_id,
+    redirect_uri: p.redirect_uri,
+    code_challenge: p.code_challenge,
+    state: p.state,
+    resource: p.resource,
+    scope: p.scope
+  };
+};
+var emitir = (a, tipo, dados, sub, duracao) => {
+  const agora = Math.floor((a.agora ?? /* @__PURE__ */ new Date()).getTime() / 1e3);
+  return new SignJWT({ ...dados, tipo }).setProtectedHeader({ alg: "HS256" }).setIssuer(a.origem).setAudience(urlsDoServidor(a.origem).recurso).setSubject(sub).setIssuedAt(agora).setExpirationTime(agora + duracao).sign(a.chave);
+};
+var ler = async (a, tipo, token) => {
+  try {
+    const { payload } = await jwtVerify(token, a.chave, {
+      issuer: a.origem,
+      audience: urlsDoServidor(a.origem).recurso,
+      algorithms: ["HS256"],
+      currentDate: a.agora
+    });
+    if (payload.tipo !== tipo || !payload.sub) throw new Error("tipo");
+    return payload;
+  } catch {
+    return null;
+  }
+};
+var DURACAO_PLANO = 60 * 60;
+var DURACAO_LOTE = 30 * 24 * 60 * 60;
+var assinarPlano = (a, uid, plano) => emitir(a, "plano", { plano }, uid, DURACAO_PLANO);
+var assinarLote = (a, uid, lote) => emitir(a, "lote", { lote }, uid, DURACAO_LOTE);
+var lerPlano = async (a, uid, codigo) => {
+  const t = await ler(a, "plano", codigo);
+  return t && t.sub === uid ? t.plano : null;
+};
+var lerLote = async (a, uid, codigo) => {
+  const t = await ler(a, "lote", codigo);
+  return t && t.sub === uid ? t.lote : null;
+};
+var emitirCodigo = (a, pedido, conta) => emitir(a, "codigo", {
+  email: conta.email,
+  cid: pedido.client_id,
+  ru: pedido.redirect_uri,
+  cc: pedido.code_challenge
+}, conta.uid, DURACAO_CODIGO);
+var emitirPar = async (a, conta) => ({
+  access_token: await emitir(a, "acesso", { email: conta.email, scope: ESCOPO }, conta.uid, DURACAO_ACESSO),
+  token_type: "Bearer",
+  expires_in: DURACAO_ACESSO,
+  refresh_token: await emitir(a, "renovacao", { email: conta.email }, conta.uid, DURACAO_RENOVACAO),
+  scope: ESCOPO
+});
+var desafioPKCE = async (verificador) => base64url.encode(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verificador))));
+var mesmoEmail = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+var trocarToken = async (a, emailPermitido, p) => {
+  if (p.grant_type === "authorization_code") {
+    const codigo = p.code && await ler(a, "codigo", p.code);
+    if (!codigo) throw new ErroOAuth("invalid_grant", "C\xF3digo inv\xE1lido ou vencido.");
+    if (p.redirect_uri !== codigo.ru) throw new ErroOAuth("invalid_grant", "redirect_uri diferente do pedido.");
+    if (p.client_id && p.client_id !== codigo.cid) throw new ErroOAuth("invalid_grant", "client_id diferente do pedido.");
+    if (!p.code_verifier || await desafioPKCE(p.code_verifier) !== codigo.cc) {
+      throw new ErroOAuth("invalid_grant", "Verifica\xE7\xE3o PKCE falhou.");
+    }
+    if (!mesmoEmail(codigo.email, emailPermitido)) throw new ErroOAuth("invalid_grant", "Conta sem acesso.");
+    return emitirPar(a, { uid: codigo.sub, email: codigo.email });
+  }
+  if (p.grant_type === "refresh_token") {
+    const renovacao = p.refresh_token && await ler(a, "renovacao", p.refresh_token);
+    if (!renovacao) throw new ErroOAuth("invalid_grant", "Token de renova\xE7\xE3o inv\xE1lido ou vencido.");
+    if (!mesmoEmail(renovacao.email, emailPermitido)) throw new ErroOAuth("invalid_grant", "Conta sem acesso.");
+    return emitirPar(a, { uid: renovacao.sub, email: renovacao.email });
+  }
+  throw new ErroOAuth("unsupported_grant_type", "Tipo de concess\xE3o n\xE3o suportado.");
+};
+var verificarAcesso = async (a, emailPermitido, cabecalho) => {
+  const token = cabecalho?.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!token) return null;
+  const acesso = await ler(a, "acesso", token);
+  if (!acesso || !mesmoEmail(acesso.email, emailPermitido)) return null;
+  return { uid: acesso.sub, email: acesso.email };
+};
+var registrarCliente = (corpo) => {
+  const uris = corpo?.redirect_uris;
+  if (!Array.isArray(uris) || !uris.length || !uris.every((u) => typeof u === "string" && redirecionamentoPermitido(u))) {
+    throw new ErroOAuth("invalid_redirect_uri", "Endere\xE7o de retorno n\xE3o permitido.");
+  }
+  return {
+    client_id: `leciona-${crypto.randomUUID()}`,
+    client_id_issued_at: Math.floor(Date.now() / 1e3),
+    client_name: typeof corpo.client_name === "string" ? corpo.client_name : void 0,
+    redirect_uris: uris,
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none"
+  };
+};
+var derivarChave = async (segredo) => new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`leciona-conector-v1:${segredo}`)));
+
+// connector/servidor.ts
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { z } from "zod";
+
+// connector/escrita.ts
+var SITUACOES = ["Pendente", "Agendada", "Pronta"];
+var camposDaSituacao = (s) => ({ prepared: s === "Pronta", scheduled: s === "Agendada" });
+var situacaoDe = (e) => e.prepared ? "Pronta" : e.scheduled ? "Agendada" : "Pendente";
+var novoId = () => crypto.randomUUID();
+var diaISO = (d) => `${d}T00:00:00.000Z`;
+var quando = (d) => `${DIAS_SEMANA[diaDaSemana(d)]} ${formatDateBR(d)}`;
+var aulasDaTurmaNoDia = (data, school, cls, d) => {
+  const semana = diaDaSemana(d);
+  return getSchedulesForDate(data, d).filter((s) => Number(s.dayOfWeek) === semana && s.schoolId === school.id && s.classId !== "window").filter((s) => eDaTurma(data, school, cls, s.classId)).flatMap((s) => {
+    const shift = school.shifts.find((sh) => sh.id === s.shiftId);
+    const slot = shift?.slots.find((sl) => sl.id === s.slotId);
+    if (!shift || !slot) return [];
+    const numero = lessonNumberInShift(shift.slots, slot.id);
+    return [{ slotId: slot.id, shiftId: shift.id, numero, inicio: slot.startTime, texto: `${numero}\xAA aula (${slot.startTime})` }];
+  }).sort((a, b) => a.inicio.localeCompare(b.inicio));
+};
+var diasComAula = (data, school, cls, d) => {
+  const dias = new Set(getSchedulesForDate(data, d).filter((s) => s.schoolId === school.id && s.classId !== "window" && eDaTurma(data, school, cls, s.classId)).map((s) => Number(s.dayOfWeek)));
+  return [...dias].sort().map((n) => DIAS_SEMANA[n]).join(", ") || "nenhum dia na grade";
+};
+var prepararAvaliacoes = (data, pedidos, hoje, agora = Date.now()) => {
+  if (!pedidos.length) throw new ConsultaError("Nenhuma avalia\xE7\xE3o informada.");
+  if (pedidos.length > 40) throw new ConsultaError("Envie no m\xE1ximo 40 avalia\xE7\xF5es por vez.");
+  const plano = { resumo: [], criar: { events: [], logs: [] }, situacoes: [] };
+  const itens = [];
+  const nestePedido = [];
+  pedidos.forEach((p, i) => {
+    const item = { pedido: i + 1, ok: false, descricao: `${p.titulo} (${p.turma}, ${p.data})`, avisos: [] };
+    itens.push(item);
+    try {
+      const d = validarData(p.data, "data");
+      const titulo = (p.titulo || "").trim();
+      if (!titulo) throw new ConsultaError("Falta o t\xEDtulo da avalia\xE7\xE3o.");
+      if (p.tipo !== "prova" && p.tipo !== "trabalho") throw new ConsultaError('O tipo deve ser "prova" ou "trabalho".');
+      const situacao = p.situacao ?? "Pendente";
+      if (!SITUACOES.includes(situacao)) throw new ConsultaError("Situa\xE7\xE3o deve ser Pendente, Agendada ou Pronta.");
+      const { school, cls } = encontrarTurma(data, p.turma, p.escola);
+      const tipoTexto = p.tipo === "prova" ? "Prova" : "Trabalho";
+      item.descricao = `${tipoTexto} "${titulo}" \u2014 ${cls.name} (${school.name}), ${quando(d)}`;
+      const aulas = aulasDaTurmaNoDia(data, school, cls, d);
+      if (!aulas.length) {
+        throw new ConsultaError(`A turma ${cls.name} n\xE3o tem aula na grade em ${quando(d)}. Dias com aula: ${diasComAula(data, school, cls, d)}.`);
+      }
+      let aula = aulas[0];
+      if (p.aula !== void 0) {
+        const escolhida = aulas.find((a) => a.numero === p.aula);
+        if (!escolhida) throw new ConsultaError(`Nesse dia a turma ${cls.name} tem: ${aulas.map((a) => a.texto).join(", ")}. Escolha uma delas.`);
+        aula = escolhida;
+      } else if (aulas.length > 1) {
+        throw new ConsultaError(`Nesse dia a turma ${cls.name} tem aulas seguidas: ${aulas.map((a) => a.texto).join(" e ")}. Pergunte ao Cadu em qual aula ser\xE1 a avalia\xE7\xE3o e informe o n\xFAmero da aula.`);
+      }
+      item.descricao += `, ${aula.texto}`;
+      const feriado = getHolidayName(getSafeDate(d));
+      if (feriado) throw new ConsultaError(`${formatDateBR(d)} \xE9 feriado (${feriado}).`);
+      if (isLessonBlocked(data, d, school.id, aula.shiftId, cls.id)) {
+        throw new ConsultaError(`${formatDateBR(d)} est\xE1 sem aula nessa escola (recesso ou evento que suspende as aulas).`);
+      }
+      if ((data.calendars || []).some((c) => c.schoolId === school.id) && !calendarioNaData(data, school.id, d)) {
+        item.avisos.push("A data est\xE1 fora do ano letivo cadastrado para essa escola.");
+      }
+      if (d < hoje) item.avisos.push("A data j\xE1 passou.");
+      const mesmaTurmaNoDia = avaliacoesDe(data, school, cls).filter((e) => dia(e.date) === d);
+      if (mesmaTurmaNoDia.some((e) => normalizar(e.title) === normalizar(titulo))) {
+        throw new ConsultaError(`J\xE1 existe "${titulo}" para a ${cls.name} nesse dia.`);
+      }
+      const naMesmaAula = mesmaTurmaNoDia.find((e) => e.slotId === aula.slotId);
+      if (naMesmaAula) item.avisos.push(`J\xE1 existe outra avalia\xE7\xE3o nessa aula: "${naMesmaAula.title}".`);
+      if (nestePedido.some((o) => o.schoolId === school.id && o.classId === cls.id && o.dia === d && normalizar(o.titulo) === normalizar(titulo))) {
+        throw new ConsultaError("Repetida neste mesmo pedido.");
+      }
+      if (nestePedido.some((o) => o.schoolId === school.id && o.classId === cls.id && o.dia === d && o.slotId === aula.slotId)) {
+        item.avisos.push("Outra avalia\xE7\xE3o deste pedido est\xE1 na mesma aula.");
+      }
+      const registro = (data.logs || []).find((l) => l.status !== "removed" && !l.studentId && dia(l.date) === d && l.schoolId === school.id && l.slotId === aula.slotId);
+      const evento = removeUndefined({
+        id: novoId(),
+        title: titulo,
+        date: diaISO(d),
+        schoolId: school.id,
+        classId: cls.id,
+        slotId: aula.slotId,
+        type: p.tipo === "prova" ? "test" : "work",
+        description: (p.descricao || "").trim(),
+        blocksClasses: false,
+        ...camposDaSituacao(situacao),
+        _m: agora
+      });
+      plano.criar.events.push(evento);
+      if (registro) {
+        item.avisos.push(`Essa aula j\xE1 tem registro no di\xE1rio ("${(registro.subject || "").slice(0, 60)}"). Ele ser\xE1 mantido e o registro "Avalia\xE7\xE3o: ${titulo}" n\xE3o ser\xE1 criado.`);
+      } else {
+        plano.criar.logs.push({
+          id: novoId(),
+          date: diaISO(d),
+          schoolId: school.id,
+          classId: cls.id,
+          slotId: aula.slotId,
+          subject: `Avalia\xE7\xE3o: ${titulo}`,
+          homework: "",
+          notes: evento.description,
+          _m: agora
+        });
+      }
+      item.descricao += ` \u2014 ${situacao}`;
+      plano.resumo.push(item.descricao);
+      nestePedido.push({ schoolId: school.id, classId: cls.id, dia: d, titulo, slotId: aula.slotId });
+      item.ok = true;
+    } catch (e) {
+      if (!(e instanceof ConsultaError)) throw e;
+      item.erro = e.message;
+    }
+  });
+  return { itens, plano: plano.resumo.length ? plano : null };
+};
+var prepararSituacoes = (data, pedidos) => {
+  if (!pedidos.length) throw new ConsultaError("Nenhuma avalia\xE7\xE3o informada.");
+  if (pedidos.length > 40) throw new ConsultaError("Envie no m\xE1ximo 40 avalia\xE7\xF5es por vez.");
+  const plano = { resumo: [], criar: { events: [], logs: [] }, situacoes: [] };
+  const itens = [];
+  pedidos.forEach((p, i) => {
+    const item = { pedido: i + 1, ok: false, descricao: `${p.turma}, ${p.data}`, avisos: [] };
+    itens.push(item);
+    try {
+      const d = validarData(p.data, "data");
+      if (!SITUACOES.includes(p.situacao)) throw new ConsultaError("Situa\xE7\xE3o deve ser Pendente, Agendada ou Pronta.");
+      const { school, cls } = encontrarTurma(data, p.turma, p.escola);
+      let candidatas = avaliacoesDe(data, school, cls).filter((e) => dia(e.date) === d);
+      if (p.titulo) {
+        const alvo = normalizar(p.titulo);
+        const exatas = candidatas.filter((e) => normalizar(e.title) === alvo);
+        candidatas = exatas.length ? exatas : candidatas.filter((e) => normalizar(e.title).includes(alvo));
+      }
+      if (!candidatas.length) throw new ConsultaError(`N\xE3o h\xE1 avalia\xE7\xE3o${p.titulo ? ` "${p.titulo}"` : ""} da ${cls.name} em ${quando(d)}.`);
+      if (candidatas.length > 1) {
+        throw new ConsultaError(`A ${cls.name} tem mais de uma avalia\xE7\xE3o nesse dia: ${candidatas.map((e) => `"${e.title}"`).join(", ")}. Informe o t\xEDtulo.`);
+      }
+      const ev = candidatas[0];
+      if (plano.situacoes.some((s) => s.id === ev.id)) throw new ConsultaError("Avalia\xE7\xE3o repetida neste pedido.");
+      const atual = situacaoDe(ev);
+      item.descricao = `"${ev.title}" \u2014 ${cls.name} (${school.name}), ${quando(d)}: ${atual} \u2192 ${p.situacao}`;
+      if (atual === p.situacao) {
+        item.avisos.push(`J\xE1 est\xE1 como ${atual}; nada muda.`);
+        item.ok = true;
+        return;
+      }
+      plano.situacoes.push({ id: ev.id, situacao: p.situacao, descricao: item.descricao });
+      plano.resumo.push(item.descricao);
+      item.ok = true;
+    } catch (e) {
+      if (!(e instanceof ConsultaError)) throw e;
+      item.erro = e.message;
+    }
+  });
+  return { itens, plano: plano.resumo.length ? plano : null };
+};
+var lapides = (raw) => ({ ...raw._deleted || {} });
+var aplicarPlano = (raw, plano, agora = Date.now()) => {
+  const mortos = lapides(raw);
+  const todos = [...plano.criar.events, ...plano.criar.logs].map((i) => i.id);
+  if (todos.some((id) => mortos[id] !== void 0)) {
+    throw new ConsultaError("Esta pr\xE9via j\xE1 foi gravada e desfeita. Prepare de novo.");
+  }
+  const events = [...raw.events || []];
+  const logs = [...raw.logs || []];
+  const existentes = new Set([...events, ...logs].map((i) => i?.id));
+  const jaGravado = todos.length > 0 && todos.every((id) => existentes.has(id));
+  const lote = { em: agora, resumo: [], criados: { events: [], logs: [] }, situacoesAnteriores: [] };
+  for (const ev of plano.criar.events) {
+    if (existentes.has(ev.id)) continue;
+    events.push({ ...ev, _m: agora });
+    lote.criados.events.push(ev.id);
+  }
+  for (const log of plano.criar.logs) {
+    if (existentes.has(log.id)) continue;
+    logs.push({ ...log, _m: agora });
+    lote.criados.logs.push(log.id);
+  }
+  for (const s of plano.situacoes) {
+    const idx = events.findIndex((e) => e?.id === s.id);
+    if (idx < 0) {
+      lote.resumo.push(`N\xE3o encontrada (talvez apagada no app): ${s.descricao}`);
+      continue;
+    }
+    const ev = events[idx];
+    if (situacaoDe(ev) === s.situacao) continue;
+    lote.situacoesAnteriores.push({ id: s.id, prepared: !!ev.prepared, scheduled: !!ev.scheduled, descricao: s.descricao });
+    events[idx] = { ...ev, ...camposDaSituacao(s.situacao), _m: agora };
+  }
+  lote.resumo.unshift(...plano.resumo);
+  const mudou = lote.criados.events.length + lote.criados.logs.length + lote.situacoesAnteriores.length > 0;
+  const alteracoes = {};
+  if (mudou) {
+    alteracoes.events = events;
+    if (lote.criados.logs.length) alteracoes.logs = logs;
+  }
+  return { alteracoes, lote, jaGravado: !mudou && (jaGravado || plano.situacoes.length > 0) };
+};
+var desfazerLote = (raw, lote, agora = Date.now()) => {
+  const mortos = lapides(raw);
+  const avisos = [];
+  let events = [...raw.events || []];
+  let logs = [...raw.logs || []];
+  let mudouEventos = false;
+  let mudouLogs = false;
+  const remover = (lista, ids, nome) => {
+    const alvo = new Set(ids);
+    return lista.filter((i) => {
+      if (!i || !alvo.has(i.id)) return true;
+      if ((i._m ?? 0) > lote.em) {
+        avisos.push(`Um ${nome} foi alterado no app depois da grava\xE7\xE3o e foi mantido.`);
+        return true;
+      }
+      mortos[i.id] = agora;
+      return false;
+    });
+  };
+  const antesE = events.length;
+  events = remover(events, lote.criados.events, "item de avalia\xE7\xE3o");
+  mudouEventos = events.length !== antesE;
+  const antesL = logs.length;
+  logs = remover(logs, lote.criados.logs, "registro do di\xE1rio");
+  mudouLogs = logs.length !== antesL;
+  for (const s of lote.situacoesAnteriores) {
+    const idx = events.findIndex((e) => e?.id === s.id);
+    if (idx < 0) {
+      avisos.push(`N\xE3o encontrada: ${s.descricao}`);
+      continue;
+    }
+    if ((events[idx]._m ?? 0) > lote.em) {
+      avisos.push(`Alterada no app depois; mantida: ${s.descricao}`);
+      continue;
+    }
+    events[idx] = { ...events[idx], prepared: s.prepared, scheduled: s.scheduled, _m: agora };
+    mudouEventos = true;
+  }
+  const alteracoes = {};
+  if (mudouEventos) alteracoes.events = events;
+  if (mudouLogs) alteracoes.logs = logs;
+  if (mudouEventos || mudouLogs) alteracoes._deleted = mortos;
+  return { alteracoes, avisos, desfeito: mudouEventos || mudouLogs };
+};
+
 // connector/servidor.ts
 var origemDe = (req) => {
   const url = new URL(req.url);
@@ -599,11 +873,18 @@ b.onclick = async () => {
 };
 var paginaDeErro = (mensagem, status = 400) => pagina("Leciona", `<h1>N\xE3o foi poss\xEDvel conectar</h1><p class="erro">${esc(mensagem)}</p>`, status);
 var INSTRUCOES = `Dados do Leciona, app de rotina docente do prof. Cadu (professor de Hist\xF3ria em escolas de Brusque/SC).
-S\xF3 leitura. Datas no formato AAAA-MM-DD, no fuso de Bras\xEDlia; cada resposta informa "hoje".
+Datas no formato AAAA-MM-DD, no fuso de Bras\xEDlia; cada resposta informa "hoje".
 Turmas e escolas podem ser escritas pelo nome (ex.: "183", "3\xAA S\xE9rie", "C\xF4nsul"); se o nome existir em mais de uma escola, informe a escola.
-Responda ao Cadu em portugu\xEAs simples. N\xE3o h\xE1 dados de alunos (nomes, notas, chamada) neste conector.`;
+Responda ao Cadu em portugu\xEAs simples. N\xE3o h\xE1 dados de alunos (nomes, notas, chamada) neste conector.
+
+Grava\xE7\xE3o (sempre em dois passos):
+1. Use uma ferramenta "preparar_..." e mostre ao Cadu a pr\xE9via completa: o que ser\xE1 gravado, os avisos e os itens com erro.
+2. S\xF3 chame "confirmar_gravacao" depois que o Cadu disser claramente que pode gravar. Nunca confirme por conta pr\xF3pria.
+Se faltar informa\xE7\xE3o (ex.: a turma tem aulas seguidas e \xE9 preciso escolher a aula), pergunte ao Cadu antes de preparar de novo.
+Depois de gravar, diga que d\xE1 para desfazer e guarde o "codigo_desfazer" para usar em "desfazer_gravacao" se ele pedir.
+Situa\xE7\xE3o das avalia\xE7\xF5es: Pendente \u2192 Agendada (alunos avisados) \u2192 Pronta (elaborada, enviada e alunos avisados).`;
 var somenteLeitura = { readOnlyHint: true, openWorldHint: false };
-var criarServidorMcp = (dados, hoje) => {
+var criarServidorMcp = (dados, hoje, escrita) => {
   const servidor = new McpServer({ name: "leciona", version: "1.0.0" }, { instructions: INSTRUCOES });
   const responder = (consulta) => {
     try {
@@ -661,7 +942,97 @@ var criarServidorMcp = (dados, hoje) => {
     },
     annotations: somenteLeitura
   }, async (args) => responder(() => calendario(dados, args)));
+  if (escrita) registrarEscrita(servidor, dados, hoje, escrita);
   return servidor;
+};
+var texto = (corpo) => ({ content: [{ type: "text", text: JSON.stringify(corpo, null, 1) }] });
+var falha = (mensagem) => ({ content: [{ type: "text", text: mensagem }], isError: true });
+var registrarEscrita = (servidor, dados, hoje, escrita) => {
+  const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use AAAA-MM-DD");
+  const situacao = z.enum(SITUACOES);
+  const gravacao = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+  const preparo = { readOnlyHint: true, openWorldHint: false };
+  const previa = async (calcular) => {
+    try {
+      const { itens, plano } = calcular();
+      return texto({
+        hoje,
+        previa: itens,
+        ...plano ? {
+          vai_gravar: plano.resumo,
+          codigo_confirmacao: await assinarPlano(escrita.assinatura, escrita.uid, plano),
+          proximo_passo: "Mostre a pr\xE9via ao Cadu. S\xF3 chame confirmar_gravacao com este c\xF3digo depois que ele confirmar. O c\xF3digo vale 1 hora."
+        } : { vai_gravar: [], proximo_passo: "Nada a gravar. Resolva os erros com o Cadu e prepare de novo." }
+      });
+    } catch (e) {
+      if (e instanceof ConsultaError) return falha(e.message);
+      throw e;
+    }
+  };
+  servidor.registerTool("preparar_avaliacoes", {
+    title: "Preparar cadastro de avalia\xE7\xF5es",
+    description: "Confere e mostra a pr\xE9via do cadastro de uma ou v\xE1rias provas/trabalhos (ex.: a partir de uma lista, foto ou PDF do calend\xE1rio da escola). Valida se a turma tem aula no dia, feriado, recesso e repeti\xE7\xE3o. N\xC3O grava: devolve um c\xF3digo para confirmar_gravacao.",
+    inputSchema: {
+      avaliacoes: z.array(z.object({
+        turma: z.string().describe('Nome da turma, ex.: "183"'),
+        escola: z.string().optional().describe("Nome da escola (necess\xE1rio se a turma existir em mais de uma)"),
+        data: data.describe("Data da avalia\xE7\xE3o (AAAA-MM-DD)"),
+        tipo: z.enum(["prova", "trabalho"]),
+        titulo: z.string().describe('T\xEDtulo curto, ex.: "P3" ou "Trabalho Iluminismo"'),
+        descricao: z.string().optional().describe('Conte\xFAdo ou cap\xEDtulos, ex.: "Cap. 12, 13 e 14"'),
+        aula: z.number().int().min(1).max(12).optional().describe("N\xFAmero da aula no turno (1\xAA, 2\xAA\u2026). Obrigat\xF3rio quando a turma tem aulas seguidas no dia"),
+        situacao: situacao.optional().describe("Padr\xE3o: Pendente")
+      })).min(1).max(40)
+    },
+    annotations: preparo
+  }, async ({ avaliacoes }) => previa(() => prepararAvaliacoes(dados, avaliacoes, hoje)));
+  servidor.registerTool("preparar_situacao", {
+    title: "Preparar mudan\xE7a de situa\xE7\xE3o",
+    description: "Mostra a pr\xE9via da mudan\xE7a de situa\xE7\xE3o de avalia\xE7\xF5es (Pendente, Agendada = alunos avisados, Pronta = elaborada, enviada e alunos avisados). N\xC3O grava: devolve um c\xF3digo para confirmar_gravacao.",
+    inputSchema: {
+      avaliacoes: z.array(z.object({
+        turma: z.string(),
+        escola: z.string().optional(),
+        data: data.describe("Data da avalia\xE7\xE3o (AAAA-MM-DD)"),
+        titulo: z.string().optional().describe("S\xF3 se a turma tiver mais de uma avalia\xE7\xE3o no dia"),
+        situacao
+      })).min(1).max(40)
+    },
+    annotations: preparo
+  }, async ({ avaliacoes }) => previa(() => prepararSituacoes(dados, avaliacoes)));
+  servidor.registerTool("confirmar_gravacao", {
+    title: "Confirmar grava\xE7\xE3o",
+    description: "Grava no Leciona exatamente o que a pr\xE9via mostrou. Use S\xD3 depois que o Cadu confirmar a pr\xE9via. Devolve um codigo_desfazer.",
+    inputSchema: { codigo: z.string().describe("codigo_confirmacao recebido na pr\xE9via") },
+    annotations: gravacao
+  }, async ({ codigo }) => {
+    const plano = await lerPlano(escrita.assinatura, escrita.uid, codigo);
+    if (!plano) return falha("C\xF3digo de confirma\xE7\xE3o inv\xE1lido ou vencido (vale 1 hora). Prepare a pr\xE9via de novo.");
+    try {
+      const r = await escrita.alterarDados(escrita.uid, (raw) => aplicarPlano(raw, plano));
+      if (r.jaGravado) return texto({ gravado: false, mensagem: "Isso j\xE1 tinha sido gravado; nada foi duplicado." });
+      return texto({
+        gravado: true,
+        resumo: r.lote.resumo,
+        codigo_desfazer: await assinarLote(escrita.assinatura, escrita.uid, r.lote),
+        proximo_passo: "Avise o Cadu que foi gravado e aparece no app em instantes. Guarde o codigo_desfazer (vale 30 dias)."
+      });
+    } catch (e) {
+      if (e instanceof ConsultaError) return falha(e.message);
+      throw e;
+    }
+  });
+  servidor.registerTool("desfazer_gravacao", {
+    title: "Desfazer grava\xE7\xE3o",
+    description: "Desfaz uma grava\xE7\xE3o feita pelo conector: apaga o que ela criou e volta as situa\xE7\xF5es anteriores. Itens alterados no app depois da grava\xE7\xE3o s\xE3o mantidos.",
+    inputSchema: { codigo_desfazer: z.string() },
+    annotations: { ...gravacao, destructiveHint: true }
+  }, async ({ codigo_desfazer }) => {
+    const lote = await lerLote(escrita.assinatura, escrita.uid, codigo_desfazer);
+    if (!lote) return falha("C\xF3digo para desfazer inv\xE1lido ou vencido (vale 30 dias).");
+    const r = await escrita.alterarDados(escrita.uid, (raw) => desfazerLote(raw, lote));
+    return texto({ desfeito: r.desfeito, o_que_era: lote.resumo, avisos: r.avisos });
+  });
 };
 var criarRotas = (deps) => {
   const assinatura = (req) => ({ chave: deps.chave, origem: origemDe(req), agora: deps.agora?.() });
@@ -727,7 +1098,11 @@ var criarRotas = (deps) => {
         return json({ error: "method_not_allowed" }, 405, { Allow: "POST" });
       }
       const dados = await deps.carregarDados(conta.uid);
-      const servidor = criarServidorMcp(dados, hojeEmBrasilia(deps.agora?.()));
+      const servidor = criarServidorMcp(dados, hojeEmBrasilia(deps.agora?.()), {
+        uid: conta.uid,
+        assinatura: assinatura(req),
+        alterarDados: deps.alterarDados
+      });
       const transporte = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: void 0, enableJsonResponse: true });
       await servidor.connect(transporte);
       const resposta = await transporte.handleRequest(req);
@@ -761,7 +1136,22 @@ var montar = async () => {
       const doc = await db.collection("users").doc(uid).get();
       if (!doc.exists) throw new Error("Documento do professor n\xE3o encontrado.");
       return doc.data();
-    }
+    },
+    alterarDados: (uid, calcular) => db.runTransaction(async (tx) => {
+      const ref = db.collection("users").doc(uid);
+      const doc = await tx.get(ref);
+      if (!doc.exists) throw new Error("Documento do professor n\xE3o encontrado.");
+      const raw = doc.data();
+      const r = calcular(raw);
+      const campos = removeUndefined(r.alteracoes);
+      if (Object.keys(campos).length) {
+        if (estimateDocBytes({ ...raw, ...campos }) > FIRESTORE_DOC_LIMIT * 0.95) {
+          throw new ConsultaError("Os dados do Leciona est\xE3o perto do limite da nuvem (1 MB). Nada foi gravado.");
+        }
+        tx.update(ref, { ...campos, updatedAt: Timestamp.now() });
+      }
+      return r;
+    })
   });
 };
 var obterRotas = () => {

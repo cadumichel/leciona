@@ -31,6 +31,13 @@ const rotas = (emailPermitido = EMAIL) => criarRotas({
   carregarDados: async uid => {
     expect(uid).toBe('uid-prof');
     return dados;
+  },
+  // Firestore em memória: grava só os campos alterados, como a transação de producao.ts
+  alterarDados: async (uid, calcular) => {
+    expect(uid).toBe('uid-prof');
+    const r = calcular(dados);
+    Object.assign(dados, JSON.parse(JSON.stringify(r.alteracoes)));
+    return r;
   }
 });
 
@@ -186,15 +193,17 @@ describe('conector: tokens', () => {
 });
 
 describe('conector: servidor MCP', () => {
-  it('lista as ferramentas de leitura', async () => {
+  it('lista as ferramentas de leitura e de gravação', async () => {
     const { access_token } = await entrar();
     const resp = await rotas().mcp(mcp(access_token, { jsonrpc: '2.0', id: 1, method: 'tools/list' }));
     expect(resp.status).toBe(200);
     const { result } = await resp.json();
     expect(result.tools.map((t: any) => t.name).sort()).toEqual([
-      'avaliacoes_proximas', 'calendario', 'conteudo_desde_ultima_avaliacao', 'listar_avaliacoes', 'turmas_e_grade'
+      'avaliacoes_proximas', 'calendario', 'confirmar_gravacao', 'conteudo_desde_ultima_avaliacao', 'desfazer_gravacao',
+      'listar_avaliacoes', 'preparar_avaliacoes', 'preparar_situacao', 'turmas_e_grade'
     ]);
-    expect(result.tools.every((t: any) => t.annotations?.readOnlyHint)).toBe(true);
+    const gravam = result.tools.filter((t: any) => !t.annotations?.readOnlyHint).map((t: any) => t.name).sort();
+    expect(gravam).toEqual(['confirmar_gravacao', 'desfazer_gravacao']);
   });
 
   it('responde a uma consulta com a data de hoje em Brasília', async () => {
@@ -227,5 +236,53 @@ describe('conector: servidor MCP', () => {
     const vencido = await rotas().mcp(mcp(access_token, lista));
     agora = new Date('2026-10-21T15:00:00Z');
     expect(vencido.status).toBe(401);
+  });
+});
+
+describe('conector: gravação pelo servidor MCP', () => {
+  const chamar = async (token: string, name: string, args: unknown) => {
+    const resp = await rotas().mcp(mcp(token, { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name, arguments: args } }));
+    const { result } = await resp.json();
+    return { erro: !!result.isError, texto: result.content[0].text as string, json: () => JSON.parse(result.content[0].text) };
+  };
+
+  it('prepara, confirma e desfaz uma avaliação', async () => {
+    const { access_token } = await entrar();
+    const antes = dados.events.length;
+
+    const previa = (await chamar(access_token, 'preparar_avaliacoes', {
+      avaliacoes: [{ turma: '183', data: '2026-11-10', tipo: 'prova', titulo: 'P3', descricao: 'Cap. 15' }]
+    })).json();
+    expect(previa.vai_gravar).toEqual(['Prova "P3" — 183 (Cônsul), terça 10/11/2026, 1ª aula (13:30) — Pendente']);
+    expect(dados.events.length).toBe(antes); // a prévia não grava
+
+    const gravou = (await chamar(access_token, 'confirmar_gravacao', { codigo: previa.codigo_confirmacao })).json();
+    expect(gravou.gravado).toBe(true);
+    expect(dados.events.length).toBe(antes + 1);
+    expect(dados.logs.some((l: any) => l.subject === 'Avaliação: P3')).toBe(true);
+
+    const deNovo = (await chamar(access_token, 'confirmar_gravacao', { codigo: previa.codigo_confirmacao })).json();
+    expect(deNovo.gravado).toBe(false);
+    expect(dados.events.length).toBe(antes + 1);
+
+    const desfez = (await chamar(access_token, 'desfazer_gravacao', { codigo_desfazer: gravou.codigo_desfazer })).json();
+    expect(desfez.desfeito).toBe(true);
+    expect(dados.events.length).toBe(antes);
+    expect(dados.logs.some((l: any) => l.subject === 'Avaliação: P3')).toBe(false);
+  });
+
+  it('não aceita código de confirmação adulterado nem código de desfazer no lugar dele', async () => {
+    const { access_token } = await entrar();
+    const previa = (await chamar(access_token, 'preparar_situacao', {
+      avaliacoes: [{ turma: '183', data: '2026-10-27', situacao: 'Pronta' }]
+    })).json();
+    const adulterado = await chamar(access_token, 'confirmar_gravacao', { codigo: previa.codigo_confirmacao.slice(0, -3) + 'abc' });
+    expect(adulterado.erro).toBe(true);
+    expect(adulterado.texto).toMatch(/inválido ou vencido/);
+    const ok = (await chamar(access_token, 'confirmar_gravacao', { codigo: previa.codigo_confirmacao })).json();
+    const trocado = await chamar(access_token, 'confirmar_gravacao', { codigo: ok.codigo_desfazer });
+    expect(trocado.erro).toBe(true);
+    await chamar(access_token, 'desfazer_gravacao', { codigo_desfazer: ok.codigo_desfazer });
+    expect(dados.events.find((e: any) => e.id === 'p')).toMatchObject({ prepared: false });
   });
 });

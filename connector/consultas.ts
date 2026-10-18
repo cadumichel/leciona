@@ -20,7 +20,7 @@ export class ConsultaError extends Error {}
 
 // ── Datas ─────────────────────────────────────────────────────────────────────
 
-const DIAS_SEMANA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+export const DIAS_SEMANA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 
 /** "2026-10-20T00:00:00.000Z" ou "2026-10-20" → "2026-10-20" */
 export const dia = (d: string | undefined | null) => String(d || '').split('T')[0];
@@ -34,9 +34,9 @@ export const somarDias = (dateStr: string, n: number) => {
   return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
 };
 
-const diaDaSemana = (dateStr: string) => getSafeDate(dateStr).getDay();
+export const diaDaSemana = (dateStr: string) => getSafeDate(dateStr).getDay();
 
-const validarData = (valor: string | undefined, campo: string) => {
+export const validarData = (valor: string | undefined, campo: string) => {
   if (valor === undefined) return undefined;
   const d = dia(valor);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new ConsultaError(`Data inválida em "${campo}": use AAAA-MM-DD.`);
@@ -45,14 +45,14 @@ const validarData = (valor: string | undefined, campo: string) => {
 
 // ── Escolas e turmas ──────────────────────────────────────────────────────────
 
-const normalizar = (s: string) =>
+export const normalizar = (s: string) =>
   String(s || '').replace(/ª/g, 'a').replace(/º/g, 'o')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
-const escolasAtivas = (data: AppData) => (data.schools || []).filter(s => !s.deleted);
+export const escolasAtivas = (data: AppData) => (data.schools || []).filter(s => !s.deleted);
 
 // Turmas antigas podem estar salvas só como texto (o nome)
-const turmasAtivas = (school: School): SchoolClass[] =>
+export const turmasAtivas = (school: School): SchoolClass[] =>
   ((school.classes || []) as (SchoolClass | string)[])
     .map(c => (typeof c === 'string' ? { id: c, name: c } : c))
     .filter(c => !c.deleted);
@@ -89,7 +89,7 @@ export const encontrarTurma = (data: AppData, busca: string, escola?: string) =>
   throw new ConsultaError(`Turma "${busca}" não encontrada. Turmas: ${opcoes}.`);
 };
 
-const eDaTurma = (data: AppData, school: School, cls: SchoolClass, ref: string | undefined) =>
+export const eDaTurma = (data: AppData, school: School, cls: SchoolClass, ref: string | undefined) =>
   !!ref && isSameClassRef(data, school.id, ref, cls.id);
 
 const nomeDaTurma = (data: AppData, school: School, ref: string | undefined) => {
@@ -100,7 +100,7 @@ const nomeDaTurma = (data: AppData, school: School, ref: string | undefined) => 
 };
 
 /** "2ª aula (08:05)" para a aula indicada, se o horário existir. */
-const descreverAula = (school: School, slotId: string | undefined) => {
+export const descreverAula = (school: School, slotId: string | undefined) => {
   if (!slotId) return undefined;
   for (const shift of school.shifts || []) {
     const slot = shift.slots.find(s => s.id === slotId);
@@ -127,9 +127,9 @@ export interface Avaliacao {
   comunicadaAosAlunos: boolean;
 }
 
-const eAvaliacao = (e: SchoolEvent) => e.type === 'test' || e.type === 'work';
+export const eAvaliacao = (e: SchoolEvent) => e.type === 'test' || e.type === 'work';
 
-const descreverAvaliacao = (data: AppData, school: School, e: SchoolEvent): Avaliacao => {
+export const descreverAvaliacao = (data: AppData, school: School, e: SchoolEvent): Avaliacao => {
   const d = dia(e.date);
   return {
     data: d,
@@ -152,7 +152,7 @@ const ordemDaAvaliacao = (school: School, e: SchoolEvent) =>
   `${dia(e.date)} ${descreverAula(school, e.slotId)?.inicio || '99:99'}`;
 
 /** Avaliações da escola (e turma, se indicada), em ordem de data e horário. */
-const avaliacoesDe = (data: AppData, school: School, cls?: SchoolClass) =>
+export const avaliacoesDe = (data: AppData, school: School, cls?: SchoolClass) =>
   (data.events || [])
     .filter(e => eAvaliacao(e) && e.schoolId === school.id && (!cls || eDaTurma(data, school, cls, e.classId)))
     .sort((a, b) => ordemDaAvaliacao(school, a).localeCompare(ordemDaAvaliacao(school, b)));
@@ -206,7 +206,7 @@ export interface ConteudoDaTurma {
 const REGISTRO_DE_AVALIACAO = /^Avaliação:/;
 
 /** Calendário da escola que contém a data, se houver. */
-const calendarioNaData = (data: AppData, schoolId: string, d: string): AcademicCalendar | undefined =>
+export const calendarioNaData = (data: AppData, schoolId: string, d: string): AcademicCalendar | undefined =>
   (data.calendars || []).find(c => c.schoolId === schoolId && d >= dia(c.start) && d <= dia(c.end));
 
 /**

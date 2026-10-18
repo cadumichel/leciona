@@ -1,7 +1,9 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { AppData } from '../types';
+import { estimateDocBytes, FIRESTORE_DOC_LIMIT, removeUndefined } from '../utils/sync';
+import { ConsultaError } from './consultas';
 import { derivarChave } from './oauth';
 import { criarRotas } from './servidor';
 
@@ -36,7 +38,23 @@ const montar = async () => {
       const doc = await db.collection('users').doc(uid).get();
       if (!doc.exists) throw new Error('Documento do professor não encontrado.');
       return doc.data() as AppData;
-    }
+    },
+    alterarDados: (uid, calcular) => db.runTransaction(async tx => {
+      const ref = db.collection('users').doc(uid);
+      const doc = await tx.get(ref);
+      if (!doc.exists) throw new Error('Documento do professor não encontrado.');
+      const raw = doc.data()!;
+      const r = calcular(raw);
+      const campos = removeUndefined(r.alteracoes);
+      if (Object.keys(campos).length) {
+        if (estimateDocBytes({ ...raw, ...campos }) > FIRESTORE_DOC_LIMIT * 0.95) {
+          throw new ConsultaError('Os dados do Leciona estão perto do limite da nuvem (1 MB). Nada foi gravado.');
+        }
+        // updatedAt como o app grava; os outros aparelhos recebem e juntam item a item
+        tx.update(ref, { ...campos, updatedAt: Timestamp.now() });
+      }
+      return r;
+    })
   });
 };
 

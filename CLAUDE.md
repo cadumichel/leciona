@@ -94,7 +94,8 @@ conector: `https://leciona.vercel.app/api/mcp`.
 - `connector/consultas.ts`: leitura (avaliações, conteúdo desde a última avaliação, avaliações
   próximas, turmas e grade, calendário). Reaproveita os utils do app.
 - `connector/escrita.ts`: gravação em dois passos (preparar → prévia assinada → confirmar) e
-  desfazer. Avaliações, situação, conteúdo de aula, calendário, recessos e eventos.
+  desfazer. Avaliações (com REC e 2ª chamada pela regra da escola), remarcar/corrigir/apagar
+  avaliações, situação, conteúdo de aula, calendário, recessos e eventos.
 - `connector/oauth.ts`: login OAuth 2.1 + PKCE; a página de login usa o Firebase Auth e só aceita a
   conta em `LECIONA_EMAIL`. Códigos, tokens, prévias e lotes são JWTs assinados com chave derivada
   da credencial do Firebase Admin (trocar a credencial corta todos os acessos).
@@ -117,8 +118,11 @@ conector: `https://leciona.vercel.app/api/mcp`.
   confirmar de novo não duplica; desfazer vale 30 dias e mantém o que foi alterado no app depois.
 - Grava como "mais um aparelho": carimbo `_m`, lápides em `_deleted`, transação que grava só os
   campos alterados. Não grava se o item mudou no app depois da prévia.
-- **Nunca apaga registro do diário**: se a aula já tem registro, ele é mantido (avaliação) ou o
-  texto novo é acrescentado (conteúdo).
+- **Nunca apaga registro do diário escrito pelo Cadu**: se a aula já tem registro, ele é mantido
+  (avaliação) ou o texto novo é acrescentado (conteúdo). Só o registro automático "Avaliação: X"
+  (texto exato, sem tarefa) acompanha a avaliação ao remarcar ou apagar.
+- Alterar/apagar avaliações é "tudo ou nada": se algo mudou no app depois da prévia, nada é gravado.
+  Apagar leva a REC e a 2ª chamada ligadas; avaliação com notas lançadas só se apaga pelo app.
 - Feriado municipal ou da escola = recesso no calendário da escola (os nacionais já estão no app).
 - Nunca ler nem gravar nomes de alunos, notas, chamada, ocorrências ou observações do diário.
 

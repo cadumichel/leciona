@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  aplicarPlano, desfazerLote, prepararAvaliacoes, prepararCalendarios, prepararConteudos, prepararEventos, prepararRecessos,
+  aplicarPlano, desfazerLote, prepararAlteracoes, prepararAvaliacoes, prepararCalendarios, prepararConteudos, prepararEventos, prepararRecessos,
   prepararSituacoes
 } from '../connector/escrita';
 import { listarAvaliacoes } from '../connector/consultas';
@@ -440,5 +440,163 @@ describe('conector (gravação): eventos', () => {
     expect(r.itens[0].erro).toMatch(/Já há conteúdo registrado no diário/);
     expect(r.itens[1].erro).toMatch(/Turno "Noturno" não encontrado. Turnos da Cônsul: Vespertino/);
     expect(r.itens[2].erro).toMatch(/Já existe "conselho"/);
+  });
+});
+
+describe('conector (gravação): REC e 2ª chamada', () => {
+  const comRegra = (policy: string, extra: any = {}) => {
+    const doc = base();
+    doc.schools[0] = { ...doc.schools[0], recoveryPolicy: policy, ...extra };
+    return doc;
+  };
+
+  it('escola com REC paralela: a prova ganha a REC junto; se a data sugerida não serve, pergunta', () => {
+    // 17/11 + 15 dias = quarta 02/12, sem aula da 183
+    const sem = prepararAvaliacoes(comRegra('parallel'), [P3], HOJE, AGORA);
+    expect(sem.plano).toBeNull();
+    expect(sem.itens[0].erro).toMatch(/REC paralela \(data sugerida: quarta 02\/12\/2026.*Próxima aula da turma: segunda 07\/12\/2026.*data_rec.*criar_rec: false/);
+
+    const com = prepararAvaliacoes(comRegra('parallel'), [{ ...P3, data_rec: '2026-12-01' }], HOJE, AGORA);
+    const [prova, rec] = com.plano!.criar.events;
+    expect(rec).toMatchObject({ kind: 'recovery', parentId: prova.id, title: 'REC P3', slotId: 's5', date: '2026-12-01T00:00:00.000Z', description: 'Cap. 15 e 16' });
+    expect(com.plano!.criar.logs.map((l: any) => l.subject)).toEqual(['Avaliação: P3', 'Avaliação: REC P3']);
+    expect(com.itens[0].descricao).toMatch(/\+ REC "REC P3" em terça 01\/12\/2026, 5ª aula/);
+
+    const semRec = prepararAvaliacoes(comRegra('parallel'), [{ ...P3, criar_rec: false }], HOJE, AGORA);
+    expect(semRec.plano!.criar.events).toHaveLength(1);
+    // trabalho não tem REC
+    expect(prepararAvaliacoes(comRegra('parallel'), [{ ...P3, tipo: 'trabalho' }], HOJE, AGORA).plano!.criar.events).toHaveLength(1);
+  });
+
+  it('2ª chamada na aula: ligada à original, com o título e o conteúdo dela', () => {
+    const doc = base();
+    doc.events[0].description = 'Cap. 10';
+    const r = prepararAvaliacoes(doc, [{ turma: '183', data: '2026-11-17', especie: 'segunda_chamada', original_data: '2026-10-27' }], HOJE, AGORA);
+    expect(r.plano!.criar.events[0]).toMatchObject({ kind: 'second_call', parentId: 'p2', title: '2ª chamada — P2', type: 'test', description: 'Cap. 10', slotId: 's5' });
+    expect(r.itens[0].descricao).toMatch(/2ª chamada "2ª chamada — P2" — 183 \(Cônsul\), terça 17\/11\/2026, 5ª aula \(16:45\) \(ligada a "P2" de 27\/10\/2026\)/);
+    // antes da original: recusa
+    const antes = prepararAvaliacoes(doc, [{ turma: '183', data: '2026-10-26', aula: 3, especie: 'segunda_chamada', original_data: '2026-10-27' }], HOJE, AGORA);
+    expect(antes.itens[0].erro).toMatch(/depois da avaliação original/);
+    // sem a original informada
+    expect(prepararAvaliacoes(doc, [{ turma: '183', data: '2026-11-17', especie: 'rec' }], HOJE, AGORA).itens[0].erro).toMatch(/original_data/);
+  });
+
+  it('2ª chamada no contraturno: sem aula e sem registro no diário (quarta, dia sem aula da turma)', () => {
+    const r = prepararAvaliacoes(comRegra('term', { secondCallMode: 'off_schedule' }),
+      [{ turma: '183', data: '2026-11-04', especie: 'segunda_chamada', original_data: '2026-10-27' }], HOJE, AGORA);
+    expect(r.itens[0].ok).toBe(true);
+    expect(r.plano!.criar.events[0].slotId).toBeUndefined();
+    expect(r.plano!.criar.logs).toHaveLength(0);
+    expect(r.itens[0].descricao).toMatch(/no contraturno/);
+  });
+
+  it('REC trimestral: conteúdo das provas do trimestre', () => {
+    const doc = base();
+    doc.events[0].description = 'Cap. 10 e 11';
+    const r = prepararAvaliacoes(doc, [{ turma: '183', data: '2026-11-24', especie: 'rec_trimestral' }], HOJE, AGORA);
+    expect(r.plano!.criar.events[0]).toMatchObject({ kind: 'term_recovery', title: 'REC trimestral', type: 'test', description: 'P2: Cap. 10 e 11' });
+  });
+
+  it('consultas mostram a espécie e a original', () => {
+    const doc = base();
+    const { plano } = prepararAvaliacoes(doc, [{ turma: '183', data: '2026-11-17', especie: 'rec', original_data: '2026-10-27' }], HOJE, AGORA);
+    Object.assign(doc, aplicarPlano(doc, plano!, AGORA).alteracoes);
+    expect(listarAvaliacoes(doc, { turma: '183', de: '2026-11-01' })[0]).toMatchObject({ titulo: 'REC P2', especie: 'REC', original: 'P2 (27/10/2026)' });
+  });
+});
+
+describe('conector (gravação): remarcar, corrigir e apagar avaliações', () => {
+  const comRegistro = () => {
+    const doc = base();
+    doc.events[0]._m = 100;
+    doc.logs.push({ id: 'lp2', date: '2026-10-27T00:00:00.000Z', schoolId: 'C', classId: 'c183', slotId: 's5', subject: 'Avaliação: P2', homework: '', notes: '', _m: 100 });
+    return doc;
+  };
+
+  it('remarca para outro dia, levando o registro "Avaliação:", e desfaz', () => {
+    const doc = comRegistro();
+    const { itens, plano } = prepararAlteracoes(doc, [{ turma: '183', data: '2026-10-27', acao: 'alterar', nova_data: '2026-11-16', nova_aula: 4, novo_titulo: 'P2 (remarcada)' }], HOJE, AGORA);
+    expect(itens[0].descricao).toBe('"P2" — 183 (Cônsul): de terça 27/10/2026, 5ª aula (16:45) para segunda 16/11/2026, 4ª aula (16:00); título "P2" → "P2 (remarcada)"');
+    const r = aplicarPlano(doc, plano!, AGORA + 1000);
+    Object.assign(doc, r.alteracoes);
+    expect(doc.events[0]).toMatchObject({ id: 'p2', date: '2026-11-16T00:00:00.000Z', slotId: 's4', title: 'P2 (remarcada)', scheduled: true, _m: AGORA + 1000 });
+    expect(doc.logs.find((l: any) => l.id === 'lp2')).toMatchObject({ date: '2026-11-16T00:00:00.000Z', slotId: 's4', subject: 'Avaliação: P2 (remarcada)' });
+
+    expect(aplicarPlano(doc, plano!, AGORA + 2000).jaGravado).toBe(true);
+    const d = desfazerLote(doc, r.lote, AGORA + 3000);
+    Object.assign(doc, d.alteracoes);
+    expect(doc.events[0]).toMatchObject({ date: '2026-10-27T00:00:00.000Z', slotId: 's5', title: 'P2' });
+    expect(doc.logs.find((l: any) => l.id === 'lp2')).toMatchObject({ date: '2026-10-27T00:00:00.000Z', subject: 'Avaliação: P2' });
+  });
+
+  it('com aulas seguidas na nova data, pede a aula; recusa feriado', () => {
+    const doc = comRegistro();
+    const r = prepararAlteracoes(doc, [
+      { turma: '183', data: '2026-10-27', acao: 'alterar', nova_data: '2026-11-16' },
+      { turma: '183', data: '2026-10-27', acao: 'alterar', nova_data: '2026-11-02', nova_aula: 3 }
+    ], HOJE, AGORA);
+    expect(r.plano).toBeNull();
+    expect(r.itens[0].erro).toMatch(/aulas seguidas.*nova_aula/);
+    expect(r.itens[1].erro).toMatch(/feriado/);
+  });
+
+  it('nunca apaga registro do Cadu: destino ocupado mantém o registro e só tira o automático', () => {
+    const doc = comRegistro();
+    const { itens, plano } = prepararAlteracoes(doc, [{ turma: '183', data: '2026-10-27', acao: 'alterar', nova_data: '2026-11-10' }], HOJE, AGORA);
+    expect(itens[0].avisos[0]).toMatch(/já tem registro no diário \("Revisão para a P3"\)/);
+    Object.assign(doc, aplicarPlano(doc, plano!, AGORA).alteracoes);
+    expect(doc.logs.map((l: any) => l.id)).toEqual(['l1']);
+    expect(doc._deleted.lp2).toBe(AGORA);
+
+    // registro "Avaliação:" editado pelo Cadu fica onde está
+    const doc2 = comRegistro();
+    doc2.logs[1].subject = 'Avaliação: P2 — levar mapa';
+    const r2 = prepararAlteracoes(doc2, [{ turma: '183', data: '2026-10-27', acao: 'alterar', nova_data: '2026-11-17' }], HOJE, AGORA);
+    expect(r2.itens[0].avisos[0]).toMatch(/foi editado e será mantido/);
+    expect(r2.plano!.itens!.map(m => m.id)).toEqual(['p2']);
+    expect(r2.plano!.criar.logs.map((l: any) => l.subject)).toEqual(['Avaliação: P2']);
+  });
+
+  it('corrige o conteúdo sem mudar de lugar', () => {
+    const doc = comRegistro();
+    const { plano } = prepararAlteracoes(doc, [{ turma: '183', data: '2026-10-27', acao: 'alterar', nova_descricao: 'Cap. 9' }], HOJE, AGORA);
+    Object.assign(doc, aplicarPlano(doc, plano!, AGORA).alteracoes);
+    expect(doc.events[0]).toMatchObject({ description: 'Cap. 9', slotId: 's5', date: '2026-10-27T00:00:00.000Z' });
+    expect(doc.logs.find((l: any) => l.id === 'lp2')).toMatchObject({ subject: 'Avaliação: P2', notes: 'Cap. 9' });
+  });
+
+  it('apaga com as ligadas e o registro automático; desfazer traz tudo de volta', () => {
+    const doc = comRegistro();
+    doc.events.push({ id: 'rec2', type: 'test', kind: 'recovery', parentId: 'p2', schoolId: 'C', classId: 'c183', slotId: 's5',
+      date: '2026-11-10T00:00:00.000Z', title: 'REC P2', description: '', blocksClasses: false, _m: 100 });
+    const { itens, plano } = prepararAlteracoes(doc, [{ turma: '183', data: '2026-10-27', acao: 'apagar' }], HOJE, AGORA);
+    expect(itens[0].descricao).toMatch(/Apagar "P2".*e as ligadas: "REC P2" \(10\/11\/2026\)/);
+    const r = aplicarPlano(doc, plano!, AGORA);
+    Object.assign(doc, r.alteracoes);
+    expect(doc.events).toHaveLength(0);
+    expect(doc.logs.map((l: any) => l.id)).toEqual(['l1']); // "Revisão para a P3" é do Cadu: fica
+    expect(Object.keys(doc._deleted).sort()).toEqual(['lp2', 'p2', 'rec2']);
+
+    const d = desfazerLote(doc, r.lote, AGORA + 1000);
+    Object.assign(doc, d.alteracoes);
+    expect(doc.events.map((e: any) => e.id).sort()).toEqual(['p2', 'rec2']);
+    expect(doc.logs.map((l: any) => l.id).sort()).toEqual(['l1', 'lp2']);
+    expect(doc._deleted.p2).toBeUndefined();
+    // junção com um aparelho que ainda tem a lápide: o item volta (carimbo mais novo que a lápide)
+    const juntado = mergeAppData({ ...doc, _deleted: { p2: AGORA } } as any, doc as any, AGORA + 2000);
+    expect(juntado.events.some((e: any) => e.id === 'p2')).toBe(true);
+  });
+
+  it('não apaga avaliação com notas lançadas', () => {
+    const doc = comRegistro();
+    doc.grades = [{ id: 'g', studentId: 'x', assessmentId: 'p2', value: 7 }];
+    expect(prepararAlteracoes(doc, [{ turma: '183', data: '2026-10-27', acao: 'apagar' }], HOJE, AGORA).itens[0].erro).toMatch(/notas lançadas.*pelo app/);
+  });
+
+  it('se a avaliação mudou no app depois da prévia, nada é gravado', () => {
+    const doc = comRegistro();
+    const { plano } = prepararAlteracoes(doc, [{ turma: '183', data: '2026-10-27', acao: 'alterar', nova_data: '2026-11-17' }], HOJE, AGORA);
+    doc.events[0] = { ...doc.events[0], prepared: true, _m: AGORA + 500 };
+    expect(() => aplicarPlano(doc, plano!, AGORA + 1000)).toThrow(/mudou no app depois da prévia/);
   });
 });

@@ -25,8 +25,8 @@ var getSafeDate = (dateStr) => {
 };
 var getHolidayName = (date) => {
   const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day2 = String(date.getDate()).padStart(2, "0");
-  const key = `${month}-${day2}`;
+  const day3 = String(date.getDate()).padStart(2, "0");
+  const key = `${month}-${day3}`;
   return BRAZIL_HOLIDAYS[key] || null;
 };
 var isHoliday = (date) => {
@@ -372,6 +372,89 @@ var countRemainingLessons = (data, ref) => {
   return result;
 };
 
+// utils/recovery.ts
+var DEFAULT_RECOVERY_DAYS = 15;
+var recoveryPolicyOf = (school) => school?.recoveryPolicy || "none";
+var recoveryDaysOf = (school) => school?.recoveryDelayDays || DEFAULT_RECOVERY_DAYS;
+var secondCallModeOf = (school) => school?.secondCallMode || "in_class";
+var isRegularAssessment = (e) => (e.type === "test" || e.type === "work") && !e.kind;
+var KIND_LABELS = {
+  recovery: "REC",
+  term_recovery: "REC trimestral",
+  second_call: "2\xAA chamada"
+};
+var day2 = (d) => String(d || "").split("T")[0];
+var addDays = (dateStr, n) => {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+};
+var weekday = (dateStr) => getSafeDate(dateStr).getDay();
+var WEEKDAYS = ["domingo", "segunda", "ter\xE7a", "quarta", "quinta", "sexta", "s\xE1bado"];
+var classLessonsOn = (data, school, classId, date) => {
+  const dow = weekday(date);
+  return getSchedulesForDate(data, date).filter((s) => Number(s.dayOfWeek) === dow && s.schoolId === school.id && s.classId !== "window" && isSameClassRef(data, school.id, s.classId, classId)).map((s) => school.shifts.find((sh) => sh.id === s.shiftId)?.slots.find((sl) => sl.id === s.slotId)).filter((s) => !!s).sort((a, b) => parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime));
+};
+var checkAssessmentDate = (data, school, classId, date) => {
+  const warnings = [];
+  let blocked = false;
+  const holiday = getHolidayName(getSafeDate(date));
+  if (holiday) {
+    warnings.push(`${formatDateBR(date)} \xE9 feriado (${holiday}).`);
+    blocked = true;
+  }
+  if (!holiday && isLessonBlocked(data, date, school.id, void 0, classId)) {
+    warnings.push(`${formatDateBR(date)} est\xE1 sem aula (recesso ou evento que suspende aulas).`);
+    blocked = true;
+  }
+  const lessons = classLessonsOn(data, school, classId, date);
+  if (!blocked && lessons.length === 0) warnings.push(`A turma n\xE3o tem aula na ${WEEKDAYS[weekday(date)]} (${formatDateBR(date)}).`);
+  const dow = weekday(date);
+  const monday = addDays(date, dow === 0 ? -6 : 1 - dow);
+  const friday = addDays(monday, 4);
+  (data.events || []).filter((e) => e.schoolId === school.id && e.type !== "test" && e.type !== "work" && day2(e.date) >= monday && day2(e.date) <= friday && (!e.classId || isSameClassRef(data, school.id, e.classId, classId))).forEach((e) => warnings.push(`Na mesma semana: "${e.title}" em ${formatDateBR(e.date)}${e.blocksClasses ? " (suspende aulas)" : ""}.`));
+  const midBreak = (data.calendars || []).find((c) => c.schoolId === school.id)?.midYearBreak;
+  if (midBreak?.start && date >= midBreak.start && date <= midBreak.end) blocked = true;
+  return { warnings, blocked, lessons };
+};
+var nextLessonDate = (data, school, classId, from, maxDays = 60) => {
+  for (let i = 0; i <= maxDays; i++) {
+    const d = addDays(from, i);
+    const { blocked, lessons } = checkAssessmentDate(data, school, classId, d);
+    if (!blocked && lessons.length > 0) return d;
+  }
+  return null;
+};
+var suggestRecovery = (data, school, classId, examDate) => {
+  const date = addDays(day2(examDate), recoveryDaysOf(school));
+  const check = checkAssessmentDate(data, school, classId, date);
+  const next = check.blocked || check.lessons.length === 0 ? nextLessonDate(data, school, classId, addDays(date, 1)) : null;
+  return {
+    date,
+    ...check,
+    nextAvailable: next,
+    nextAvailableText: next ? `Pr\xF3xima aula da turma: ${WEEKDAYS[weekday(next)]} ${formatDateBR(next)}.` : void 0
+  };
+};
+var termRecoveryContent = (data, schoolId, classId, date) => {
+  const found = findTerm(data, schoolId, date);
+  const start = found ? day2(found.term.start) : `${date.slice(0, 4)}-01-01`;
+  return (data.events || []).filter((e) => isRegularAssessment(e) && e.schoolId === schoolId && isSameClassRef(data, schoolId, e.classId, classId) && day2(e.date) >= start && day2(e.date) < date).sort((a, b) => day2(a.date).localeCompare(day2(b.date))).map((e) => e.description?.trim() ? `${e.title}: ${e.description.trim()}` : e.title).join(" \xB7 ");
+};
+var buildRecovery = (original, date, slotId, id) => ({
+  id,
+  kind: "recovery",
+  parentId: original.id,
+  title: `REC ${original.title}`,
+  date: `${date}T00:00:00.000Z`,
+  schoolId: original.schoolId,
+  classId: original.classId,
+  slotId,
+  type: "test",
+  description: original.description || "",
+  blocksClasses: false
+});
+var linkedAssessments = (events, id) => events.filter((e) => e.parentId === id);
+
 // connector/consultas.ts
 var ConsultaError = class extends Error {
 };
@@ -449,7 +532,13 @@ var descreverAvaliacao = (data, school, e) => {
     situacao: e.prepared ? "Pronta" : e.scheduled ? "Agendada" : "Pendente",
     elaborada: !!e.prepared,
     // No app, escolher "Pronta" desliga "Agendada"; pronta já foi enviada e os alunos já sabem
-    comunicadaAosAlunos: !!e.prepared || !!e.scheduled
+    comunicadaAosAlunos: !!e.prepared || !!e.scheduled,
+    ...e.kind ? { especie: KIND_LABELS[e.kind] } : {},
+    ...e.kind && !e.slotId ? { aula: "contraturno" } : {},
+    ...e.parentId ? (() => {
+      const o = (data.events || []).find((x) => x.id === e.parentId);
+      return o ? { original: `${o.title} (${formatDateBR(dia(o.date))})` } : {};
+    })() : {}
   };
 };
 var ordemDaAvaliacao = (school, e) => `${dia(e.date)} ${descreverAula(school, e.slotId)?.inicio || "99:99"}`;
@@ -464,7 +553,7 @@ var listarAvaliacoes = (data, filtro = {}) => {
 var REGISTRO_DE_AVALIACAO = /^Avaliação:/;
 var calendarioNaData = (data, schoolId, d) => (data.calendars || []).find((c) => c.schoolId === schoolId && d >= dia(c.start) && d <= dia(c.end));
 var conteudoEntre = (data, school, cls, ate, hoje) => {
-  const avaliacoes = avaliacoesDe(data, school, cls);
+  const avaliacoes = avaliacoesDe(data, school, cls).filter((e) => !e.kind);
   const anteriores = avaliacoes.filter((e) => dia(e.date) < ate);
   const ultima = anteriores[anteriores.length - 1];
   const proxima = avaliacoes.find((e) => dia(e.date) >= ate);
@@ -516,7 +605,8 @@ var avaliacoesProximas = (data, opcoes) => {
   const escolas = opcoes.escola ? [encontrarEscola(data, opcoes.escola)] : escolasAtivas(data);
   const diasEntre = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
   return escolas.flatMap((school) => avaliacoesDe(data, school).map((e) => ({ school, e }))).filter(({ e }) => dia(e.date) >= opcoes.hoje && dia(e.date) <= ate).sort((a, b) => ordemDaAvaliacao(a.school, a.e).localeCompare(ordemDaAvaliacao(b.school, b.e))).map(({ school, e }) => ({ school, e, cls: turmasAtivas(school).find((c) => eDaTurma(data, school, c, e.classId)) })).filter(({ e, cls }) => !e.classId || !!cls).map(({ school, e, cls }) => {
-    const c = cls && conteudoEntre(data, school, cls, dia(e.date), opcoes.hoje);
+    const original = e.kind && e.kind !== "term_recovery" && e.parentId ? (data.events || []).find((x) => x.id === e.parentId) : void 0;
+    const c = cls && e.kind !== "term_recovery" && conteudoEntre(data, school, cls, dia((original || e).date), opcoes.hoje);
     return {
       ...descreverAvaliacao(data, school, e),
       diasAte: diasEntre(opcoes.hoje, dia(e.date)),
@@ -883,43 +973,108 @@ var diasComAula = (data, school, cls, d) => {
   const dias = new Set(getSchedulesForDate(data, d).filter((s) => s.schoolId === school.id && s.classId !== "window" && eDaTurma(data, school, cls, s.classId)).map((s) => Number(s.dayOfWeek)));
   return [...dias].sort().map((n) => DIAS_SEMANA[n]).join(", ") || "nenhum dia na grade";
 };
+var ESPECIES = ["regular", "rec", "rec_trimestral", "segunda_chamada"];
+var NOME_DA_ESPECIE = { rec: "REC", rec_trimestral: "REC trimestral", segunda_chamada: "2\xAA chamada" };
+var escolherAula = (data, school, cls, d, pedida, campo = "aula") => {
+  const aulas = aulasDaTurmaNoDia(data, school, cls, d);
+  if (!aulas.length) {
+    throw new ConsultaError(`A turma ${cls.name} n\xE3o tem aula na grade em ${quando(d)}. Dias com aula: ${diasComAula(data, school, cls, d)}.`);
+  }
+  let aula = aulas[0];
+  if (pedida !== void 0) {
+    const escolhida = aulas.find((a) => a.numero === pedida);
+    if (!escolhida) throw new ConsultaError(`Nesse dia a turma ${cls.name} tem: ${aulas.map((a) => a.texto).join(", ")}. Escolha uma delas.`);
+    aula = escolhida;
+  } else if (aulas.length > 1) {
+    throw new ConsultaError(`Nesse dia a turma ${cls.name} tem aulas seguidas: ${aulas.map((a) => a.texto).join(" e ")}. Pergunte ao Cadu em qual aula ser\xE1 a avalia\xE7\xE3o e informe o n\xFAmero da aula (${campo}).`);
+  }
+  const feriado = getHolidayName(getSafeDate(d));
+  if (feriado) throw new ConsultaError(`${formatDateBR(d)} \xE9 feriado (${feriado}).`);
+  if (isLessonBlocked(data, d, school.id, aula.shiftId, cls.id)) {
+    throw new ConsultaError(`${formatDateBR(d)} est\xE1 sem aula nessa escola (recesso ou evento que suspende as aulas).`);
+  }
+  return aula;
+};
+var acharAvaliacao = (data, school, cls, d, titulo, filtro = () => true) => {
+  let candidatas = avaliacoesDe(data, school, cls).filter((e) => dia(e.date) === d && filtro(e));
+  if (titulo) {
+    const alvo = normalizar(titulo);
+    const exatas = candidatas.filter((e) => normalizar(e.title) === alvo);
+    candidatas = exatas.length ? exatas : candidatas.filter((e) => normalizar(e.title).includes(alvo));
+  }
+  if (!candidatas.length) throw new ConsultaError(`N\xE3o h\xE1 avalia\xE7\xE3o${titulo ? ` "${titulo}"` : ""} da ${cls.name} em ${quando(d)}.`);
+  if (candidatas.length > 1) {
+    throw new ConsultaError(`A ${cls.name} tem mais de uma avalia\xE7\xE3o nesse dia: ${candidatas.map((e) => `"${e.title}"`).join(", ")}. Informe o t\xEDtulo.`);
+  }
+  return candidatas[0];
+};
+var registroNaAula = (data, schoolId, d, slotId) => slotId ? (data.logs || []).find((l) => l.status !== "removed" && !l.studentId && dia(l.date) === d && l.schoolId === schoolId && l.slotId === slotId) : void 0;
 var prepararAvaliacoes = (data, pedidos, hoje, agora = Date.now()) => {
   if (!pedidos.length) throw new ConsultaError("Nenhuma avalia\xE7\xE3o informada.");
   if (pedidos.length > 40) throw new ConsultaError("Envie no m\xE1ximo 40 avalia\xE7\xF5es por vez.");
   const plano = { resumo: [], criar: { events: [], logs: [] }, situacoes: [] };
   const itens = [];
   const nestePedido = [];
+  const criar = (item, evento, d, prefixo = "") => {
+    plano.criar.events.push(evento);
+    if (!evento.slotId) return;
+    const registro = registroNaAula(data, evento.schoolId, d, evento.slotId) || plano.criar.logs.find((l) => dia(l.date) === d && l.schoolId === evento.schoolId && l.slotId === evento.slotId);
+    if (registro) {
+      item.avisos.push(`${prefixo}Essa aula j\xE1 tem registro no di\xE1rio ("${(registro.subject || "").slice(0, 60)}"). Ele ser\xE1 mantido e o registro "Avalia\xE7\xE3o: ${evento.title}" n\xE3o ser\xE1 criado.`);
+      return;
+    }
+    plano.criar.logs.push({
+      id: novoId(),
+      date: diaISO(d),
+      schoolId: evento.schoolId,
+      classId: evento.classId,
+      slotId: evento.slotId,
+      subject: `Avalia\xE7\xE3o: ${evento.title}`,
+      homework: "",
+      notes: evento.description || "",
+      _m: agora
+    });
+  };
   pedidos.forEach((p, i) => {
-    const item = { pedido: i + 1, ok: false, descricao: `${p.titulo} (${p.turma}, ${p.data})`, avisos: [] };
+    const especie = p.especie ?? "regular";
+    const item = { pedido: i + 1, ok: false, descricao: `${p.titulo || NOME_DA_ESPECIE[especie] || "Avalia\xE7\xE3o"} (${p.turma}, ${p.data})`, avisos: [] };
     itens.push(item);
     try {
+      if (!ESPECIES.includes(especie)) throw new ConsultaError("A esp\xE9cie deve ser regular, rec, rec_trimestral ou segunda_chamada.");
       const d = validarData(p.data, "data");
-      const titulo = (p.titulo || "").trim();
-      if (!titulo) throw new ConsultaError("Falta o t\xEDtulo da avalia\xE7\xE3o.");
-      if (p.tipo !== "prova" && p.tipo !== "trabalho") throw new ConsultaError('O tipo deve ser "prova" ou "trabalho".');
       const situacao = p.situacao ?? "Pendente";
       if (!SITUACOES.includes(situacao)) throw new ConsultaError("Situa\xE7\xE3o deve ser Pendente, Agendada ou Pronta.");
       const { school, cls } = encontrarTurma(data, p.turma, p.escola);
-      const tipoTexto = p.tipo === "prova" ? "Prova" : "Trabalho";
-      item.descricao = `${tipoTexto} "${titulo}" \u2014 ${cls.name} (${school.name}), ${quando(d)}`;
-      const aulas = aulasDaTurmaNoDia(data, school, cls, d);
-      if (!aulas.length) {
-        throw new ConsultaError(`A turma ${cls.name} n\xE3o tem aula na grade em ${quando(d)}. Dias com aula: ${diasComAula(data, school, cls, d)}.`);
+      let original;
+      if (especie === "rec" || especie === "segunda_chamada") {
+        if (!p.original_data) throw new ConsultaError(`Informe a data da avalia\xE7\xE3o original (original_data) da ${NOME_DA_ESPECIE[especie]}.`);
+        original = acharAvaliacao(data, school, cls, validarData(p.original_data, "original_data"), p.original_titulo, isRegularAssessment);
+        if (especie === "rec" && original.type !== "test") throw new ConsultaError(`"${original.title}" \xE9 um trabalho; a REC fica ligada a uma prova.`);
+        if (d <= dia(original.date)) throw new ConsultaError(`A ${NOME_DA_ESPECIE[especie]} precisa ser depois da avalia\xE7\xE3o original (${formatDateBR(original.date)}).`);
+        const kind = especie === "rec" ? "recovery" : "second_call";
+        if (linkedAssessments(data.events || [], original.id).some((e) => e.kind === kind)) {
+          item.avisos.push(`"${original.title}" j\xE1 tem ${NOME_DA_ESPECIE[especie]} cadastrada.`);
+        }
       }
-      let aula = aulas[0];
-      if (p.aula !== void 0) {
-        const escolhida = aulas.find((a) => a.numero === p.aula);
-        if (!escolhida) throw new ConsultaError(`Nesse dia a turma ${cls.name} tem: ${aulas.map((a) => a.texto).join(", ")}. Escolha uma delas.`);
-        aula = escolhida;
-      } else if (aulas.length > 1) {
-        throw new ConsultaError(`Nesse dia a turma ${cls.name} tem aulas seguidas: ${aulas.map((a) => a.texto).join(" e ")}. Pergunte ao Cadu em qual aula ser\xE1 a avalia\xE7\xE3o e informe o n\xFAmero da aula.`);
+      const titulo = (p.titulo || "").trim() || (especie === "rec" ? `REC ${original.title}` : especie === "segunda_chamada" ? `2\xAA chamada \u2014 ${original.title}` : especie === "rec_trimestral" ? "REC trimestral" : "");
+      if (!titulo) throw new ConsultaError("Falta o t\xEDtulo da avalia\xE7\xE3o.");
+      if (especie === "regular" && p.tipo !== "prova" && p.tipo !== "trabalho") throw new ConsultaError('O tipo deve ser "prova" ou "trabalho".');
+      const type = original ? especie === "rec" ? "test" : original.type : especie === "rec_trimestral" ? "test" : p.tipo === "trabalho" ? "work" : "test";
+      const descricao = (p.descricao ?? "").trim() || (original ? original.description || "" : especie === "rec_trimestral" ? termRecoveryContent(data, school.id, cls.id, d) : "");
+      const rotulo = especie === "regular" ? type === "test" ? "Prova" : "Trabalho" : NOME_DA_ESPECIE[especie];
+      item.descricao = `${rotulo} "${titulo}" \u2014 ${cls.name} (${school.name}), ${quando(d)}`;
+      const contraturno = especie === "segunda_chamada" && secondCallModeOf(school) === "off_schedule";
+      let aula;
+      if (contraturno) {
+        const feriado = getHolidayName(getSafeDate(d));
+        if (feriado) throw new ConsultaError(`${formatDateBR(d)} \xE9 feriado (${feriado}).`);
+        if (isLessonBlocked(data, d, school.id, void 0, cls.id)) item.avisos.push("Nesse dia a escola est\xE1 sem aula (recesso ou evento).");
+        item.descricao += ", no contraturno";
+      } else {
+        aula = escolherAula(data, school, cls, d, p.aula);
+        item.descricao += `, ${aula.texto}`;
       }
-      item.descricao += `, ${aula.texto}`;
-      const feriado = getHolidayName(getSafeDate(d));
-      if (feriado) throw new ConsultaError(`${formatDateBR(d)} \xE9 feriado (${feriado}).`);
-      if (isLessonBlocked(data, d, school.id, aula.shiftId, cls.id)) {
-        throw new ConsultaError(`${formatDateBR(d)} est\xE1 sem aula nessa escola (recesso ou evento que suspende as aulas).`);
-      }
+      if (original) item.descricao += ` (ligada a "${original.title}" de ${formatDateBR(original.date)})`;
       if ((data.calendars || []).some((c) => c.schoolId === school.id) && !calendarioNaData(data, school.id, d)) {
         item.avisos.push("A data est\xE1 fora do ano letivo cadastrado para essa escola.");
       }
@@ -928,50 +1083,205 @@ var prepararAvaliacoes = (data, pedidos, hoje, agora = Date.now()) => {
       if (mesmaTurmaNoDia.some((e) => normalizar(e.title) === normalizar(titulo))) {
         throw new ConsultaError(`J\xE1 existe "${titulo}" para a ${cls.name} nesse dia.`);
       }
-      const naMesmaAula = mesmaTurmaNoDia.find((e) => e.slotId === aula.slotId);
+      const naMesmaAula = aula && mesmaTurmaNoDia.find((e) => e.slotId === aula.slotId);
       if (naMesmaAula) item.avisos.push(`J\xE1 existe outra avalia\xE7\xE3o nessa aula: "${naMesmaAula.title}".`);
       if (nestePedido.some((o) => o.schoolId === school.id && o.classId === cls.id && o.dia === d && normalizar(o.titulo) === normalizar(titulo))) {
         throw new ConsultaError("Repetida neste mesmo pedido.");
       }
-      if (nestePedido.some((o) => o.schoolId === school.id && o.classId === cls.id && o.dia === d && o.slotId === aula.slotId)) {
+      if (aula && nestePedido.some((o) => o.schoolId === school.id && o.classId === cls.id && o.dia === d && o.slotId === aula.slotId)) {
         item.avisos.push("Outra avalia\xE7\xE3o deste pedido est\xE1 na mesma aula.");
       }
-      const registro = (data.logs || []).find((l) => l.status !== "removed" && !l.studentId && dia(l.date) === d && l.schoolId === school.id && l.slotId === aula.slotId);
+      let rec;
+      if (especie === "regular" && type === "test" && recoveryPolicyOf(school) === "parallel" && p.criar_rec !== false) {
+        const sugerida = suggestRecovery(data, school, cls.id, d).date;
+        const dRec = p.data_rec ? validarData(p.data_rec, "data_rec") : sugerida;
+        if (dRec <= d) throw new ConsultaError("A REC precisa ser depois da prova.");
+        const conferencia = checkAssessmentDate(data, school, cls.id, dRec);
+        if (conferencia.blocked || !conferencia.lessons.length) {
+          const proxima = nextLessonDate(data, school, cls.id, dRec);
+          const motivo = conferencia.warnings.find((w) => !w.startsWith("Na mesma semana")) || `A turma n\xE3o tem aula em ${quando(dRec)}.`;
+          throw new ConsultaError(`${school.name} tem REC paralela${p.data_rec ? "" : ` (data sugerida: ${quando(dRec)}, ${recoveryDaysOf(school)} dias depois)`}, mas: ${motivo}${proxima ? ` Pr\xF3xima aula da turma: ${quando(proxima)}.` : ""} Pergunte ao Cadu a data da REC (data_rec) ou se n\xE3o quer REC agora (criar_rec: false).`);
+        }
+        const mesmaAula = aulasDaTurmaNoDia(data, school, cls, dRec).find((a) => a.slotId === aula?.slotId)?.numero;
+        let aulaRec;
+        try {
+          aulaRec = escolherAula(data, school, cls, dRec, p.aula_rec ?? mesmaAula, "aula_rec");
+        } catch (e) {
+          if (e instanceof ConsultaError) throw new ConsultaError(`REC: ${e.message}`);
+          throw e;
+        }
+        const base = { id: "", title: titulo, description: descricao, schoolId: school.id, classId: cls.id };
+        const evRec = { ...buildRecovery(base, dRec, aulaRec.slotId, novoId()), prepared: false, scheduled: false, _m: agora };
+        rec = {
+          evento: evRec,
+          d: dRec,
+          texto: `REC "${evRec.title}" em ${quando(dRec)}, ${aulaRec.texto}`,
+          avisos: conferencia.warnings.map((w) => `REC: ${w}`)
+        };
+      }
       const evento = removeUndefined({
         id: novoId(),
         title: titulo,
         date: diaISO(d),
         schoolId: school.id,
         classId: cls.id,
-        slotId: aula.slotId,
-        type: p.tipo === "prova" ? "test" : "work",
-        description: (p.descricao || "").trim(),
+        slotId: aula?.slotId,
+        type,
+        description: descricao,
         blocksClasses: false,
         ...camposDaSituacao(situacao),
+        kind: especie === "rec" ? "recovery" : especie === "rec_trimestral" ? "term_recovery" : especie === "segunda_chamada" ? "second_call" : void 0,
+        parentId: original?.id,
         _m: agora
       });
-      plano.criar.events.push(evento);
-      if (registro) {
-        item.avisos.push(`Essa aula j\xE1 tem registro no di\xE1rio ("${(registro.subject || "").slice(0, 60)}"). Ele ser\xE1 mantido e o registro "Avalia\xE7\xE3o: ${titulo}" n\xE3o ser\xE1 criado.`);
+      criar(item, evento, d);
+      if (rec) {
+        rec.evento.parentId = evento.id;
+        criar(item, rec.evento, rec.d, "REC: ");
+        item.avisos.push(...rec.avisos);
+        item.descricao += ` \u2014 ${situacao} + ${rec.texto}`;
       } else {
-        plano.criar.logs.push({
-          id: novoId(),
-          date: diaISO(d),
-          schoolId: school.id,
-          classId: cls.id,
-          slotId: aula.slotId,
-          subject: `Avalia\xE7\xE3o: ${titulo}`,
-          homework: "",
-          notes: evento.description,
-          _m: agora
-        });
+        item.descricao += ` \u2014 ${situacao}`;
       }
-      item.descricao += ` \u2014 ${situacao}`;
       plano.resumo.push(item.descricao);
-      nestePedido.push({ schoolId: school.id, classId: cls.id, dia: d, titulo, slotId: aula.slotId });
+      nestePedido.push({ schoolId: school.id, classId: cls.id, dia: d, titulo, slotId: aula?.slotId });
       item.ok = true;
     } catch (e) {
       if (!(e instanceof ConsultaError)) throw e;
+      item.erro = e.message;
+    }
+  });
+  return { itens, plano: plano.resumo.length ? plano : null };
+};
+var registroAutomatico = (l, titulo) => !!l && (l.subject || "").trim() === `Avalia\xE7\xE3o: ${titulo}` && !(l.homework || "").trim();
+var prepararAlteracoes = (data, pedidos, hoje, agora = Date.now()) => {
+  if (!pedidos.length) throw new ConsultaError("Nenhuma avalia\xE7\xE3o informada.");
+  if (pedidos.length > 40) throw new ConsultaError("Envie no m\xE1ximo 40 avalia\xE7\xF5es por vez.");
+  const plano = { resumo: [], criar: { events: [], logs: [] }, situacoes: [], itens: [] };
+  const itens = [];
+  const tocados = /* @__PURE__ */ new Set();
+  const mudar = (colecao, antes, novo, descricao) => {
+    if (tocados.has(antes.id)) throw new ConsultaError("Este pedido mexe duas vezes no mesmo item. Fa\xE7a em duas vezes.");
+    tocados.add(antes.id);
+    plano.itens.push({ colecao, id: antes.id, antes: semCarimbo(antes), novo: novo && semCarimbo(novo), descricao });
+  };
+  pedidos.forEach((p, i) => {
+    const item = { pedido: i + 1, ok: false, descricao: `${p.titulo || "Avalia\xE7\xE3o"} (${p.turma}, ${p.data})`, avisos: [] };
+    itens.push(item);
+    const tamanho = plano.itens.length;
+    const criados = plano.criar.logs.length;
+    try {
+      const d = validarData(p.data, "data");
+      const { school, cls } = encontrarTurma(data, p.turma, p.escola);
+      const ev = acharAvaliacao(data, school, cls, d, p.titulo);
+      const aulaAtual = ev.slotId ? aulasDaTurmaNoDia(data, school, cls, d).find((a) => a.slotId === ev.slotId) : void 0;
+      const onde = `${quando(d)}${aulaAtual ? `, ${aulaAtual.texto}` : ev.slotId ? "" : ", no contraturno"}`;
+      const nome = `"${ev.title}" \u2014 ${cls.name} (${school.name})`;
+      if (p.acao === "apagar") {
+        const ligadas = linkedAssessments(data.events || [], ev.id);
+        const todas = [ev, ...ligadas];
+        if ((data.grades || []).some((g) => todas.some((e) => e.id === g.assessmentId))) {
+          throw new ConsultaError(`${nome} tem notas lan\xE7adas no app. Para n\xE3o perder as notas, apague pelo app.`);
+        }
+        item.descricao = `Apagar ${nome}, ${onde}`;
+        if (ligadas.length) item.descricao += ` e as ligadas: ${ligadas.map((e) => `"${e.title}" (${formatDateBR(e.date)})`).join(", ")}`;
+        todas.forEach((e) => {
+          mudar("events", e, null, `Apagar "${e.title}" (${formatDateBR(e.date)})`);
+          const reg = registroNaAula(data, e.schoolId, dia(e.date), e.slotId);
+          if (registroAutomatico(reg, e.title)) mudar("logs", reg, null, `Apagar o registro "Avalia\xE7\xE3o: ${e.title}" do di\xE1rio`);
+          else if (reg && (reg.subject || "").startsWith("Avalia\xE7\xE3o:")) {
+            item.avisos.push(`O registro do di\xE1rio de ${formatDateBR(e.date)} ("${(reg.subject || "").slice(0, 60)}") foi editado e ser\xE1 mantido.`);
+          }
+        });
+        plano.resumo.push(item.descricao);
+        item.ok = true;
+        return;
+      }
+      if (p.acao !== "alterar") throw new ConsultaError('A a\xE7\xE3o deve ser "alterar" ou "apagar".');
+      const novoTitulo = (p.novo_titulo ?? "").trim() || ev.title;
+      const novaDescricao = p.nova_descricao !== void 0 ? p.nova_descricao.trim() : ev.description || "";
+      if (p.novo_tipo && p.novo_tipo !== "prova" && p.novo_tipo !== "trabalho") throw new ConsultaError('O tipo deve ser "prova" ou "trabalho".');
+      const novoType = p.novo_tipo ? p.novo_tipo === "prova" ? "test" : "work" : ev.type;
+      const novaD = p.nova_data ? validarData(p.nova_data, "nova_data") : d;
+      const contraturno = !ev.slotId && ev.kind === "second_call";
+      let slotId = ev.slotId;
+      let aulaTexto = aulaAtual?.texto;
+      if (!contraturno && (novaD !== d || p.nova_aula !== void 0)) {
+        const mesma = novaD !== d ? aulasDaTurmaNoDia(data, school, cls, novaD).find((a) => a.slotId === ev.slotId)?.numero : void 0;
+        const aula = escolherAula(data, school, cls, novaD, p.nova_aula ?? mesma, "nova_aula");
+        slotId = aula.slotId;
+        aulaTexto = aula.texto;
+      } else if (contraturno && novaD !== d) {
+        const feriado = getHolidayName(getSafeDate(novaD));
+        if (feriado) throw new ConsultaError(`${formatDateBR(novaD)} \xE9 feriado (${feriado}).`);
+      }
+      const mudancas = [];
+      if (novaD !== d || slotId !== ev.slotId) mudancas.push(`de ${onde} para ${quando(novaD)}${contraturno ? ", no contraturno" : aulaTexto ? `, ${aulaTexto}` : ""}`);
+      if (novoTitulo !== ev.title) mudancas.push(`t\xEDtulo "${ev.title}" \u2192 "${novoTitulo}"`);
+      if (novaDescricao !== (ev.description || "")) mudancas.push(`conte\xFAdo: "${novaDescricao.slice(0, 80)}"`);
+      if (novoType !== ev.type) mudancas.push(novoType === "test" ? "vira prova" : "vira trabalho");
+      if (!mudancas.length) throw new ConsultaError(`Nada muda em ${nome}. Informe nova_data, nova_aula, novo_titulo, nova_descricao ou novo_tipo.`);
+      item.descricao = `${nome}: ${mudancas.join("; ")}`;
+      if (novaD < hoje && novaD !== d) item.avisos.push("A nova data j\xE1 passou.");
+      if (novaD !== d || novoTitulo !== ev.title) {
+        const noDia = avaliacoesDe(data, school, cls).filter((e) => e.id !== ev.id && dia(e.date) === novaD);
+        if (noDia.some((e) => normalizar(e.title) === normalizar(novoTitulo))) throw new ConsultaError(`J\xE1 existe "${novoTitulo}" para a ${cls.name} em ${quando(novaD)}.`);
+        const naAula = slotId && noDia.find((e) => e.slotId === slotId);
+        if (naAula) item.avisos.push(`J\xE1 existe outra avalia\xE7\xE3o nessa aula: "${naAula.title}".`);
+      }
+      if (novaD !== d) {
+        const ligadas = linkedAssessments(data.events || [], ev.id);
+        if (ligadas.length) item.avisos.push(`As avalia\xE7\xF5es ligadas n\xE3o mudam de data: ${ligadas.map((e) => `"${e.title}" (${formatDateBR(e.date)})`).join(", ")}. Pergunte ao Cadu se elas tamb\xE9m devem ser remarcadas.`);
+        if (ev.kind && ev.parentId) {
+          const original = (data.events || []).find((e) => e.id === ev.parentId);
+          if (original && novaD <= dia(original.date)) throw new ConsultaError(`"${ev.title}" precisa ficar depois da avalia\xE7\xE3o original (${formatDateBR(original.date)}).`);
+        }
+      }
+      const novoEv = { ...ev, title: novoTitulo, description: novaDescricao, type: novoType, date: diaISO(novaD), ...slotId ? { slotId } : {} };
+      mudar("events", ev, novoEv, item.descricao);
+      const regAntigo = registroNaAula(data, school.id, d, ev.slotId);
+      const automatico = registroAutomatico(regAntigo, ev.title) ? regAntigo : void 0;
+      if (regAntigo && !automatico && (regAntigo.subject || "").startsWith("Avalia\xE7\xE3o:") && (novaD !== d || slotId !== ev.slotId || novoTitulo !== ev.title)) {
+        item.avisos.push(`O registro do di\xE1rio de ${formatDateBR(d)} ("${(regAntigo.subject || "").slice(0, 60)}") foi editado e ser\xE1 mantido como est\xE1.`);
+      }
+      const mudouLugar = novaD !== d || slotId !== ev.slotId;
+      const notas = (antigo) => (antigo.notes || "") === (ev.description || "") ? novaDescricao : antigo.notes || "";
+      if (!mudouLugar) {
+        if (automatico && (novoTitulo !== ev.title || novaDescricao !== (ev.description || ""))) {
+          mudar("logs", automatico, { ...automatico, subject: `Avalia\xE7\xE3o: ${novoTitulo}`, notes: notas(automatico) }, `Registro do di\xE1rio: "Avalia\xE7\xE3o: ${novoTitulo}"`);
+        }
+      } else if (slotId) {
+        const destino = registroNaAula(data, school.id, novaD, slotId);
+        if (destino && destino.id !== automatico?.id) {
+          item.avisos.push(`A nova aula j\xE1 tem registro no di\xE1rio ("${(destino.subject || "").slice(0, 60)}"). Ele ser\xE1 mantido.`);
+          if (automatico) mudar("logs", automatico, null, `Tirar o registro "Avalia\xE7\xE3o: ${ev.title}" de ${formatDateBR(d)}`);
+        } else if (automatico) {
+          mudar(
+            "logs",
+            automatico,
+            { ...automatico, date: diaISO(novaD), slotId, subject: `Avalia\xE7\xE3o: ${novoTitulo}`, notes: notas(automatico) },
+            `Registro "Avalia\xE7\xE3o: ${novoTitulo}" vai para ${formatDateBR(novaD)}`
+          );
+        } else {
+          plano.criar.logs.push({
+            id: novoId(),
+            date: diaISO(novaD),
+            schoolId: school.id,
+            classId: ev.classId,
+            slotId,
+            subject: `Avalia\xE7\xE3o: ${novoTitulo}`,
+            homework: "",
+            notes: novaDescricao,
+            _m: agora
+          });
+        }
+      }
+      plano.resumo.push(item.descricao);
+      item.ok = true;
+    } catch (e) {
+      if (!(e instanceof ConsultaError)) throw e;
+      plano.itens.splice(tamanho).forEach((x) => tocados.delete(x.id));
+      plano.criar.logs.splice(criados);
       item.erro = e.message;
     }
   });
@@ -1477,16 +1787,50 @@ var aplicarPlano = (raw, plano, agora = Date.now()) => {
     else calendars.push({ ...c.novo, _m: agora });
   }
   if (calendariosAnteriores.length) lote.calendariosAnteriores = calendariosAnteriores;
+  const listas = { events, logs };
+  const itensAnteriores = [];
+  let itensJaGravados = false;
+  let apagou = false;
+  const pendentes = (plano.itens || []).filter((m) => {
+    const atualItem = listas[m.colecao].find((x) => x?.id === m.id);
+    const atual = atualItem ? semCarimboItem(atualItem) : null;
+    if (m.novo === null ? atual === null : atual && deepEqual(atual, m.novo)) {
+      itensJaGravados = true;
+      return false;
+    }
+    if (!atual || !deepEqual(atual, m.antes)) {
+      throw new ConsultaError(`"${m.descricao}" mudou no app depois da pr\xE9via. Nada foi gravado; prepare de novo.`);
+    }
+    return true;
+  });
+  for (const m of pendentes) {
+    const lista = listas[m.colecao];
+    const idx = lista.findIndex((x) => x?.id === m.id);
+    itensAnteriores.push({ colecao: m.colecao, id: m.id, antes: m.antes, descricao: m.descricao });
+    if (m.novo === null) {
+      lista.splice(idx, 1);
+      mortos[m.id] = agora;
+      apagou = true;
+    } else {
+      lista[idx] = { ...m.novo, _m: agora };
+    }
+  }
+  if (itensAnteriores.length) lote.itensAnteriores = itensAnteriores;
   lote.resumo.unshift(...plano.resumo);
-  const mudouEventos = lote.criados.events.length + lote.situacoesAnteriores.length > 0;
-  const mudouLogs = lote.criados.logs.length + conteudosAnteriores.length > 0;
+  const mudouEventos = lote.criados.events.length + lote.situacoesAnteriores.length + itensAnteriores.filter((m) => m.colecao === "events").length > 0;
+  const mudouLogs = lote.criados.logs.length + conteudosAnteriores.length + itensAnteriores.filter((m) => m.colecao === "logs").length > 0;
   const mudouCalendarios = calendariosAnteriores.length > 0;
   const alteracoes = {};
   if (mudouEventos) alteracoes.events = events;
   if (mudouLogs) alteracoes.logs = logs;
   if (mudouCalendarios) alteracoes.calendars = calendars;
+  if (apagou) alteracoes._deleted = mortos;
   const mudou = mudouEventos || mudouLogs || mudouCalendarios;
-  return { alteracoes, lote, jaGravado: !mudou && (jaGravado || plano.situacoes.length > 0 || conteudoJaGravado || calendarioJaGravado) };
+  return {
+    alteracoes,
+    lote,
+    jaGravado: !mudou && (jaGravado || plano.situacoes.length > 0 || conteudoJaGravado || calendarioJaGravado || itensJaGravados)
+  };
 };
 var desfazerLote = (raw, lote, agora = Date.now()) => {
   const mortos = lapides(raw);
@@ -1558,6 +1902,21 @@ var desfazerLote = (raw, lote, agora = Date.now()) => {
       calendars[idx] = { ...c.antes, _m: agora };
     }
     mudouCalendarios = true;
+  }
+  for (const m of lote.itensAnteriores || []) {
+    const lista = m.colecao === "events" ? events : logs;
+    const idx = lista.findIndex((x) => x?.id === m.id);
+    if (idx >= 0 && (lista[idx]._m ?? 0) > lote.em) {
+      avisos.push(`Alterado no app depois; mantido: ${m.descricao}`);
+      continue;
+    }
+    if (idx >= 0) lista[idx] = { ...m.antes, _m: agora };
+    else {
+      lista.push({ ...m.antes, _m: agora });
+      delete mortos[m.id];
+    }
+    if (m.colecao === "events") mudouEventos = true;
+    else mudouLogs = true;
   }
   const alteracoes = {};
   if (mudouEventos) alteracoes.events = events;
@@ -1655,6 +2014,8 @@ Grava\xE7\xE3o (sempre em dois passos):
 Se faltar informa\xE7\xE3o (ex.: a turma tem aulas seguidas e \xE9 preciso escolher a aula), pergunte ao Cadu antes de preparar de novo.
 Conte\xFAdo de aula ("hoje na 183 dei\u2026"): use preparar_conteudo. Se a turma tiver aulas seguidas no dia, pergunte se o conte\xFAdo vale para todas ou s\xF3 para uma. Por padr\xE3o o texto \xE9 acrescentado ao que j\xE1 estiver no di\xE1rio; s\xF3 use modo "substituir" se o Cadu pedir.
 Calend\xE1rio: ano letivo, bimestres/trimestres e recesso de meio de ano com preparar_calendario. Feriados nacionais j\xE1 est\xE3o no app; feriado municipal, da escola ou dia sem aula entram como recesso (preparar_recessos; sem escola = todas as escolas). Reuni\xF5es, festas, passeios etc. com preparar_eventos; pergunte se o evento suspende as aulas quando n\xE3o estiver claro.
+Recupera\xE7\xE3o e 2\xAA chamada: cada escola tem a sua regra. Na escola com REC paralela, cadastrar uma prova j\xE1 cria a REC junto (data sugerida pelo app); se a data n\xE3o servir, pergunte ao Cadu a data (data_rec) ou se n\xE3o quer REC (criar_rec: false). REC avulsa, REC trimestral e 2\xAA chamada: preparar_avaliacoes com "especie"; REC e 2\xAA chamada precisam da avalia\xE7\xE3o original (original_data).
+Remarcar, corrigir ou apagar avalia\xE7\xF5es: preparar_alteracao_avaliacoes. Ao apagar, a REC e a 2\xAA chamada ligadas saem junto; avalia\xE7\xE3o com notas lan\xE7adas s\xF3 se apaga pelo app.
 Depois de gravar, diga que d\xE1 para desfazer e guarde o "codigo_desfazer" para usar em "desfazer_gravacao" se ele pedir.
 C\xF3pias de seguran\xE7a: o Leciona faz uma c\xF3pia autom\xE1tica por dia (guardada por 30 dias). listar_copias mostra as c\xF3pias; preparar_restauracao s\xF3 se o Cadu pedir para voltar os dados a uma data. Restaurar apaga o que foi feito depois da c\xF3pia: deixe isso claro na pr\xE9via.
 Situa\xE7\xE3o das avalia\xE7\xF5es: Pendente (vai acontecer, alunos ainda n\xE3o avisados) \u2192 Agendada (comunicada aos alunos) \u2192 Pronta (enviada para a coordena\xE7\xE3o e impress\xE3o; os alunos j\xE1 sabem). "Falta elaborar" = ainda n\xE3o est\xE1 Pronta.`;
@@ -1772,21 +2133,46 @@ var registrarEscrita = (servidor, dados, hoje, escrita) => {
   };
   servidor.registerTool("preparar_avaliacoes", {
     title: "Preparar cadastro de avalia\xE7\xF5es",
-    description: "Confere e mostra a pr\xE9via do cadastro de uma ou v\xE1rias provas/trabalhos (ex.: a partir de uma lista, foto ou PDF do calend\xE1rio da escola). Valida se a turma tem aula no dia, feriado, recesso e repeti\xE7\xE3o. N\xC3O grava: devolve um c\xF3digo para confirmar_gravacao.",
+    description: "Confere e mostra a pr\xE9via do cadastro de uma ou v\xE1rias provas/trabalhos (ex.: a partir de uma lista, foto ou PDF do calend\xE1rio da escola), inclusive REC e 2\xAA chamada. Valida se a turma tem aula no dia, feriado, recesso e repeti\xE7\xE3o. Na escola com REC paralela, a prova ganha a REC junto. N\xC3O grava: devolve um c\xF3digo para confirmar_gravacao.",
     inputSchema: {
       avaliacoes: z.array(z.object({
         turma: z.string().describe('Nome da turma, ex.: "183"'),
         escola: z.string().optional().describe("Nome da escola (necess\xE1rio se a turma existir em mais de uma)"),
         data: data.describe("Data da avalia\xE7\xE3o (AAAA-MM-DD)"),
-        tipo: z.enum(["prova", "trabalho"]),
-        titulo: z.string().describe('T\xEDtulo curto, ex.: "P3" ou "Trabalho Iluminismo"'),
+        tipo: z.enum(["prova", "trabalho"]).optional().describe("Obrigat\xF3rio na avalia\xE7\xE3o regular (REC e 2\xAA chamada seguem a original)"),
+        titulo: z.string().optional().describe('T\xEDtulo curto, ex.: "P3" ou "Trabalho Iluminismo". REC e 2\xAA chamada t\xEAm t\xEDtulo padr\xE3o'),
         descricao: z.string().optional().describe('Conte\xFAdo ou cap\xEDtulos, ex.: "Cap. 12, 13 e 14"'),
         aula: z.number().int().min(1).max(12).optional().describe("N\xFAmero da aula no turno (1\xAA, 2\xAA\u2026). Obrigat\xF3rio quando a turma tem aulas seguidas no dia"),
-        situacao: situacao.optional().describe("Padr\xE3o: Pendente")
+        situacao: situacao.optional().describe("Padr\xE3o: Pendente"),
+        especie: z.enum(["regular", "rec", "rec_trimestral", "segunda_chamada"]).optional().describe("Padr\xE3o: regular. rec = recupera\xE7\xE3o de uma prova; rec_trimestral = recupera\xE7\xE3o do trimestre (o conte\xFAdo vem das provas do trimestre); segunda_chamada = para quem faltou"),
+        original_data: data.optional().describe("REC e 2\xAA chamada: data da avalia\xE7\xE3o original"),
+        original_titulo: z.string().optional().describe("REC e 2\xAA chamada: t\xEDtulo da original, se a turma tiver mais de uma avalia\xE7\xE3o nesse dia"),
+        criar_rec: z.boolean().optional().describe("Escola com REC paralela: false para cadastrar a prova sem a REC"),
+        data_rec: data.optional().describe("Escola com REC paralela: data da REC, se n\xE3o for a sugerida"),
+        aula_rec: z.number().int().min(1).max(12).optional().describe("Escola com REC paralela: aula da REC, se a turma tiver aulas seguidas nesse dia")
       })).min(1).max(40)
     },
     annotations: preparo
   }, async ({ avaliacoes }) => previa(() => prepararAvaliacoes(dados, avaliacoes, hoje)));
+  servidor.registerTool("preparar_alteracao_avaliacoes", {
+    title: "Preparar remarca\xE7\xE3o, corre\xE7\xE3o ou exclus\xE3o de avalia\xE7\xF5es",
+    description: 'Mostra a pr\xE9via de remarcar (nova data ou aula), corrigir (t\xEDtulo, conte\xFAdo, tipo) ou apagar avalia\xE7\xF5es. O registro "Avalia\xE7\xE3o: X" do di\xE1rio acompanha a avalia\xE7\xE3o; registros editados pelo Cadu nunca s\xE3o apagados. Apagar leva junto a REC e a 2\xAA chamada ligadas; avalia\xE7\xE3o com notas lan\xE7adas n\xE3o pode ser apagada pelo conector. N\xC3O grava: devolve um c\xF3digo para confirmar_gravacao.',
+    inputSchema: {
+      avaliacoes: z.array(z.object({
+        turma: z.string(),
+        escola: z.string().optional(),
+        data: data.describe("Data atual da avalia\xE7\xE3o (AAAA-MM-DD)"),
+        titulo: z.string().optional().describe("S\xF3 se a turma tiver mais de uma avalia\xE7\xE3o no dia"),
+        acao: z.enum(["alterar", "apagar"]),
+        nova_data: data.optional(),
+        nova_aula: z.number().int().min(1).max(12).optional().describe("N\xFAmero da aula no turno, se a turma tiver aulas seguidas na nova data"),
+        novo_titulo: z.string().optional(),
+        nova_descricao: z.string().optional().describe("Novo conte\xFAdo (substitui o atual)"),
+        novo_tipo: z.enum(["prova", "trabalho"]).optional()
+      })).min(1).max(40)
+    },
+    annotations: preparo
+  }, async ({ avaliacoes }) => previa(() => prepararAlteracoes(dados, avaliacoes, hoje)));
   servidor.registerTool("preparar_situacao", {
     title: "Preparar mudan\xE7a de situa\xE7\xE3o",
     description: "Mostra a pr\xE9via da mudan\xE7a de situa\xE7\xE3o de avalia\xE7\xF5es (Pendente = vai acontecer, alunos ainda n\xE3o avisados; Agendada = comunicada aos alunos; Pronta = enviada para a coordena\xE7\xE3o e impress\xE3o). N\xC3O grava: devolve um c\xF3digo para confirmar_gravacao.",
@@ -1929,7 +2315,7 @@ var registrarEscrita = (servidor, dados, hoje, escrita) => {
   });
   servidor.registerTool("desfazer_gravacao", {
     title: "Desfazer grava\xE7\xE3o",
-    description: "Desfaz uma grava\xE7\xE3o feita pelo conector: apaga o que ela criou e volta situa\xE7\xF5es, conte\xFAdos e calend\xE1rios anteriores. Itens alterados no app depois da grava\xE7\xE3o s\xE3o mantidos.",
+    description: "Desfaz uma grava\xE7\xE3o feita pelo conector: apaga o que ela criou e volta situa\xE7\xF5es, conte\xFAdos, calend\xE1rios e avalia\xE7\xF5es remarcadas, corrigidas ou apagadas. Itens alterados no app depois da grava\xE7\xE3o s\xE3o mantidos.",
     inputSchema: { codigo_desfazer: z.string() },
     annotations: { ...gravacao, destructiveHint: true }
   }, async ({ codigo_desfazer }) => {

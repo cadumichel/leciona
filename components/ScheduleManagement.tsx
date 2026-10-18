@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { AppData, School, DayOfWeek, Shift, TimeSlot, ScheduleEntry, Student, PrivateSchedule, ScheduleVersion } from '../types';
+import { AppData, School, DayOfWeek, Shift, TimeSlot, ScheduleEntry, Student, PrivateSchedule, ScheduleVersion, LessonLog, SchoolEvent } from '../types';
 import { DAYS_OF_WEEK_NAMES } from '../constants';
 import { Plus, Trash2, LayoutGrid, Calendar as CalendarIcon, Save, Info, AlertCircle, User, Clock, ShieldAlert, Layers, ChevronDown, Check, ArrowRight, PackageX } from 'lucide-react';
 import { MigrationWizard, MigrationDecision } from './MigrationWizard';
 import { checkTimeOverlap } from '../utils';
 import { getClassName } from '../utils/classRefs';
-import { analyzeMigration, ScheduleChange, AffectedLog, AffectedEvent } from '../utils/scheduleMigration';
+import { ScheduleChangePlan, applyScheduleDecisions, nextVersionStart, planScheduleChange } from '../utils/scheduleChange';
 
 interface ScheduleManagementProps {
   data: AppData;
@@ -22,14 +22,14 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
   const [newVersionDate, setNewVersionDate] = useState('');
 
   // MIGRATION WIZARD
-  const [migrationData, setMigrationData] = useState<{
-    changes: ScheduleChange[];
-    affectedLogs: AffectedLog[];
-    affectedEvents: AffectedEvent[];
-    orphans: LessonLog[];
-    orphanEvents: SchoolEvent[];
+  // Ajuste do planejamento futuro (utils/scheduleChange.ts): o que muda a partir da data da grade
+  const [migrationData, setMigrationData] = useState<(ScheduleChangePlan & {
     pendingVersion?: ScheduleVersion;
-  } | null>(null);
+    /** Excluir esta versão (a grade anterior volta a valer a partir da data dela) */
+    deleteVersionId?: string;
+    activeFrom: string;
+    newSchedules: ScheduleEntry[];
+  }) | null>(null);
   const [showMigrationModal, setShowMigrationModal] = useState(false);
 
   // LOCAL STATE FOR EDITS (Commit Strategy)
@@ -166,25 +166,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
       schedules: baseSchedules
     };
 
-    // Check for migrations before saving
-    const analysis = analyzeMigration(
-      baseSchedules,
-      baseSchedules, // Same for now, changes happen during editing
-      data.logs || [],
-      data.events || [],
-      newVersionDate,
-      data.schools || [],
-      data
-    );
-
-    // Store pending version for later
-    if (analysis.affectedLogs.length > 0 || analysis.affectedEvents.length > 0) {
-      setMigrationData({ ...analysis, pendingVersion: newVersion });
-      setShowMigrationModal(true);
-      setIsVersionModalOpen(false);
-      return;
-    }
-
+    // A nova versão começa como cópia da grade atual: nada muda até ela ser editada e salva
     // No migrations needed, save directly
     onUpdateData({
       scheduleVersions: [...(data.scheduleVersions || []), newVersion]
@@ -198,142 +180,30 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
 
 
   const executeMigration = (migrate: boolean, decisions?: MigrationDecision[]) => {
-    if (!migrationData?.pendingVersion) return;
+    if (!migrationData) return;
+    // Grava as decisões (utils/scheduleChange.ts)
+    const { logs, events, grades } = migrate
+      ? applyScheduleDecisions(data, migrationData, decisions || [])
+      : { logs: data.logs || [], events: data.events || [], grades: data.grades || [] };
 
-    let updatedLogs = data.logs || [];
-
-    // If migrate is true and we have decisions from Wizard
-    if (migrate && decisions && decisions.length > 0) {
-      updatedLogs = updatedLogs.map(log => {
-        let decision = decisions.find(d => d.logId === log.id);
-
-        // FALLBACK: If user moved the SchoolEvent but ignored the LessonLog
-        if (!decision || decision.type !== 'MOVE') {
-           const associatedEvent = (data.events || []).find(e => 
-             log.date.startsWith(e.date.split('T')[0]) && 
-             log.schoolId === e.schoolId && 
-             log.slotId === e.slotId && 
-             log.subject?.includes(e.title)
-           );
-           if (associatedEvent) {
-              const eventDecision = decisions.find(d => d.logId === associatedEvent.id);
-              if (eventDecision && eventDecision.type === 'MOVE') {
-                 decision = eventDecision;
-              }
-           }
-        }
-
-        if (!decision) return log;
-
-        if (decision.type === 'DELETE') {
-          // Remove log (or mark as deleted?) -> Let's filter it out or mark status 'removed'
-          return { ...log, status: 'removed' };
-        }
-
-        if (decision.type === 'EXTRA') {
-          // Keep date, remove slotId (becomes extra class)
-          // We might want to ensure it has a time if it didn't before, or keep original time
-          const { slotId, ...rest } = log; // Remove slotId
-          return {
-            ...rest,
-            // Use targetDate if provided (e.g. custom date selection or calculated new date)
-            date: decision.targetDate || log.date,
-            // Ensure it's treated as extra, maybe add flag or just lack of slotId is enough?
-            // data.logs typings might require slotId to be optional? 
-            // Currently Log has slotId string. let's set it to empty string or special value
-            slotId: 'extra',
-          };
-        }
-
-        if (decision.type === 'MOVE' && decision.targetDate && decision.targetSlotId) {
-          return {
-            ...log,
-            date: decision.targetDate,
-            slotId: decision.targetSlotId,
-            startTime: decision.targetTime?.startTime || log.startTime,
-            endTime: decision.targetTime?.endTime || log.endTime
-          };
-        }
-
-        return log;
-      }).filter(l => l.status !== 'removed');
-    } else if (!migrate) {
-      // User chose NOT to migrate -> Logs remain orphans (old date, old slotId)
-      // They will show in History but not in Schedule.
-      // No changes needed to logs array.
+    let updatedVersions = data.scheduleVersions || [];
+    if (migrationData.deleteVersionId) {
+      updatedVersions = updatedVersions.filter(v => v.id !== migrationData.deleteVersionId);
+    } else if (migrationData.pendingVersion) {
+      const exists = updatedVersions.some(v => v.id === migrationData.pendingVersion!.id);
+      updatedVersions = exists
+        ? updatedVersions.map(v => (v.id === migrationData.pendingVersion!.id ? migrationData.pendingVersion! : v))
+        : [...updatedVersions, migrationData.pendingVersion];
     }
 
-    let updatedEvents = data.events || [];
-    // If migrate is true and we have EVENT decisions from Wizard
-    if (migrate && decisions && decisions.length > 0) {
-      updatedEvents = updatedEvents.map(event => {
-        let decision = decisions.find(d => d.logId === event.id);
+    onUpdateData({ scheduleVersions: updatedVersions, logs, events, grades });
 
-        // FALLBACK: If the user didn't explicitly move this event, but they MOVED its associated LessonLog
-        // we should inherit that move to prevent split-brain issues.
-        if (!decision || decision.type !== 'MOVE') {
-          const associatedLog = (data.logs || []).find(l => 
-             l.date.startsWith(event.date.split('T')[0]) && 
-             l.schoolId === event.schoolId && 
-             l.slotId === event.slotId && 
-             l.subject?.includes(event.title)
-          );
-          if (associatedLog) {
-             const logDecision = decisions.find(d => d.logId === associatedLog.id);
-             if (logDecision && logDecision.type === 'MOVE') {
-                 decision = logDecision;
-             }
-          }
-        }
-        
-        if (!decision) return event;
-
-        if (decision.type === 'DELETE') {
-          return { ...event, title: event.title + ' (Cancelado)', status: 'removed' } as any; // hacky way, maybe add status to SchoolEvent
-        }
-        if (decision.type === 'MOVE' && decision.targetDate && decision.targetSlotId) {
-          return {
-            ...event,
-            date: decision.targetDate,
-            slotId: decision.targetSlotId,
-          };
-        }
-        if (decision.type === 'EXTRA') {
-          const { slotId, ...rest } = event;
-          return {
-            ...rest,
-            date: decision.targetDate || event.date,
-            slotId: undefined
-          };
-        }
-        return event;
-      });
-    }
-
-    // ... save version logic
-    const existingVersionIndex = data.scheduleVersions?.findIndex(v => v.id === migrationData.pendingVersion.id);
-    let updatedVersions;
-
-    if (existingVersionIndex !== undefined && existingVersionIndex >= 0) {
-      updatedVersions = data.scheduleVersions.map(v =>
-        v.id === migrationData.pendingVersion.id ? migrationData.pendingVersion : v
-      );
-    } else {
-      updatedVersions = [...(data.scheduleVersions || []), migrationData.pendingVersion];
-    }
-
-    onUpdateData({
-      scheduleVersions: updatedVersions,
-      logs: updatedLogs,
-      events: updatedEvents
-    });
-
-    // If we just saved the current version edits, we need to reset changes flag
-    if (selectedVersionId === migrationData.pendingVersion.id) {
+    if (migrationData.deleteVersionId) {
+      const remaining = [...updatedVersions].sort((a, b) => b.activeFrom.localeCompare(a.activeFrom));
+      setSelectedVersionId(remaining[0]?.id || '');
+    } else if (selectedVersionId === migrationData.pendingVersion?.id) {
       setHasChanges(false);
-      // editedSchedules will sync via useEffect, or we can force it here?
-      // useEffect handles it because currentVersion changes reference
-    } else {
+    } else if (migrationData.pendingVersion) {
       setSelectedVersionId(migrationData.pendingVersion.id);
     }
 
@@ -346,15 +216,10 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
     try {
       if (!currentVersion) return;
 
-      // 1. Analyze for migrations between ORIGINAL and EDITED
-      const analysis = analyzeMigration(
-        currentVersion.schedules, // Original state (old)
-        editedSchedules,          // New state (new)
-        data.logs || [],
-        data.events || [],
-        currentVersion.activeFrom,
-        data.schools || [],
-        data
+      // 1. O que muda no planejamento entre a grade salva e a editada, só no período desta versão
+      const analysis = planScheduleChange(
+        data, currentVersion.schedules, editedSchedules, currentVersion.activeFrom,
+        nextVersionStart(data, currentVersion.activeFrom, currentVersion.id)
       );
 
       // 2. Prepare pending update
@@ -364,8 +229,8 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
       };
 
       // 3. If migration needed -> Show Wizard
-      if (analysis.affectedLogs.length > 0 || analysis.affectedEvents.length > 0 || analysis.orphans.length > 0 || analysis.orphanEvents.length > 0) {
-        setMigrationData({ ...analysis, pendingVersion: pendingUpdate });
+      if (analysis.orphans.length > 0 || analysis.orphanEvents.length > 0) {
+        setMigrationData({ ...analysis, pendingVersion: pendingUpdate, activeFrom: currentVersion.activeFrom, newSchedules: editedSchedules });
         setShowMigrationModal(true);
         return;
       }
@@ -485,25 +350,25 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
           {selectedVersionId && sortedVersions.length > 1 && (
             <button
               onClick={() => {
-                if (confirm('Tem certeza que deseja excluir esta versão da grade?\n\nEsta ação não pode ser desfeita.')) {
+                if (confirm('Tem certeza que deseja excluir esta versão da grade?\n\nA partir da data dela, volta a valer a grade da versão anterior.')) {
                   const versionToDelete = data.scheduleVersions.find(v => v.id === selectedVersionId);
-
-                  // Check if there are logs using this version
-                  const logsUsingVersion = data.logs?.filter(log =>
-                    log.date >= versionToDelete?.activeFrom
+                  if (!versionToDelete) return;
+                  const previous = [...data.scheduleVersions]
+                    .filter(v => v.id !== versionToDelete.id && v.activeFrom < versionToDelete.activeFrom)
+                    .sort((a, b) => b.activeFrom.localeCompare(a.activeFrom))[0]
+                    || [...data.scheduleVersions].filter(v => v.id !== versionToDelete.id).sort((a, b) => a.activeFrom.localeCompare(b.activeFrom))[0];
+                  // Registros e avaliações a partir dessa data passam a seguir a grade anterior
+                  const plan = planScheduleChange(
+                    data, versionToDelete.schedules, previous?.schedules || [], versionToDelete.activeFrom,
+                    nextVersionStart(data, versionToDelete.activeFrom, versionToDelete.id)
                   );
-
-                  if (logsUsingVersion && logsUsingVersion.length > 0) {
-                    if (!confirm(`ATENÇÃO: Existem ${logsUsingVersion.length} aulas registradas usando esta versão da grade.\n\nAo excluir, essas aulas continuarão existindo mas podem não aparecer corretamente no histórico.\n\nDeseja continuar mesmo assim?`)) {
-                      return;
-                    }
+                  if (plan.orphans.length > 0 || plan.orphanEvents.length > 0) {
+                    setMigrationData({ ...plan, deleteVersionId: versionToDelete.id, activeFrom: versionToDelete.activeFrom, newSchedules: previous?.schedules || [] });
+                    setShowMigrationModal(true);
+                    return;
                   }
-
-                  // Delete version
                   const updatedVersions = data.scheduleVersions.filter(v => v.id !== selectedVersionId);
                   onUpdateData({ scheduleVersions: updatedVersions });
-
-                  // Select the most recent remaining version
                   const remaining = updatedVersions.sort((a, b) => b.activeFrom.localeCompare(a.activeFrom));
                   setSelectedVersionId(remaining[0]?.id || '');
                 }
@@ -583,10 +448,12 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
           setMigrationData(null);
         }}
         onConfirm={(decisions) => executeMigration(true, decisions)}
-        orphans={migrationData?.orphans || []} // We will need to merge orphan logs and orphan events in Wizard
+        orphans={migrationData?.orphans || []}
         orphanEvents={migrationData?.orphanEvents || []}
-        newSchedules={migrationData?.pendingVersion?.schedules || []}
-        activeFrom={migrationData?.pendingVersion?.activeFrom || ''}
+        newSchedules={migrationData?.newSchedules || []}
+        activeFrom={migrationData?.activeFrom || ''}
+        suggestions={migrationData?.suggestions}
+        notes={migrationData?.notes}
         schools={data.schools || []}
         appData={data}
       />

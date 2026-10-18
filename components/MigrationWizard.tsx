@@ -9,8 +9,10 @@ import {
     CalendarPlus,
     ArrowLeftRight
 } from 'lucide-react';
-import { LessonLog, ScheduleEntry, School, AffectedLog, SchoolEvent } from '../types';
+import { AppData, LessonLog, ScheduleEntry, School, SchoolEvent } from '../types';
 import { DAYS_OF_WEEK_NAMES } from '../constants';
+import { getClassName } from '../utils/classRefs';
+import { ScheduleDecision } from '../utils/scheduleChange';
 import { isSameClass, calculateNewDate, calculateSameWeekValidDate } from '../utils/scheduleMigration';
 
 // CONSTANTS & HELPERS
@@ -25,19 +27,14 @@ interface MigrationWizardProps {
     schools: School[];
     activeFrom: string;
     appData: AppData;
+    /** Sugestões calculadas pela ordem das aulas (utils/scheduleChange.ts) */
+    suggestions?: Record<string, ScheduleDecision>;
+    /** Por que um item ficou sem sugestão automática */
+    notes?: Record<string, string>;
 }
 
 export type MigrationDecisionType = 'MOVE' | 'EXTRA' | 'DELETE';
-
-export interface MigrationDecision {
-    logId: string;
-    type: MigrationDecisionType;
-    targetDate?: string;
-    targetSlotId?: string;
-    targetTime?: { startTime: string; endTime: string };
-    targetSlot?: ScheduleEntry; // Helper to keep track of full slot info
-    isCustomDate?: boolean;
-}
+export type MigrationDecision = ScheduleDecision;
 
 export const MigrationWizard: React.FC<MigrationWizardProps> = ({
     isOpen,
@@ -48,7 +45,9 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
     newSchedules,
     schools,
     activeFrom,
-    appData
+    appData,
+    suggestions,
+    notes = {}
 }) => {
     const [decisions, setDecisions] = useState<Map<string, MigrationDecision>>(new Map());
 
@@ -59,6 +58,11 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
 
     // Smart Matching Logic: Run once on mount or when orphans change
     useEffect(() => {
+        // Sugestões já calculadas pela ordem das aulas (sem colisões)
+        if (suggestions) {
+            setDecisions(new Map(unifiedOrphans.map(o => [o.id, suggestions[o.id] || { logId: o.id, type: 'EXTRA' as const }])));
+            return;
+        }
         const initialDecisions = new Map<string, MigrationDecision>();
 
         unifiedOrphans.forEach(log => {
@@ -125,7 +129,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
         });
 
         setDecisions(initialDecisions);
-    }, [unifiedOrphans, newSchedules, schools]);
+    }, [unifiedOrphans, newSchedules, schools, suggestions]);
 
 
     const handleDecisionChange = (logId: string, type: MigrationDecisionType, targetSlot?: ScheduleEntry, isCustom?: boolean, customDate?: string) => {
@@ -150,7 +154,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                 // Find if there is a slot for this class on this day
                 const potentialSlot = newSchedules.find(s =>
                     s.schoolId === log.schoolId &&
-                    s.classId === log.classId &&
+                    isSameClass(s.classId, log.classId, log.schoolId, schools) &&
                     Number(s.dayOfWeek) === dayOfWeek
                 );
 
@@ -256,12 +260,17 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                             const logDate = new Date(log.date.split('T')[0] + 'T00:00:00');
                             const school = schools.find(s => s.id === log.schoolId);
 
-                            const className = school?.classes.find(c => c.id === log.classId)?.name || log.classId;
+                            const className = getClassName(appData, log.schoolId, log.classId);
+                            const isAssessment = isEvent && ['test', 'work'].includes((log as SchoolEvent).type);
+                            const note = notes[log.id];
 
                             // Available slots for this class
                             const classSlots = newSchedules
                                 .filter(s => s.schoolId === log.schoolId && isSameClass(s.classId, log.classId, log.schoolId, schools))
-                                .sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+                                .sort((a, b) => {
+                                    const t = (x: ScheduleEntry) => school?.shifts?.find(sh => sh.id === x.shiftId)?.slots?.find(sl => sl.id === x.slotId)?.startTime || '';
+                                    return ((a.dayOfWeek + 6) % 7) - ((b.dayOfWeek + 6) % 7) || t(a).localeCompare(t(b));
+                                });
 
                             return (
                                 <div key={log.id} className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col md:flex-row gap-4 items-center">
@@ -274,7 +283,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                                             </span>
                                             {isEvent && (
                                                 <span className="text-[10px] font-black bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">
-                                                    Evento
+                                                    {isAssessment ? 'Avaliação' : 'Evento'}
                                                 </span>
                                             )}
                                         </div>
@@ -282,8 +291,12 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                                             {isEvent ? (log as SchoolEvent).title : ((log as LessonLog).content || (log as LessonLog).subject || (log as LessonLog).homework || (log as LessonLog).notes || 'Sem conteúdo registrado')}
                                         </h4>
                                         <p className="text-xs text-slate-500 mt-0.5">
-                                            Original: {new Date(log.date.split('T')[0] + 'T00:00:00').toLocaleDateString()} ({DAYS_OF_WEEK_NAMES[new Date(log.date.split('T')[0] + 'T00:00:00').getDay()]})
+                                            Original: {new Date(log.date.split('T')[0] + 'T00:00:00').toLocaleDateString()} ({DAYS_OF_WEEK_NAMES[new Date(log.date.split('T')[0] + 'T00:00:00').getDay()]}{(() => {
+                                                const t = school?.shifts?.flatMap(sh => sh.slots).find(sl => sl.id === log.slotId)?.startTime;
+                                                return t ? `, ${t}` : '';
+                                            })()})
                                         </p>
+                                        {note && <p className="text-[11px] font-bold text-amber-600 mt-1">⚠️ {note} Escolha o que fazer.</p>}
                                     </div>
 
                                     <ArrowRight className="text-slate-300 hidden md:block" />
@@ -326,15 +339,15 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                                                         return (
                                                             <option key={slot.id} value={slot.id}>
                                                                 {isSmartMatch ? '✨ ' : ''}
-                                                                {DAYS_OF_WEEK_NAMES[slot.dayOfWeek]} - {new Date(validDate + 'T00:00:00').toLocaleDateString()} ({slotTime?.startTime})
+                                                                {DAYS_OF_WEEK_NAMES[slot.dayOfWeek]} - {new Date(validDate + 'T00:00:00').toLocaleDateString()} ({slotTime?.label ? `${slotTime.label}, ` : ''}{slotTime?.startTime})
                                                             </option>
                                                         );
                                                     })}
                                                 </optgroup>
                                                 <optgroup label="Outras ações">
-                                                    <option value="EXTRA">Transformar em Aula Extra (Sem horário fixo)</option>
+                                                    <option value="EXTRA">{isEvent ? 'Manter na data, sem aula' : 'Manter como aula extra (mesma data e horário)'}</option>
                                                     <option value="CUSTOM">Escolher outra data...</option>
-                                                    <option value="DELETE">Excluir Planejamento</option>
+                                                    <option value="DELETE">{isAssessment ? 'Excluir a avaliação' : isEvent ? 'Excluir o evento' : 'Excluir o registro'}</option>
                                                 </optgroup>
                                             </select>
 
@@ -362,7 +375,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                                                     <CalendarPlus size={10} />
                                                     {decision.targetDate && decision.targetDate !== log.date
                                                         ? `Ficará como Extra em ${new Date(decision.targetDate + 'T00:00:00').toLocaleDateString()}`
-                                                        : 'Ficará como Aula Extra (Mesma data)'
+                                                        : (isEvent ? 'Fica na mesma data, sem aula' : 'Fica como aula extra (mesma data)')
                                                     }
                                                 </span>
                                             )}

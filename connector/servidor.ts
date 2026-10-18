@@ -9,7 +9,7 @@ import {
   CAMPO_COPIA, InfoDaCopia, copiasVencidas, dadosDaCopia, documentoRestaurado, idAntesDeRestaurar, idDaCopiaDiaria,
   listarParaOClaude, previaDaRestauracao
 } from './copias';
-import { Alteracoes, Lote, Plano, SITUACOES, aplicarPlano, desfazerLote, prepararAvaliacoes, prepararCalendarios, prepararConteudos, prepararEventos, prepararRecessos, prepararSituacoes } from './escrita';
+import { Alteracoes, Lote, Plano, SITUACOES, aplicarPlano, desfazerLote, prepararAlteracoes, prepararAvaliacoes, prepararCalendarios, prepararConteudos, prepararEventos, prepararRecessos, prepararSituacoes } from './escrita';
 import {
   Assinatura, Conta, ErroOAuth, assinarLote, assinarPlano, emitirCodigo, lerLote, lerPlano, metadadosDoRecurso, metadadosDoServidor, registrarCliente, trocarToken,
   urlsDoServidor, validarPedido, verificarAcesso
@@ -156,6 +156,8 @@ Gravação (sempre em dois passos):
 Se faltar informação (ex.: a turma tem aulas seguidas e é preciso escolher a aula), pergunte ao Cadu antes de preparar de novo.
 Conteúdo de aula ("hoje na 183 dei…"): use preparar_conteudo. Se a turma tiver aulas seguidas no dia, pergunte se o conteúdo vale para todas ou só para uma. Por padrão o texto é acrescentado ao que já estiver no diário; só use modo "substituir" se o Cadu pedir.
 Calendário: ano letivo, bimestres/trimestres e recesso de meio de ano com preparar_calendario. Feriados nacionais já estão no app; feriado municipal, da escola ou dia sem aula entram como recesso (preparar_recessos; sem escola = todas as escolas). Reuniões, festas, passeios etc. com preparar_eventos; pergunte se o evento suspende as aulas quando não estiver claro.
+Recuperação e 2ª chamada: cada escola tem a sua regra. Na escola com REC paralela, cadastrar uma prova já cria a REC junto (data sugerida pelo app); se a data não servir, pergunte ao Cadu a data (data_rec) ou se não quer REC (criar_rec: false). REC avulsa, REC trimestral e 2ª chamada: preparar_avaliacoes com "especie"; REC e 2ª chamada precisam da avaliação original (original_data).
+Remarcar, corrigir ou apagar avaliações: preparar_alteracao_avaliacoes. Ao apagar, a REC e a 2ª chamada ligadas saem junto; avaliação com notas lançadas só se apaga pelo app.
 Depois de gravar, diga que dá para desfazer e guarde o "codigo_desfazer" para usar em "desfazer_gravacao" se ele pedir.
 Cópias de segurança: o Leciona faz uma cópia automática por dia (guardada por 30 dias). listar_copias mostra as cópias; preparar_restauracao só se o Cadu pedir para voltar os dados a uma data. Restaurar apaga o que foi feito depois da cópia: deixe isso claro na prévia.
 Situação das avaliações: Pendente (vai acontecer, alunos ainda não avisados) → Agendada (comunicada aos alunos) → Pronta (enviada para a coordenação e impressão; os alunos já sabem). "Falta elaborar" = ainda não está Pronta.`;
@@ -303,21 +305,48 @@ const registrarEscrita = (servidor: McpServer, dados: AppData, hoje: string, esc
 
   servidor.registerTool('preparar_avaliacoes', {
     title: 'Preparar cadastro de avaliações',
-    description: 'Confere e mostra a prévia do cadastro de uma ou várias provas/trabalhos (ex.: a partir de uma lista, foto ou PDF do calendário da escola). Valida se a turma tem aula no dia, feriado, recesso e repetição. NÃO grava: devolve um código para confirmar_gravacao.',
+    description: 'Confere e mostra a prévia do cadastro de uma ou várias provas/trabalhos (ex.: a partir de uma lista, foto ou PDF do calendário da escola), inclusive REC e 2ª chamada. Valida se a turma tem aula no dia, feriado, recesso e repetição. Na escola com REC paralela, a prova ganha a REC junto. NÃO grava: devolve um código para confirmar_gravacao.',
     inputSchema: {
       avaliacoes: z.array(z.object({
         turma: z.string().describe('Nome da turma, ex.: "183"'),
         escola: z.string().optional().describe('Nome da escola (necessário se a turma existir em mais de uma)'),
         data: data.describe('Data da avaliação (AAAA-MM-DD)'),
-        tipo: z.enum(['prova', 'trabalho']),
-        titulo: z.string().describe('Título curto, ex.: "P3" ou "Trabalho Iluminismo"'),
+        tipo: z.enum(['prova', 'trabalho']).optional().describe('Obrigatório na avaliação regular (REC e 2ª chamada seguem a original)'),
+        titulo: z.string().optional().describe('Título curto, ex.: "P3" ou "Trabalho Iluminismo". REC e 2ª chamada têm título padrão'),
         descricao: z.string().optional().describe('Conteúdo ou capítulos, ex.: "Cap. 12, 13 e 14"'),
         aula: z.number().int().min(1).max(12).optional().describe('Número da aula no turno (1ª, 2ª…). Obrigatório quando a turma tem aulas seguidas no dia'),
-        situacao: situacao.optional().describe('Padrão: Pendente')
+        situacao: situacao.optional().describe('Padrão: Pendente'),
+        especie: z.enum(['regular', 'rec', 'rec_trimestral', 'segunda_chamada']).optional()
+          .describe('Padrão: regular. rec = recuperação de uma prova; rec_trimestral = recuperação do trimestre (o conteúdo vem das provas do trimestre); segunda_chamada = para quem faltou'),
+        original_data: data.optional().describe('REC e 2ª chamada: data da avaliação original'),
+        original_titulo: z.string().optional().describe('REC e 2ª chamada: título da original, se a turma tiver mais de uma avaliação nesse dia'),
+        criar_rec: z.boolean().optional().describe('Escola com REC paralela: false para cadastrar a prova sem a REC'),
+        data_rec: data.optional().describe('Escola com REC paralela: data da REC, se não for a sugerida'),
+        aula_rec: z.number().int().min(1).max(12).optional().describe('Escola com REC paralela: aula da REC, se a turma tiver aulas seguidas nesse dia')
       })).min(1).max(40)
     },
     annotations: preparo
   }, async ({ avaliacoes }) => previa(() => prepararAvaliacoes(dados, avaliacoes as any, hoje)));
+
+  servidor.registerTool('preparar_alteracao_avaliacoes', {
+    title: 'Preparar remarcação, correção ou exclusão de avaliações',
+    description: 'Mostra a prévia de remarcar (nova data ou aula), corrigir (título, conteúdo, tipo) ou apagar avaliações. O registro "Avaliação: X" do diário acompanha a avaliação; registros editados pelo Cadu nunca são apagados. Apagar leva junto a REC e a 2ª chamada ligadas; avaliação com notas lançadas não pode ser apagada pelo conector. NÃO grava: devolve um código para confirmar_gravacao.',
+    inputSchema: {
+      avaliacoes: z.array(z.object({
+        turma: z.string(),
+        escola: z.string().optional(),
+        data: data.describe('Data atual da avaliação (AAAA-MM-DD)'),
+        titulo: z.string().optional().describe('Só se a turma tiver mais de uma avaliação no dia'),
+        acao: z.enum(['alterar', 'apagar']),
+        nova_data: data.optional(),
+        nova_aula: z.number().int().min(1).max(12).optional().describe('Número da aula no turno, se a turma tiver aulas seguidas na nova data'),
+        novo_titulo: z.string().optional(),
+        nova_descricao: z.string().optional().describe('Novo conteúdo (substitui o atual)'),
+        novo_tipo: z.enum(['prova', 'trabalho']).optional()
+      })).min(1).max(40)
+    },
+    annotations: preparo
+  }, async ({ avaliacoes }) => previa(() => prepararAlteracoes(dados, avaliacoes as any, hoje)));
 
   servidor.registerTool('preparar_situacao', {
     title: 'Preparar mudança de situação',
@@ -469,7 +498,7 @@ const registrarEscrita = (servidor: McpServer, dados: AppData, hoje: string, esc
 
   servidor.registerTool('desfazer_gravacao', {
     title: 'Desfazer gravação',
-    description: 'Desfaz uma gravação feita pelo conector: apaga o que ela criou e volta situações, conteúdos e calendários anteriores. Itens alterados no app depois da gravação são mantidos.',
+    description: 'Desfaz uma gravação feita pelo conector: apaga o que ela criou e volta situações, conteúdos, calendários e avaliações remarcadas, corrigidas ou apagadas. Itens alterados no app depois da gravação são mantidos.',
     inputSchema: { codigo_desfazer: z.string() },
     annotations: { ...gravacao, destructiveHint: true }
   }, async ({ codigo_desfazer }) => {

@@ -5,6 +5,7 @@ import { getSchedulesForDate } from '../utils/schedule';
 import { isLessonBlocked } from '../utils/lessonStats';
 import { lessonNumberInShift } from '../utils/dashboardWeb';
 import { countRemainingLessons } from '../utils/remainingLessons';
+import { KIND_LABELS } from '../utils/recovery';
 
 /**
  * Consultas do conector do Leciona para o Claude (etapa 1: só leitura).
@@ -126,6 +127,10 @@ export interface Avaliacao {
   situacao: 'Pendente' | 'Agendada' | 'Pronta';
   elaborada: boolean;
   comunicadaAosAlunos: boolean;
+  /** REC, REC trimestral ou 2ª chamada (sem isto = avaliação regular) */
+  especie?: string;
+  /** REC e 2ª chamada: a avaliação original */
+  original?: string;
 }
 
 export const eAvaliacao = (e: SchoolEvent) => e.type === 'test' || e.type === 'work';
@@ -145,7 +150,13 @@ export const descreverAvaliacao = (data: AppData, school: School, e: SchoolEvent
     situacao: e.prepared ? 'Pronta' : e.scheduled ? 'Agendada' : 'Pendente',
     elaborada: !!e.prepared,
     // No app, escolher "Pronta" desliga "Agendada"; pronta já foi enviada e os alunos já sabem
-    comunicadaAosAlunos: !!e.prepared || !!e.scheduled
+    comunicadaAosAlunos: !!e.prepared || !!e.scheduled,
+    ...(e.kind ? { especie: KIND_LABELS[e.kind] } : {}),
+    ...(e.kind && !e.slotId ? { aula: 'contraturno' } : {}),
+    ...(e.parentId ? (() => {
+      const o = (data.events || []).find(x => x.id === e.parentId);
+      return o ? { original: `${o.title} (${formatDateBR(dia(o.date))})` } : {};
+    })() : {})
   };
 };
 
@@ -215,7 +226,8 @@ export const calendarioNaData = (data: AppData, schoolId: string, d: string): Ac
  * Sem avaliação anterior, começa no início do ano letivo (ou em 1º de janeiro).
  */
 const conteudoEntre = (data: AppData, school: School, cls: SchoolClass, ate: string, hoje: string): ConteudoDaTurma => {
-  const avaliacoes = avaliacoesDe(data, school, cls);
+  // REC e 2ª chamada não marcam o fim de um conteúdo: só as avaliações regulares
+  const avaliacoes = avaliacoesDe(data, school, cls).filter(e => !e.kind);
   const anteriores = avaliacoes.filter(e => dia(e.date) < ate);
   const ultima = anteriores[anteriores.length - 1];
   const proxima = avaliacoes.find(e => dia(e.date) >= ate);
@@ -309,7 +321,9 @@ export const avaliacoesProximas = (
     // Avaliação de turma excluída não gera alerta
     .filter(({ e, cls }) => !e.classId || !!cls)
     .map(({ school, e, cls }) => {
-      const c = cls && conteudoEntre(data, school, cls, dia(e.date), opcoes.hoje);
+      // REC e 2ª chamada: o conteúdo é o da avaliação original; REC trimestral: está na descrição
+      const original = e.kind && e.kind !== 'term_recovery' && e.parentId ? (data.events || []).find(x => x.id === e.parentId) : undefined;
+      const c = cls && e.kind !== 'term_recovery' && conteudoEntre(data, school, cls, dia((original || e).date), opcoes.hoje);
       return {
         ...descreverAvaliacao(data, school, e),
         diasAte: diasEntre(opcoes.hoje, dia(e.date)),

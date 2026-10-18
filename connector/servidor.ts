@@ -145,7 +145,7 @@ export const criarServidorMcp = (dados: AppData, hoje: string) => {
 
   servidor.registerTool('listar_avaliacoes', {
     title: 'Listar avaliações',
-    description: 'Provas e trabalhos cadastrados, com data, turma, aula e se já foram elaborados. Filtre por período, escola, turma ou pelas que faltam elaborar.',
+    description: 'Provas e trabalhos cadastrados, com data, turma, aula e situação (Pendente, Agendada = alunos avisados, Pronta = elaborada, enviada e alunos avisados). Filtre por período, escola, turma ou pelas que faltam elaborar.',
     inputSchema: {
       de: data.optional().describe('Data inicial (AAAA-MM-DD)'),
       ate: data.optional().describe('Data final (AAAA-MM-DD)'),

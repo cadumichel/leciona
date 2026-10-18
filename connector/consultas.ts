@@ -121,6 +121,8 @@ export interface Avaliacao {
   titulo: string;
   descricao: string;
   aula?: string;
+  /** Mesma caixa do app: Pendente → Agendada (alunos avisados) → Pronta (elaborada, enviada e alunos avisados) */
+  situacao: 'Pendente' | 'Agendada' | 'Pronta';
   elaborada: boolean;
   comunicadaAosAlunos: boolean;
 }
@@ -139,8 +141,10 @@ const descreverAvaliacao = (data: AppData, school: School, e: SchoolEvent): Aval
     titulo: e.title,
     descricao: e.description || '',
     aula: descreverAula(school, e.slotId)?.texto,
+    situacao: e.prepared ? 'Pronta' : e.scheduled ? 'Agendada' : 'Pendente',
     elaborada: !!e.prepared,
-    comunicadaAosAlunos: !!e.scheduled
+    // No app, escolher "Pronta" desliga "Agendada"; pronta já foi enviada e os alunos já sabem
+    comunicadaAosAlunos: !!e.prepared || !!e.scheduled
   };
 };
 

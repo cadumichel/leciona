@@ -5,7 +5,7 @@ import { AppData } from '../types';
 import {
   ConsultaError, avaliacoesProximas, calendario, conteudoDesdeUltimaAvaliacao, hojeEmBrasilia, listarAvaliacoes, turmasEGrade
 } from './consultas';
-import { Alteracoes, Lote, Plano, SITUACOES, aplicarPlano, desfazerLote, prepararAvaliacoes, prepararConteudos, prepararSituacoes } from './escrita';
+import { Alteracoes, Lote, Plano, SITUACOES, aplicarPlano, desfazerLote, prepararAvaliacoes, prepararCalendarios, prepararConteudos, prepararEventos, prepararRecessos, prepararSituacoes } from './escrita';
 import {
   Assinatura, Conta, ErroOAuth, assinarLote, assinarPlano, emitirCodigo, lerLote, lerPlano, metadadosDoRecurso, metadadosDoServidor, registrarCliente, trocarToken,
   urlsDoServidor, validarPedido, verificarAcesso
@@ -138,6 +138,7 @@ Gravação (sempre em dois passos):
 2. Só chame "confirmar_gravacao" depois que o Cadu disser claramente que pode gravar. Nunca confirme por conta própria.
 Se faltar informação (ex.: a turma tem aulas seguidas e é preciso escolher a aula), pergunte ao Cadu antes de preparar de novo.
 Conteúdo de aula ("hoje na 183 dei…"): use preparar_conteudo. Se a turma tiver aulas seguidas no dia, pergunte se o conteúdo vale para todas ou só para uma. Por padrão o texto é acrescentado ao que já estiver no diário; só use modo "substituir" se o Cadu pedir.
+Calendário: ano letivo, bimestres/trimestres e recesso de meio de ano com preparar_calendario. Feriados nacionais já estão no app; feriado municipal, da escola ou dia sem aula entram como recesso (preparar_recessos; sem escola = todas as escolas). Reuniões, festas, passeios etc. com preparar_eventos; pergunte se o evento suspende as aulas quando não estiver claro.
 Depois de gravar, diga que dá para desfazer e guarde o "codigo_desfazer" para usar em "desfazer_gravacao" se ele pedir.
 Situação das avaliações: Pendente → Agendada (alunos avisados) → Pronta (elaborada, enviada e alunos avisados).`;
 
@@ -302,6 +303,57 @@ const registrarEscrita = (servidor: McpServer, dados: AppData, hoje: string, esc
     annotations: preparo
   }, async ({ registros }) => previa(() => prepararConteudos(dados, registros as any, hoje)));
 
+  servidor.registerTool('preparar_calendario', {
+    title: 'Preparar calendário da escola',
+    description: 'Prévia da criação ou mudança do calendário de uma escola: início e fim do ano letivo, divisão (bimestres/trimestres), datas de cada período e recesso de meio de ano. Só os campos informados mudam. NÃO grava: devolve um código para confirmar_gravacao.',
+    inputSchema: {
+      calendarios: z.array(z.object({
+        escola: z.string(),
+        divisao: z.enum(['bimestres', 'trimestres', 'personalizado']).optional(),
+        inicio: data.optional().describe('Início do ano letivo'),
+        fim: data.optional().describe('Fim do ano letivo'),
+        periodos: z.array(z.object({
+          nome: z.string().optional().describe('Padrão: "1º Trimestre", "2º Bimestre"…'),
+          inicio: data,
+          fim: data
+        })).max(8).optional().describe('Todos os períodos, em ordem (substitui a lista atual)'),
+        recesso_meio_ano: z.object({ inicio: data, fim: data }).nullable().optional().describe('null remove o recesso de meio de ano')
+      })).min(1).max(10)
+    },
+    annotations: preparo
+  }, async ({ calendarios }) => previa(() => prepararCalendarios(dados, calendarios as any)));
+
+  servidor.registerTool('preparar_recessos', {
+    title: 'Preparar recessos e feriados da escola',
+    description: 'Prévia do cadastro de dias sem aula no calendário das escolas: feriado municipal, feriado ou recesso da escola, ponto facultativo. Sem escola, vale para todas. Feriados nacionais já estão no app. NÃO grava: devolve um código para confirmar_gravacao.',
+    inputSchema: {
+      recessos: z.array(z.object({
+        escola: z.string().optional().describe('Omitir = todas as escolas'),
+        data,
+        nome: z.string().describe('Ex.: "Aniversário de Brusque"')
+      })).min(1).max(40)
+    },
+    annotations: preparo
+  }, async ({ recessos }) => previa(() => prepararRecessos(dados, recessos as any)));
+
+  servidor.registerTool('preparar_eventos', {
+    title: 'Preparar eventos',
+    description: 'Prévia do cadastro de eventos na agenda (reunião, festividade, passeio, material, outro). Se o evento suspende as aulas (da escola toda, de um turno ou de uma turma), marca as aulas do dia no diário como "Evento: X", como o app. NÃO grava: devolve um código para confirmar_gravacao.',
+    inputSchema: {
+      eventos: z.array(z.object({
+        escola: z.string(),
+        data,
+        tipo: z.enum(['reuniao', 'festividade', 'passeio', 'material', 'outro']),
+        titulo: z.string(),
+        descricao: z.string().optional(),
+        suspende_aulas: z.boolean().optional().describe('Padrão: false'),
+        turno: z.string().optional().describe('Ex.: "Vespertino" — só esse turno'),
+        turma: z.string().optional().describe('Só essa turma')
+      })).min(1).max(40)
+    },
+    annotations: preparo
+  }, async ({ eventos }) => previa(() => prepararEventos(dados, eventos as any, hoje)));
+
   servidor.registerTool('confirmar_gravacao', {
     title: 'Confirmar gravação',
     description: 'Grava no Leciona exatamente o que a prévia mostrou. Use SÓ depois que o Cadu confirmar a prévia. Devolve um codigo_desfazer.',
@@ -327,7 +379,7 @@ const registrarEscrita = (servidor: McpServer, dados: AppData, hoje: string, esc
 
   servidor.registerTool('desfazer_gravacao', {
     title: 'Desfazer gravação',
-    description: 'Desfaz uma gravação feita pelo conector: apaga o que ela criou e volta situações e conteúdos anteriores. Itens alterados no app depois da gravação são mantidos.',
+    description: 'Desfaz uma gravação feita pelo conector: apaga o que ela criou e volta situações, conteúdos e calendários anteriores. Itens alterados no app depois da gravação são mantidos.',
     inputSchema: { codigo_desfazer: z.string() },
     annotations: { ...gravacao, destructiveHint: true }
   }, async ({ codigo_desfazer }) => {

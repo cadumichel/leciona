@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { aplicarPlano, desfazerLote, prepararAvaliacoes, prepararConteudos, prepararSituacoes } from '../connector/escrita';
+import {
+  aplicarPlano, desfazerLote, prepararAvaliacoes, prepararCalendarios, prepararConteudos, prepararEventos, prepararRecessos,
+  prepararSituacoes
+} from '../connector/escrita';
 import { listarAvaliacoes } from '../connector/consultas';
 import { mergeAppData } from '../utils/sync';
 
@@ -282,5 +285,160 @@ describe('conector (gravação): conteúdo de aula', () => {
       expect.stringMatching(/Informe o conteúdo/)
     ]);
     expect(r.plano).toBeNull();
+  });
+});
+
+const comUniavan = () => {
+  const doc = base();
+  doc.schools.push({ id: 'U', name: 'Uniavan', color: '#0f0', classes: [{ id: 'u3', name: '3ª Série' }],
+    shifts: [{ id: 'um', name: 'Matutino', slots: VESP.map(s => ({ ...s, id: `m${s.id}` })) }] });
+  return doc;
+};
+const TRIMESTRES = [
+  { inicio: '2026-02-10', fim: '2026-05-15' },
+  { inicio: '2026-05-18', fim: '2026-09-04' },
+  { inicio: '2026-09-08', fim: '2026-12-15' }
+];
+
+describe('conector (gravação): calendário', () => {
+  it('define os trimestres, grava e desfaz', () => {
+    const doc = base();
+    const { itens, plano } = prepararCalendarios(doc, [{ escola: 'consul', periodos: TRIMESTRES }], AGORA);
+    expect(itens[0].descricao).toBe('Calendário da Cônsul: períodos: 1º Trimestre 10/02/2026 a 15/05/2026; 2º Trimestre 18/05/2026 a 04/09/2026; 3º Trimestre 08/09/2026 a 15/12/2026');
+    const r = aplicarPlano(doc, plano!, AGORA);
+    Object.assign(doc, r.alteracoes);
+    expect(doc.calendars[0].terms).toEqual([
+      { name: '1º Trimestre', start: '2026-02-10', end: '2026-05-15' },
+      { name: '2º Trimestre', start: '2026-05-18', end: '2026-09-04' },
+      { name: '3º Trimestre', start: '2026-09-08', end: '2026-12-15' }
+    ]);
+    expect(doc.calendars[0]._m).toBe(AGORA);
+    expect(aplicarPlano(doc, plano!, AGORA + 1).jaGravado).toBe(true);
+    Object.assign(doc, desfazerLote(doc, r.lote, AGORA + 1000).alteracoes);
+    expect(doc.calendars[0].terms).toEqual([]);
+    expect(doc.calendars[0].extraRecesses).toHaveLength(1);
+  });
+
+  it('cria o calendário de uma escola que ainda não tem (e desfaz com lápide)', () => {
+    const doc = comUniavan();
+    expect(prepararCalendarios(doc, [{ escola: 'uniavan', divisao: 'bimestres' }]).itens[0].erro).toMatch(/informe o início e o fim/);
+    const { itens, plano } = prepararCalendarios(doc, [{
+      escola: 'uniavan', divisao: 'bimestres', inicio: '2026-02-09', fim: '2026-12-11',
+      recesso_meio_ano: { inicio: '2026-07-13', fim: '2026-07-24' }
+    }], AGORA);
+    expect(itens[0].descricao).toMatch(/calendário novo; ano letivo: 09\/02\/2026 a 11\/12\/2026; divisão: bimestres; recesso de meio de ano: 13\/07\/2026 a 24\/07\/2026/);
+    expect(itens[0].avisos).toContain('Os períodos não foram informados e continuam 0. Informe as datas de cada bimestre.');
+    const r = aplicarPlano(doc, plano!, AGORA);
+    Object.assign(doc, r.alteracoes);
+    const cal = doc.calendars.find((c: any) => c.schoolId === 'U');
+    expect(cal).toMatchObject({ year: 2026, division: 'bimestres', start: '2026-02-09', end: '2026-12-11', extraRecesses: [] });
+    Object.assign(doc, desfazerLote(doc, r.lote, AGORA + 1000).alteracoes);
+    expect(doc.calendars.some((c: any) => c.schoolId === 'U')).toBe(false);
+    expect(doc._deleted[cal.id]).toBe(AGORA + 1000);
+  });
+
+  it('valida períodos e avisa quando nada muda', () => {
+    const r = prepararCalendarios(base(), [
+      { escola: 'consul', periodos: [{ inicio: '2026-02-10', fim: '2026-06-01' }, { inicio: '2026-05-18', fim: '2026-09-04' }] },
+      { escola: 'consul', inicio: '2026-12-20' },
+      { escola: 'consul', fim: '2026-12-15' }
+    ]);
+    expect(r.itens[0].erro).toMatch(/2º Trimestre começa antes do fim de 1º Trimestre/);
+    expect(r.itens[1].erro).toMatch(/início do ano letivo vem depois do fim/);
+    expect(r.itens[2].avisos).toContain('Nada muda no calendário.');
+    expect(r.plano).toBeNull();
+  });
+
+  it('não grava se o calendário mudou no app depois da prévia', () => {
+    const doc = base();
+    const { plano } = prepararCalendarios(doc, [{ escola: 'consul', periodos: TRIMESTRES }], AGORA);
+    doc.calendars[0] = { ...doc.calendars[0], end: '2026-12-18', _m: AGORA + 5 };
+    const r = aplicarPlano(doc, plano!, AGORA + 10);
+    expect(r.alteracoes).toEqual({});
+    expect(r.lote.resumo.at(-1)).toMatch(/calendário mudou no app/);
+  });
+});
+
+describe('conector (gravação): recessos e feriados da escola', () => {
+  it('sem escola vale para todas; escola sem calendário fica de fora com aviso', () => {
+    const doc = comUniavan();
+    const { itens, plano } = prepararRecessos(doc, [{ data: '2026-08-04', nome: 'Aniversário de Brusque' }]);
+    expect(itens[0].descricao).toBe('"Aniversário de Brusque" em terça 04/08/2026 — Cônsul');
+    expect(itens[0].avisos).toContain('Uniavan: ainda não tem calendário cadastrado; não incluída.');
+    const r = aplicarPlano(doc, plano!, AGORA);
+    Object.assign(doc, r.alteracoes);
+    expect(doc.calendars[0].extraRecesses.map((x: any) => [x.name, x.date])).toEqual([['Recesso', '2026-11-03'], ['Aniversário de Brusque', '2026-08-04']]);
+    // Depois de gravado, o dia conta como sem aula
+    expect(prepararAvaliacoes(doc, [{ ...P3, data: '2026-08-04' }], HOJE, AGORA).itens[0].erro).toMatch(/sem aula nessa escola/);
+    Object.assign(doc, desfazerLote(doc, r.lote, AGORA + 1000).alteracoes);
+    expect(doc.calendars[0].extraRecesses).toHaveLength(1);
+  });
+
+  it('junta vários recessos da mesma escola numa só mudança', () => {
+    const { plano } = prepararRecessos(base(), [
+      { escola: 'consul', data: '2026-08-04', nome: 'Aniversário de Brusque' },
+      { escola: 'consul', data: '2026-10-16', nome: 'Recesso escolar' }
+    ]);
+    expect(plano!.calendarios).toHaveLength(1);
+    expect(plano!.calendarios![0].novo.extraRecesses).toHaveLength(3);
+  });
+
+  it('recusa feriado nacional e recesso repetido; avisa de prova e diário no dia', () => {
+    const doc = base();
+    doc.logs.push({ id: 'l2', date: '2026-10-27T00:00:00.000Z', schoolId: 'C', classId: 'c183', slotId: 's4', subject: 'Iluminismo', homework: '', notes: '' });
+    const r = prepararRecessos(doc, [
+      { escola: 'consul', data: '2026-11-02', nome: 'Finados' },
+      { escola: 'consul', data: '2026-11-03', nome: 'Outro' },
+      { escola: 'consul', data: '2026-10-27', nome: 'Recesso' }
+    ]);
+    expect(r.itens[0].erro).toMatch(/já é feriado nacional/);
+    expect(r.itens[1].erro).toMatch(/Nenhuma escola/);
+    expect(r.itens[2].avisos).toEqual([
+      'Cônsul: há 1 registro(s) de conteúdo no diário nesse dia; eles continuam lá, mas o dia passa a contar como sem aula.',
+      'Cônsul: há avaliação nesse dia ("P2"); remarque no app.'
+    ]);
+  });
+});
+
+describe('conector (gravação): eventos', () => {
+  it('cadastra reunião sem suspender aulas', () => {
+    const { itens, plano } = prepararEventos(base(), [{ escola: 'consul', data: '2026-11-11', tipo: 'reuniao', titulo: 'Conselho de classe' }], HOJE, AGORA);
+    expect(itens[0].descricao).toBe('Reunião "Conselho de classe" — Cônsul, quarta 11/11/2026');
+    expect(plano!.criar.events[0]).toMatchObject({ type: 'meeting', title: 'Conselho de classe', blocksClasses: false, blocksShift: false, schoolId: 'C' });
+    expect(plano!.criar.events[0]).not.toHaveProperty('slotId');
+    expect(plano!.criar.logs).toHaveLength(0);
+  });
+
+  it('suspende as aulas da escola como o app e o dia passa a contar como sem aula', () => {
+    const doc = base();
+    const { itens, plano } = prepararEventos(doc, [{ escola: 'consul', data: '2026-11-16', tipo: 'festividade', titulo: 'Festa da família', suspende_aulas: true }], HOJE, AGORA);
+    expect(itens[0].avisos).toContain('2 aula(s) desse dia ficam marcadas como "Evento: Festa da família" no diário.');
+    expect(plano!.criar.events[0]).toMatchObject({ type: 'festivity', blocksClasses: true, blocksShift: true });
+    expect(plano!.criar.logs.map(l => [l.slotId, l.classId, l.subject, l.notes])).toEqual([
+      ['s3', 'c183', 'Evento: Festa da família', 'Aula substituída por evento escolar.'],
+      ['s4', 'c183', 'Evento: Festa da família', 'Aula substituída por evento escolar.']
+    ]);
+    Object.assign(doc, aplicarPlano(doc, plano!, AGORA).alteracoes);
+    expect(prepararAvaliacoes(doc, [{ ...P3, data: '2026-11-16', aula: 3 }], HOJE, AGORA).itens[0].erro).toMatch(/sem aula nessa escola/);
+  });
+
+  it('só de uma turma; avisa de prova no dia', () => {
+    const { itens, plano } = prepararEventos(base(), [{ escola: 'consul', data: '2026-10-27', tipo: 'passeio', titulo: 'Museu', suspende_aulas: true, turma: '183' }], HOJE, AGORA);
+    expect(itens[0].avisos).toContain('Há avaliação nesse dia ("P2"); remarque no app.');
+    expect(plano!.criar.events[0]).toMatchObject({ classId: 'c183', blocksClasses: true, blocksShift: false });
+    expect(plano!.criar.logs).toHaveLength(1);
+  });
+
+  it('recusa suspender aula com conteúdo no diário, turno inexistente e evento repetido', () => {
+    const doc = base();
+    doc.events.push({ id: 'm1', type: 'meeting', schoolId: 'C', date: '2026-11-11T00:00:00.000Z', title: 'Conselho', description: '', blocksClasses: false });
+    const r = prepararEventos(doc, [
+      { escola: 'consul', data: '2026-11-10', tipo: 'outro', titulo: 'Palestra', suspende_aulas: true },
+      { escola: 'consul', data: '2026-11-12', tipo: 'outro', titulo: 'Palestra', turno: 'Noturno' },
+      { escola: 'consul', data: '2026-11-11', tipo: 'reuniao', titulo: 'conselho' }
+    ], HOJE, AGORA);
+    expect(r.itens[0].erro).toMatch(/Já há conteúdo registrado no diário/);
+    expect(r.itens[1].erro).toMatch(/Turno "Noturno" não encontrado. Turnos da Cônsul: Vespertino/);
+    expect(r.itens[2].erro).toMatch(/Já existe "conselho"/);
   });
 });

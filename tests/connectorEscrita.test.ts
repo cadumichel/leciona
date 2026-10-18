@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { aplicarPlano, desfazerLote, prepararAvaliacoes, prepararSituacoes } from '../connector/escrita';
+import { aplicarPlano, desfazerLote, prepararAvaliacoes, prepararConteudos, prepararSituacoes } from '../connector/escrita';
 import { listarAvaliacoes } from '../connector/consultas';
 import { mergeAppData } from '../utils/sync';
 
@@ -196,5 +196,91 @@ describe('conector (gravação): convivência com o app aberto', () => {
     const juntos = mergeAppData(nuvem, app, AGORA + 2000);
     expect(juntos.events.some(e => e.title === 'P3')).toBe(false);
     expect(juntos.logs.some(l => l.subject === 'Avaliação: P3')).toBe(false);
+  });
+});
+
+describe('conector (gravação): conteúdo de aula', () => {
+  const AULA = { turma: '183', data: '2026-10-20', conteudo: 'Revolução Industrial', tarefa: 'p. 40' };
+
+  it('cria o registro da aula como o app (tipo regular, código da turma)', () => {
+    const { itens, plano } = prepararConteudos(base(), [AULA], HOJE, AGORA);
+    expect(itens[0]).toMatchObject({ ok: true, avisos: [] });
+    expect(plano!.resumo).toEqual(['183 (Cônsul), terça 20/10/2026, 5ª aula (16:45) — "Revolução Industrial", tarefa: "p. 40"']);
+    expect(plano!.criar.logs[0]).toMatchObject({
+      date: '2026-10-20T00:00:00.000Z', schoolId: 'C', classId: 'c183', slotId: 's5',
+      subject: 'Revolução Industrial', homework: 'p. 40', notes: '', type: 'regular'
+    });
+    expect(plano!.criar.events).toHaveLength(0);
+  });
+
+  it('com aulas seguidas, pergunta; com as aulas informadas, registra em cada uma', () => {
+    const sem = prepararConteudos(base(), [{ ...AULA, data: '2026-10-19' }], HOJE, AGORA);
+    expect(sem.itens[0].erro).toMatch(/aulas seguidas.*vale para todas ou só para uma/);
+    const duas = prepararConteudos(base(), [{ ...AULA, data: '2026-10-19', aulas: [3, 4] }], HOJE, AGORA);
+    expect(duas.plano!.criar.logs.map(l => l.slotId)).toEqual(['s3', 's4']);
+    const uma = prepararConteudos(base(), [{ ...AULA, data: '2026-10-19', aulas: [4] }], HOJE, AGORA);
+    expect(uma.plano!.criar.logs.map(l => l.slotId)).toEqual(['s4']);
+  });
+
+  it('acrescenta ao que já está no diário (ou substitui, se pedido) e mostra como vai ficar', () => {
+    const r = prepararConteudos(base(), [{ ...AULA, data: '2026-11-10', tarefa: '' }], HOJE, AGORA);
+    expect(r.itens[0].avisos).toContain('A aula ainda não aconteceu: fica registrado como planejamento.');
+    expect(r.itens[0].avisos).toContain('A 5ª aula (16:45) já tinha no diário: "Revisão para a P3". Vai ficar: "Revisão para a P3\nRevolução Industrial".');
+    expect(r.plano!.criar.logs).toHaveLength(0);
+    expect(r.plano!.conteudos![0]).toMatchObject({ id: 'l1', subject: 'Revisão para a P3\nRevolução Industrial', homework: '' });
+    const s = prepararConteudos(base(), [{ ...AULA, data: '2026-11-10', modo: 'substituir' }], HOJE, AGORA);
+    expect(s.plano!.conteudos![0]).toMatchObject({ subject: 'Revolução Industrial', homework: 'p. 40' });
+  });
+
+  it('não repete o que já está escrito', () => {
+    const r = prepararConteudos(base(), [{ turma: '183', data: '2026-11-10', conteudo: 'revisão para a p3' }], HOJE, AGORA);
+    expect(r.itens[0].avisos.some(a => /já tem esse registro; nada muda/.test(a))).toBe(true);
+    expect(r.plano).toBeNull();
+  });
+
+  it('grava, desfaz e volta o conteúdo anterior', () => {
+    const doc = base();
+    const { plano } = prepararConteudos(doc, [{ ...AULA, data: '2026-11-10' }, AULA], HOJE, AGORA);
+    const r = aplicarPlano(doc, plano!, AGORA);
+    Object.assign(doc, r.alteracoes);
+    expect(doc.logs.find((l: any) => l.id === 'l1')).toMatchObject({ subject: 'Revisão para a P3\nRevolução Industrial', homework: 'p. 40', _m: AGORA });
+    expect(doc.logs).toHaveLength(2);
+    expect(aplicarPlano(doc, plano!, AGORA + 1).jaGravado).toBe(true);
+    const d = desfazerLote(doc, r.lote, AGORA + 1000);
+    Object.assign(doc, d.alteracoes);
+    expect(doc.logs).toHaveLength(1);
+    expect(doc.logs[0]).toMatchObject({ id: 'l1', subject: 'Revisão para a P3', homework: '' });
+  });
+
+  it('não grava se o registro mudou no app depois da prévia', () => {
+    const doc = base();
+    const { plano } = prepararConteudos(doc, [{ ...AULA, data: '2026-11-10' }], HOJE, AGORA);
+    doc.logs[0] = { ...doc.logs[0], subject: 'Mudei no celular', _m: AGORA + 10 };
+    const r = aplicarPlano(doc, plano!, AGORA + 20);
+    expect(r.alteracoes).toEqual({});
+    expect(r.lote.resumo.at(-1)).toMatch(/mudou no app depois da prévia/);
+  });
+
+  it('recusa feriado, recesso, aula removida, registro de outra turma e texto vazio', () => {
+    const doc = base();
+    doc.logs.push(
+      { id: 'rem', date: '2026-10-27T00:00:00.000Z', schoolId: 'C', classId: 'c183', slotId: 's5', subject: '', homework: '', notes: '', status: 'removed' },
+      { id: 'out', date: '2026-10-13T00:00:00.000Z', schoolId: 'C', classId: 'c163', slotId: 's5', subject: 'Substituição', homework: '', notes: '' }
+    );
+    const r = prepararConteudos(doc, [
+      { ...AULA, data: '2026-11-02', aulas: [3] },
+      { ...AULA, data: '2026-11-03' },
+      { ...AULA, data: '2026-10-27' },
+      { ...AULA, data: '2026-10-13' },
+      { turma: '183', data: '2026-10-20', conteudo: '  ' }
+    ], HOJE, AGORA);
+    expect(r.itens.map(i => i.erro)).toEqual([
+      expect.stringMatching(/feriado \(Finados\)/),
+      expect.stringMatching(/sem aula nessa escola/),
+      expect.stringMatching(/marcada como removida/),
+      expect.stringMatching(/registro de outra turma/),
+      expect.stringMatching(/Informe o conteúdo/)
+    ]);
+    expect(r.plano).toBeNull();
   });
 });

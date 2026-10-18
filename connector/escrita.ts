@@ -33,6 +33,8 @@ export interface Plano {
   resumo: string[];
   criar: { events: Item[]; logs: Item[] };
   situacoes: { id: string; situacao: Situacao; descricao: string }[];
+  /** Registros do diário que já existem e ganham conteúdo (com o valor visto na prévia) */
+  conteudos?: { id: string; subject: string; homework: string; antes: { subject: string; homework: string }; descricao: string }[];
 }
 
 /** O que foi gravado, para desfazer. */
@@ -41,6 +43,7 @@ export interface Lote {
   resumo: string[];
   criados: { events: string[]; logs: string[] };
   situacoesAnteriores: { id: string; prepared: boolean; scheduled: boolean; descricao: string }[];
+  conteudosAnteriores?: { id: string; subject: string; homework: string; descricao: string }[];
 }
 
 export interface ItemDaPrevia {
@@ -245,6 +248,136 @@ export const prepararSituacoes = (data: AppData, pedidos: PedidoDeSituacao[]) =>
   return { itens, plano: plano.resumo.length ? plano : null };
 };
 
+// ── Registrar conteúdo de aula ────────────────────────────────────────────────
+
+/** Mesmos limites e limpeza do app (utils/validation.ts, que não dá para importar aqui por usar React). */
+const LIMITE_CONTEUDO = 500;
+const LIMITE_TAREFA = 2000;
+const limpar = (t: string | undefined) => (t || '').trim().replace(/[<>]/g, '');
+
+export interface PedidoDeConteudo {
+  turma: string;
+  escola?: string;
+  data: string;
+  /** Números das aulas no turno (1ª, 2ª…). Obrigatório quando a turma tem aulas seguidas no dia */
+  aulas?: number[];
+  conteudo?: string;
+  tarefa?: string;
+  /** "acrescentar" (padrão) junta ao que já está no diário; "substituir" troca */
+  modo?: 'acrescentar' | 'substituir';
+}
+
+const juntar = (atual: string, novo: string, modo: 'acrescentar' | 'substituir') => {
+  if (!novo) return atual;
+  if (modo === 'substituir' || !atual.trim()) return novo;
+  if (normalizar(atual).includes(normalizar(novo))) return atual;
+  return `${atual}\n${novo}`;
+};
+
+export const prepararConteudos = (data: AppData, pedidos: PedidoDeConteudo[], hoje: string, agora = Date.now()) => {
+  if (!pedidos.length) throw new ConsultaError('Nenhum registro informado.');
+  if (pedidos.length > 40) throw new ConsultaError('Envie no máximo 40 registros por vez.');
+
+  const plano: Plano = { resumo: [], criar: { events: [], logs: [] }, situacoes: [], conteudos: [] };
+  const itens: ItemDaPrevia[] = [];
+  const aulasNestePedido = new Set<string>();
+
+  pedidos.forEach((p, i) => {
+    const item: ItemDaPrevia = { pedido: i + 1, ok: false, descricao: `${p.turma}, ${p.data}`, avisos: [] };
+    itens.push(item);
+    try {
+      const d = validarData(p.data, 'data')!;
+      const modo = p.modo ?? 'acrescentar';
+      const conteudo = limpar(p.conteudo);
+      const tarefa = limpar(p.tarefa);
+      if (!conteudo && !tarefa) throw new ConsultaError('Informe o conteúdo da aula (ou a tarefa).');
+      if (conteudo.length > LIMITE_CONTEUDO) throw new ConsultaError(`O conteúdo passa de ${LIMITE_CONTEUDO} caracteres (limite do app).`);
+      if (tarefa.length > LIMITE_TAREFA) throw new ConsultaError(`A tarefa passa de ${LIMITE_TAREFA} caracteres (limite do app).`);
+      const { school, cls } = encontrarTurma(data, p.turma, p.escola);
+      item.descricao = `${cls.name} (${school.name}), ${quando(d)}`;
+
+      // Quais aulas
+      const aulasDoDia = aulasDaTurmaNoDia(data, school, cls, d);
+      if (!aulasDoDia.length) {
+        throw new ConsultaError(`A turma ${cls.name} não tem aula na grade em ${quando(d)}. Dias com aula: ${diasComAula(data, school, cls, d)}.`);
+      }
+      let escolhidas = aulasDoDia;
+      if (p.aulas?.length) {
+        escolhidas = p.aulas.map(n => {
+          const a = aulasDoDia.find(x => x.numero === n);
+          if (!a) throw new ConsultaError(`Nesse dia a turma ${cls.name} tem: ${aulasDoDia.map(x => x.texto).join(', ')}. Escolha entre elas.`);
+          return a;
+        });
+        escolhidas = escolhidas.filter((a, k) => escolhidas.findIndex(b => b.slotId === a.slotId) === k);
+      } else if (aulasDoDia.length > 1) {
+        throw new ConsultaError(`Nesse dia a turma ${cls.name} tem aulas seguidas: ${aulasDoDia.map(a => a.texto).join(' e ')}. Pergunte ao Cadu se o conteúdo vale para todas ou só para uma, e informe os números das aulas.`);
+      }
+      item.descricao += `, ${escolhidas.map(a => a.texto).join(' e ')}`;
+
+      const feriado = getHolidayName(getSafeDate(d));
+      if (feriado) throw new ConsultaError(`${formatDateBR(d)} é feriado (${feriado}).`);
+      for (const a of escolhidas) {
+        if (isLessonBlocked(data, d, school.id, a.shiftId, cls.id)) {
+          throw new ConsultaError(`${formatDateBR(d)} está sem aula nessa escola (recesso ou evento que suspende as aulas).`);
+        }
+      }
+      if (d > hoje) item.avisos.push('A aula ainda não aconteceu: fica registrado como planejamento.');
+
+      const novos: Item[] = [];
+      const edicoes: NonNullable<Plano['conteudos']> = [];
+      for (const a of escolhidas) {
+        const chave = `${school.id}|${d}|${a.slotId}`;
+        if (aulasNestePedido.has(chave)) throw new ConsultaError(`A ${a.texto} aparece duas vezes neste pedido.`);
+        aulasNestePedido.add(chave);
+
+        const registro = (data.logs || []).find(l => !l.studentId && dia(l.date) === d && l.schoolId === school.id && l.slotId === a.slotId);
+        if (registro && registro.status === 'removed') {
+          throw new ConsultaError(`A ${a.texto} foi marcada como removida no app; não dá para registrar conteúdo nela.`);
+        }
+        if (registro && registro.classId && !eDaTurma(data, school, cls, registro.classId)) {
+          throw new ConsultaError(`A ${a.texto} desse dia já tem registro de outra turma no diário.`);
+        }
+        if (!registro) {
+          novos.push({
+            id: novoId(), date: diaISO(d), schoolId: school.id, classId: cls.id, slotId: a.slotId,
+            subject: conteudo, homework: tarefa, notes: '', type: 'regular', _m: agora
+          });
+          continue;
+        }
+        const antes = { subject: registro.subject || '', homework: registro.homework || '' };
+        const depois = { subject: juntar(antes.subject, conteudo, modo), homework: juntar(antes.homework, tarefa, modo) };
+        if (depois.subject.length > LIMITE_CONTEUDO) {
+          throw new ConsultaError(`Juntando com o que já está no diário da ${a.texto}, o conteúdo passa de ${LIMITE_CONTEUDO} caracteres. Use modo "substituir" ou encurte.`);
+        }
+        if (depois.subject === antes.subject && depois.homework === antes.homework) {
+          item.avisos.push(`A ${a.texto} já tem esse registro; nada muda nela.`);
+          continue;
+        }
+        item.avisos.push(antes.subject
+          ? `A ${a.texto} já tinha no diário: "${antes.subject}". Vai ficar: "${depois.subject}".`
+          : `A ${a.texto} já tinha um registro sem conteúdo; ele será preenchido.`);
+        edicoes.push({ id: registro.id, ...depois, antes, descricao: `${item.descricao}: ${a.texto}` });
+      }
+
+      if (!novos.length && !edicoes.length) {
+        item.ok = true;
+        return;
+      }
+      plano.criar.logs.push(...novos);
+      plano.conteudos!.push(...edicoes);
+      const resumo = [conteudo && `"${conteudo}"`, tarefa && `tarefa: "${tarefa}"`].filter(Boolean).join(', ');
+      item.descricao += ` — ${resumo}`;
+      plano.resumo.push(item.descricao);
+      item.ok = true;
+    } catch (e) {
+      if (!(e instanceof ConsultaError)) throw e;
+      item.erro = e.message;
+    }
+  });
+
+  return { itens, plano: plano.resumo.length ? plano : null };
+};
+
 // ── Aplicar e desfazer ────────────────────────────────────────────────────────
 
 /** Campos do documento que a gravação altera (o resto do documento não é tocado). */
@@ -287,14 +420,37 @@ export const aplicarPlano = (raw: any, plano: Plano, agora = Date.now()) => {
     events[idx] = { ...ev, ...camposDaSituacao(s.situacao), _m: agora };
   }
 
-  lote.resumo.unshift(...plano.resumo);
-  const mudou = lote.criados.events.length + lote.criados.logs.length + lote.situacoesAnteriores.length > 0;
-  const alteracoes: Alteracoes = {};
-  if (mudou) {
-    alteracoes.events = events;
-    if (lote.criados.logs.length) alteracoes.logs = logs;
+  const conteudosAnteriores: NonNullable<Lote['conteudosAnteriores']> = [];
+  let conteudoJaGravado = false;
+  for (const c of plano.conteudos || []) {
+    const idx = logs.findIndex(l => l?.id === c.id);
+    if (idx < 0) {
+      lote.resumo.push(`Não gravado (o registro foi apagado no app depois da prévia): ${c.descricao}`);
+      continue;
+    }
+    const log = logs[idx];
+    const atual = { subject: log.subject || '', homework: log.homework || '' };
+    if (atual.subject === c.subject && atual.homework === c.homework) {
+      conteudoJaGravado = true;
+      continue;
+    }
+    if (atual.subject !== c.antes.subject || atual.homework !== c.antes.homework) {
+      lote.resumo.push(`Não gravado (o registro mudou no app depois da prévia; prepare de novo): ${c.descricao}`);
+      continue;
+    }
+    conteudosAnteriores.push({ id: c.id, ...atual, descricao: c.descricao });
+    logs[idx] = { ...log, subject: c.subject, homework: c.homework, _m: agora };
   }
-  return { alteracoes, lote, jaGravado: !mudou && (jaGravado || plano.situacoes.length > 0) };
+  if (conteudosAnteriores.length) lote.conteudosAnteriores = conteudosAnteriores;
+
+  lote.resumo.unshift(...plano.resumo);
+  const mudouEventos = lote.criados.events.length + lote.situacoesAnteriores.length > 0;
+  const mudouLogs = lote.criados.logs.length + conteudosAnteriores.length > 0;
+  const alteracoes: Alteracoes = {};
+  if (mudouEventos) alteracoes.events = events;
+  if (mudouLogs) alteracoes.logs = logs;
+  const mudou = mudouEventos || mudouLogs;
+  return { alteracoes, lote, jaGravado: !mudou && (jaGravado || plano.situacoes.length > 0 || conteudoJaGravado) };
 };
 
 /** Desfaz um lote: apaga o que foi criado (com lápide) e volta as situações anteriores. */
@@ -331,6 +487,14 @@ export const desfazerLote = (raw: any, lote: Lote, agora = Date.now()) => {
     if ((events[idx]._m ?? 0) > lote.em) { avisos.push(`Alterada no app depois; mantida: ${s.descricao}`); continue; }
     events[idx] = { ...events[idx], prepared: s.prepared, scheduled: s.scheduled, _m: agora };
     mudouEventos = true;
+  }
+
+  for (const c of lote.conteudosAnteriores || []) {
+    const idx = logs.findIndex(l => l?.id === c.id);
+    if (idx < 0) { avisos.push(`Registro não encontrado: ${c.descricao}`); continue; }
+    if ((logs[idx]._m ?? 0) > lote.em) { avisos.push(`Registro alterado no app depois; mantido: ${c.descricao}`); continue; }
+    logs[idx] = { ...logs[idx], subject: c.subject, homework: c.homework, _m: agora };
+    mudouLogs = true;
   }
 
   const alteracoes: Alteracoes = {};

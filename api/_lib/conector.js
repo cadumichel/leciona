@@ -709,6 +709,116 @@ var prepararSituacoes = (data, pedidos) => {
   });
   return { itens, plano: plano.resumo.length ? plano : null };
 };
+var LIMITE_CONTEUDO = 500;
+var LIMITE_TAREFA = 2e3;
+var limpar = (t) => (t || "").trim().replace(/[<>]/g, "");
+var juntar = (atual, novo, modo) => {
+  if (!novo) return atual;
+  if (modo === "substituir" || !atual.trim()) return novo;
+  if (normalizar(atual).includes(normalizar(novo))) return atual;
+  return `${atual}
+${novo}`;
+};
+var prepararConteudos = (data, pedidos, hoje, agora = Date.now()) => {
+  if (!pedidos.length) throw new ConsultaError("Nenhum registro informado.");
+  if (pedidos.length > 40) throw new ConsultaError("Envie no m\xE1ximo 40 registros por vez.");
+  const plano = { resumo: [], criar: { events: [], logs: [] }, situacoes: [], conteudos: [] };
+  const itens = [];
+  const aulasNestePedido = /* @__PURE__ */ new Set();
+  pedidos.forEach((p, i) => {
+    const item = { pedido: i + 1, ok: false, descricao: `${p.turma}, ${p.data}`, avisos: [] };
+    itens.push(item);
+    try {
+      const d = validarData(p.data, "data");
+      const modo = p.modo ?? "acrescentar";
+      const conteudo = limpar(p.conteudo);
+      const tarefa = limpar(p.tarefa);
+      if (!conteudo && !tarefa) throw new ConsultaError("Informe o conte\xFAdo da aula (ou a tarefa).");
+      if (conteudo.length > LIMITE_CONTEUDO) throw new ConsultaError(`O conte\xFAdo passa de ${LIMITE_CONTEUDO} caracteres (limite do app).`);
+      if (tarefa.length > LIMITE_TAREFA) throw new ConsultaError(`A tarefa passa de ${LIMITE_TAREFA} caracteres (limite do app).`);
+      const { school, cls } = encontrarTurma(data, p.turma, p.escola);
+      item.descricao = `${cls.name} (${school.name}), ${quando(d)}`;
+      const aulasDoDia = aulasDaTurmaNoDia(data, school, cls, d);
+      if (!aulasDoDia.length) {
+        throw new ConsultaError(`A turma ${cls.name} n\xE3o tem aula na grade em ${quando(d)}. Dias com aula: ${diasComAula(data, school, cls, d)}.`);
+      }
+      let escolhidas = aulasDoDia;
+      if (p.aulas?.length) {
+        escolhidas = p.aulas.map((n) => {
+          const a = aulasDoDia.find((x) => x.numero === n);
+          if (!a) throw new ConsultaError(`Nesse dia a turma ${cls.name} tem: ${aulasDoDia.map((x) => x.texto).join(", ")}. Escolha entre elas.`);
+          return a;
+        });
+        escolhidas = escolhidas.filter((a, k) => escolhidas.findIndex((b) => b.slotId === a.slotId) === k);
+      } else if (aulasDoDia.length > 1) {
+        throw new ConsultaError(`Nesse dia a turma ${cls.name} tem aulas seguidas: ${aulasDoDia.map((a) => a.texto).join(" e ")}. Pergunte ao Cadu se o conte\xFAdo vale para todas ou s\xF3 para uma, e informe os n\xFAmeros das aulas.`);
+      }
+      item.descricao += `, ${escolhidas.map((a) => a.texto).join(" e ")}`;
+      const feriado = getHolidayName(getSafeDate(d));
+      if (feriado) throw new ConsultaError(`${formatDateBR(d)} \xE9 feriado (${feriado}).`);
+      for (const a of escolhidas) {
+        if (isLessonBlocked(data, d, school.id, a.shiftId, cls.id)) {
+          throw new ConsultaError(`${formatDateBR(d)} est\xE1 sem aula nessa escola (recesso ou evento que suspende as aulas).`);
+        }
+      }
+      if (d > hoje) item.avisos.push("A aula ainda n\xE3o aconteceu: fica registrado como planejamento.");
+      const novos = [];
+      const edicoes = [];
+      for (const a of escolhidas) {
+        const chave = `${school.id}|${d}|${a.slotId}`;
+        if (aulasNestePedido.has(chave)) throw new ConsultaError(`A ${a.texto} aparece duas vezes neste pedido.`);
+        aulasNestePedido.add(chave);
+        const registro = (data.logs || []).find((l) => !l.studentId && dia(l.date) === d && l.schoolId === school.id && l.slotId === a.slotId);
+        if (registro && registro.status === "removed") {
+          throw new ConsultaError(`A ${a.texto} foi marcada como removida no app; n\xE3o d\xE1 para registrar conte\xFAdo nela.`);
+        }
+        if (registro && registro.classId && !eDaTurma(data, school, cls, registro.classId)) {
+          throw new ConsultaError(`A ${a.texto} desse dia j\xE1 tem registro de outra turma no di\xE1rio.`);
+        }
+        if (!registro) {
+          novos.push({
+            id: novoId(),
+            date: diaISO(d),
+            schoolId: school.id,
+            classId: cls.id,
+            slotId: a.slotId,
+            subject: conteudo,
+            homework: tarefa,
+            notes: "",
+            type: "regular",
+            _m: agora
+          });
+          continue;
+        }
+        const antes = { subject: registro.subject || "", homework: registro.homework || "" };
+        const depois = { subject: juntar(antes.subject, conteudo, modo), homework: juntar(antes.homework, tarefa, modo) };
+        if (depois.subject.length > LIMITE_CONTEUDO) {
+          throw new ConsultaError(`Juntando com o que j\xE1 est\xE1 no di\xE1rio da ${a.texto}, o conte\xFAdo passa de ${LIMITE_CONTEUDO} caracteres. Use modo "substituir" ou encurte.`);
+        }
+        if (depois.subject === antes.subject && depois.homework === antes.homework) {
+          item.avisos.push(`A ${a.texto} j\xE1 tem esse registro; nada muda nela.`);
+          continue;
+        }
+        item.avisos.push(antes.subject ? `A ${a.texto} j\xE1 tinha no di\xE1rio: "${antes.subject}". Vai ficar: "${depois.subject}".` : `A ${a.texto} j\xE1 tinha um registro sem conte\xFAdo; ele ser\xE1 preenchido.`);
+        edicoes.push({ id: registro.id, ...depois, antes, descricao: `${item.descricao}: ${a.texto}` });
+      }
+      if (!novos.length && !edicoes.length) {
+        item.ok = true;
+        return;
+      }
+      plano.criar.logs.push(...novos);
+      plano.conteudos.push(...edicoes);
+      const resumo = [conteudo && `"${conteudo}"`, tarefa && `tarefa: "${tarefa}"`].filter(Boolean).join(", ");
+      item.descricao += ` \u2014 ${resumo}`;
+      plano.resumo.push(item.descricao);
+      item.ok = true;
+    } catch (e) {
+      if (!(e instanceof ConsultaError)) throw e;
+      item.erro = e.message;
+    }
+  });
+  return { itens, plano: plano.resumo.length ? plano : null };
+};
 var lapides = (raw) => ({ ...raw._deleted || {} });
 var aplicarPlano = (raw, plano, agora = Date.now()) => {
   const mortos = lapides(raw);
@@ -742,14 +852,36 @@ var aplicarPlano = (raw, plano, agora = Date.now()) => {
     lote.situacoesAnteriores.push({ id: s.id, prepared: !!ev.prepared, scheduled: !!ev.scheduled, descricao: s.descricao });
     events[idx] = { ...ev, ...camposDaSituacao(s.situacao), _m: agora };
   }
-  lote.resumo.unshift(...plano.resumo);
-  const mudou = lote.criados.events.length + lote.criados.logs.length + lote.situacoesAnteriores.length > 0;
-  const alteracoes = {};
-  if (mudou) {
-    alteracoes.events = events;
-    if (lote.criados.logs.length) alteracoes.logs = logs;
+  const conteudosAnteriores = [];
+  let conteudoJaGravado = false;
+  for (const c of plano.conteudos || []) {
+    const idx = logs.findIndex((l) => l?.id === c.id);
+    if (idx < 0) {
+      lote.resumo.push(`N\xE3o gravado (o registro foi apagado no app depois da pr\xE9via): ${c.descricao}`);
+      continue;
+    }
+    const log = logs[idx];
+    const atual = { subject: log.subject || "", homework: log.homework || "" };
+    if (atual.subject === c.subject && atual.homework === c.homework) {
+      conteudoJaGravado = true;
+      continue;
+    }
+    if (atual.subject !== c.antes.subject || atual.homework !== c.antes.homework) {
+      lote.resumo.push(`N\xE3o gravado (o registro mudou no app depois da pr\xE9via; prepare de novo): ${c.descricao}`);
+      continue;
+    }
+    conteudosAnteriores.push({ id: c.id, ...atual, descricao: c.descricao });
+    logs[idx] = { ...log, subject: c.subject, homework: c.homework, _m: agora };
   }
-  return { alteracoes, lote, jaGravado: !mudou && (jaGravado || plano.situacoes.length > 0) };
+  if (conteudosAnteriores.length) lote.conteudosAnteriores = conteudosAnteriores;
+  lote.resumo.unshift(...plano.resumo);
+  const mudouEventos = lote.criados.events.length + lote.situacoesAnteriores.length > 0;
+  const mudouLogs = lote.criados.logs.length + conteudosAnteriores.length > 0;
+  const alteracoes = {};
+  if (mudouEventos) alteracoes.events = events;
+  if (mudouLogs) alteracoes.logs = logs;
+  const mudou = mudouEventos || mudouLogs;
+  return { alteracoes, lote, jaGravado: !mudou && (jaGravado || plano.situacoes.length > 0 || conteudoJaGravado) };
 };
 var desfazerLote = (raw, lote, agora = Date.now()) => {
   const mortos = lapides(raw);
@@ -788,6 +920,19 @@ var desfazerLote = (raw, lote, agora = Date.now()) => {
     }
     events[idx] = { ...events[idx], prepared: s.prepared, scheduled: s.scheduled, _m: agora };
     mudouEventos = true;
+  }
+  for (const c of lote.conteudosAnteriores || []) {
+    const idx = logs.findIndex((l) => l?.id === c.id);
+    if (idx < 0) {
+      avisos.push(`Registro n\xE3o encontrado: ${c.descricao}`);
+      continue;
+    }
+    if ((logs[idx]._m ?? 0) > lote.em) {
+      avisos.push(`Registro alterado no app depois; mantido: ${c.descricao}`);
+      continue;
+    }
+    logs[idx] = { ...logs[idx], subject: c.subject, homework: c.homework, _m: agora };
+    mudouLogs = true;
   }
   const alteracoes = {};
   if (mudouEventos) alteracoes.events = events;
@@ -881,6 +1026,7 @@ Grava\xE7\xE3o (sempre em dois passos):
 1. Use uma ferramenta "preparar_..." e mostre ao Cadu a pr\xE9via completa: o que ser\xE1 gravado, os avisos e os itens com erro.
 2. S\xF3 chame "confirmar_gravacao" depois que o Cadu disser claramente que pode gravar. Nunca confirme por conta pr\xF3pria.
 Se faltar informa\xE7\xE3o (ex.: a turma tem aulas seguidas e \xE9 preciso escolher a aula), pergunte ao Cadu antes de preparar de novo.
+Conte\xFAdo de aula ("hoje na 183 dei\u2026"): use preparar_conteudo. Se a turma tiver aulas seguidas no dia, pergunte se o conte\xFAdo vale para todas ou s\xF3 para uma. Por padr\xE3o o texto \xE9 acrescentado ao que j\xE1 estiver no di\xE1rio; s\xF3 use modo "substituir" se o Cadu pedir.
 Depois de gravar, diga que d\xE1 para desfazer e guarde o "codigo_desfazer" para usar em "desfazer_gravacao" se ele pedir.
 Situa\xE7\xE3o das avalia\xE7\xF5es: Pendente \u2192 Agendada (alunos avisados) \u2192 Pronta (elaborada, enviada e alunos avisados).`;
 var somenteLeitura = { readOnlyHint: true, openWorldHint: false };
@@ -1000,6 +1146,22 @@ var registrarEscrita = (servidor, dados, hoje, escrita) => {
     },
     annotations: preparo
   }, async ({ avaliacoes }) => previa(() => prepararSituacoes(dados, avaliacoes)));
+  servidor.registerTool("preparar_conteudo", {
+    title: "Preparar registro de conte\xFAdo de aula",
+    description: 'Mostra a pr\xE9via do registro do conte\xFAdo (e da tarefa) de aulas no di\xE1rio, ex.: "hoje na 183 dei Revolu\xE7\xE3o Industrial". Confere se a turma tem aula no dia, feriado e recesso; se a aula j\xE1 tiver registro, mostra como vai ficar. N\xC3O grava: devolve um c\xF3digo para confirmar_gravacao.',
+    inputSchema: {
+      registros: z.array(z.object({
+        turma: z.string().describe('Nome da turma, ex.: "183"'),
+        escola: z.string().optional().describe("Nome da escola (necess\xE1rio se a turma existir em mais de uma)"),
+        data: data.describe('Data da aula (AAAA-MM-DD); "hoje" vem nas respostas do conector'),
+        aulas: z.array(z.number().int().min(1).max(12)).optional().describe("N\xFAmeros das aulas no turno (ex.: [3, 4]). Obrigat\xF3rio quando a turma tem aulas seguidas no dia"),
+        conteudo: z.string().optional().describe("O que foi dado na aula"),
+        tarefa: z.string().optional().describe("Tarefa de casa, se houver"),
+        modo: z.enum(["acrescentar", "substituir"]).optional().describe("Padr\xE3o: acrescentar ao que j\xE1 estiver no di\xE1rio")
+      })).min(1).max(40)
+    },
+    annotations: preparo
+  }, async ({ registros }) => previa(() => prepararConteudos(dados, registros, hoje)));
   servidor.registerTool("confirmar_gravacao", {
     title: "Confirmar grava\xE7\xE3o",
     description: "Grava no Leciona exatamente o que a pr\xE9via mostrou. Use S\xD3 depois que o Cadu confirmar a pr\xE9via. Devolve um codigo_desfazer.",
@@ -1024,7 +1186,7 @@ var registrarEscrita = (servidor, dados, hoje, escrita) => {
   });
   servidor.registerTool("desfazer_gravacao", {
     title: "Desfazer grava\xE7\xE3o",
-    description: "Desfaz uma grava\xE7\xE3o feita pelo conector: apaga o que ela criou e volta as situa\xE7\xF5es anteriores. Itens alterados no app depois da grava\xE7\xE3o s\xE3o mantidos.",
+    description: "Desfaz uma grava\xE7\xE3o feita pelo conector: apaga o que ela criou e volta situa\xE7\xF5es e conte\xFAdos anteriores. Itens alterados no app depois da grava\xE7\xE3o s\xE3o mantidos.",
     inputSchema: { codigo_desfazer: z.string() },
     annotations: { ...gravacao, destructiveHint: true }
   }, async ({ codigo_desfazer }) => {

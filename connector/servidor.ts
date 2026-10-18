@@ -5,7 +5,7 @@ import { AppData } from '../types';
 import {
   ConsultaError, avaliacoesProximas, calendario, conteudoDesdeUltimaAvaliacao, hojeEmBrasilia, listarAvaliacoes, turmasEGrade
 } from './consultas';
-import { Alteracoes, Lote, Plano, SITUACOES, aplicarPlano, desfazerLote, prepararAvaliacoes, prepararSituacoes } from './escrita';
+import { Alteracoes, Lote, Plano, SITUACOES, aplicarPlano, desfazerLote, prepararAvaliacoes, prepararConteudos, prepararSituacoes } from './escrita';
 import {
   Assinatura, Conta, ErroOAuth, assinarLote, assinarPlano, emitirCodigo, lerLote, lerPlano, metadadosDoRecurso, metadadosDoServidor, registrarCliente, trocarToken,
   urlsDoServidor, validarPedido, verificarAcesso
@@ -137,6 +137,7 @@ Gravação (sempre em dois passos):
 1. Use uma ferramenta "preparar_..." e mostre ao Cadu a prévia completa: o que será gravado, os avisos e os itens com erro.
 2. Só chame "confirmar_gravacao" depois que o Cadu disser claramente que pode gravar. Nunca confirme por conta própria.
 Se faltar informação (ex.: a turma tem aulas seguidas e é preciso escolher a aula), pergunte ao Cadu antes de preparar de novo.
+Conteúdo de aula ("hoje na 183 dei…"): use preparar_conteudo. Se a turma tiver aulas seguidas no dia, pergunte se o conteúdo vale para todas ou só para uma. Por padrão o texto é acrescentado ao que já estiver no diário; só use modo "substituir" se o Cadu pedir.
 Depois de gravar, diga que dá para desfazer e guarde o "codigo_desfazer" para usar em "desfazer_gravacao" se ele pedir.
 Situação das avaliações: Pendente → Agendada (alunos avisados) → Pronta (elaborada, enviada e alunos avisados).`;
 
@@ -284,6 +285,23 @@ const registrarEscrita = (servidor: McpServer, dados: AppData, hoje: string, esc
     annotations: preparo
   }, async ({ avaliacoes }) => previa(() => prepararSituacoes(dados, avaliacoes as any)));
 
+  servidor.registerTool('preparar_conteudo', {
+    title: 'Preparar registro de conteúdo de aula',
+    description: 'Mostra a prévia do registro do conteúdo (e da tarefa) de aulas no diário, ex.: "hoje na 183 dei Revolução Industrial". Confere se a turma tem aula no dia, feriado e recesso; se a aula já tiver registro, mostra como vai ficar. NÃO grava: devolve um código para confirmar_gravacao.',
+    inputSchema: {
+      registros: z.array(z.object({
+        turma: z.string().describe('Nome da turma, ex.: "183"'),
+        escola: z.string().optional().describe('Nome da escola (necessário se a turma existir em mais de uma)'),
+        data: data.describe('Data da aula (AAAA-MM-DD); "hoje" vem nas respostas do conector'),
+        aulas: z.array(z.number().int().min(1).max(12)).optional().describe('Números das aulas no turno (ex.: [3, 4]). Obrigatório quando a turma tem aulas seguidas no dia'),
+        conteudo: z.string().optional().describe('O que foi dado na aula'),
+        tarefa: z.string().optional().describe('Tarefa de casa, se houver'),
+        modo: z.enum(['acrescentar', 'substituir']).optional().describe('Padrão: acrescentar ao que já estiver no diário')
+      })).min(1).max(40)
+    },
+    annotations: preparo
+  }, async ({ registros }) => previa(() => prepararConteudos(dados, registros as any, hoje)));
+
   servidor.registerTool('confirmar_gravacao', {
     title: 'Confirmar gravação',
     description: 'Grava no Leciona exatamente o que a prévia mostrou. Use SÓ depois que o Cadu confirmar a prévia. Devolve um codigo_desfazer.',
@@ -309,7 +327,7 @@ const registrarEscrita = (servidor: McpServer, dados: AppData, hoje: string, esc
 
   servidor.registerTool('desfazer_gravacao', {
     title: 'Desfazer gravação',
-    description: 'Desfaz uma gravação feita pelo conector: apaga o que ela criou e volta as situações anteriores. Itens alterados no app depois da gravação são mantidos.',
+    description: 'Desfaz uma gravação feita pelo conector: apaga o que ela criou e volta situações e conteúdos anteriores. Itens alterados no app depois da gravação são mantidos.',
     inputSchema: { codigo_desfazer: z.string() },
     annotations: { ...gravacao, destructiveHint: true }
   }, async ({ codigo_desfazer }) => {

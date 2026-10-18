@@ -44,6 +44,7 @@ import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName } from '../utils/classRefs';
 import { getLessonDisplayItems, deriveStatsFromLessons, LessonDisplayItem } from '../utils/lessonStats';
 import { sanitizeText, LIMITS } from '../utils/validation';
+import { findPreviousLesson } from '../utils/retrospective';
 import { useToast } from '../hooks/useToast';
 
 interface LessonLoggerProps {
@@ -817,113 +818,18 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     };
   }, [historyItems]);
 
+  // Retrospectiva: a aula anterior da turma, mesmo sem conteúdo (utils/retrospective.ts)
   const lastLessonInfo = useMemo(() => {
     if (!activeLesson) return null;
-    const classId = activeLesson.type === 'school' ? activeLesson.schedule.classId : activeLesson.institution.name;
-    const instId = activeLesson.institution.id;
-    const currentSlotStart = parseTimeToMinutes(activeLesson.slot.startTime);
-
-    // Build an inclusive set of acceptable classId values for backward compatibility:
-    // Legacy logs may store the class *name* as classId; modern logs store the UUID.
-    // We accept both so the retrospective works regardless of when the log was created.
-    const acceptableClassIds = new Set<string>([classId]);
-    if (activeLesson.type === 'school') {
-      const school = data.schools.find(s => s.id === instId);
-      if (school) {
-        const schoolClass = school.classes.find(c =>
-          typeof c !== 'string' && (c.id === classId || c.name === classId)
-        );
-        if (schoolClass && typeof schoolClass !== 'string') {
-          // Add both ID and name so both legacy and modern logs match
-          acceptableClassIds.add(schoolClass.id);
-          acceptableClassIds.add(schoolClass.name);
-        }
-      }
-    }
-
-    // Find the current lesson's log (if any)
-    const currentLog = data.logs.find(l =>
-      l.date.startsWith(activeLesson.date) &&
-      (l.schoolId === instId || l.studentId === instId) &&
-      l.slotId === activeLesson.schedule.slotId &&
-      l.status !== 'removed'
-    );
-
-    return data.logs
-      .filter(l => {
-        // Exclude current lesson log from retrospective
-        if (currentLog && l.id === currentLog.id) return false;
-
-        // Filter by Class and Institution (backward-compatible: accept both UUID and name)
-        if (!acceptableClassIds.has(l.classId)) return false;
-        if (l.schoolId !== instId && l.studentId !== instId) return false;
-        if (l.status === 'removed') return false;
-
-        const logDateStr = l.date.split('T')[0];
-
-        // previous dates: accepted
-        if (logDateStr < activeLesson.date) return true;
-
-        // future dates: rejected
-        if (logDateStr > activeLesson.date) return false;
-
-        // same date: must be strictly earlier
-        if (logDateStr === activeLesson.date) {
-          // Find slot for this log to check time
-          // Strategy: Try to find slot in the school structure
-          // If it's the SAME slot ID, it's the same lesson (discard) -> "Scheduled Test" case
-          if (l.slotId === activeLesson.schedule.slotId) return false;
-
-          const logSchool = data.schools.find(s => s.id === l.schoolId);
-          if (logSchool) {
-            for (const shift of logSchool.shifts) {
-              const s = shift.slots.find(slot => slot.id === l.slotId);
-              if (s && s.startTime) {
-                const logStart = parseTimeToMinutes(s.startTime);
-                return logStart < currentSlotStart;
-              }
-            }
-          }
-          // If private teacher or slot not found, fallback to safer "exclude" to avoid weird recursion
-          return false;
-        }
-
-        return false;
-      })
-      .sort((a, b) => {
-        // Sort by Date Descending
-        const dateDiff = b.date.localeCompare(a.date);
-        if (dateDiff !== 0) return dateDiff;
-
-        // If same date, sort by start time descending
-        let startA = 0;
-        let startB = 0;
-
-        const schoolA = data.schools.find(s => s.id === a.schoolId);
-        if (schoolA) {
-          for (const shift of schoolA.shifts) {
-            const slot = shift.slots.find(s => s.id === a.slotId);
-            if (slot && slot.startTime) {
-              startA = parseTimeToMinutes(slot.startTime);
-              break;
-            }
-          }
-        }
-
-        const schoolB = data.schools.find(s => s.id === b.schoolId);
-        if (schoolB) {
-          for (const shift of schoolB.shifts) {
-            const slot = shift.slots.find(s => s.id === b.slotId);
-            if (slot && slot.startTime) {
-              startB = parseTimeToMinutes(slot.startTime);
-              break;
-            }
-          }
-        }
-
-        return startB - startA;
-      })[0];
-  }, [activeLesson, data.logs, data.schools]);
+    return findPreviousLesson(data, {
+      institutionId: activeLesson.institution.id,
+      classId: activeLesson.type === 'school' ? activeLesson.schedule.classId : activeLesson.institution.name,
+      date: activeLesson.date,
+      slotId: activeLesson.schedule.slotId,
+      startTime: activeLesson.slot.startTime,
+      isPrivate: activeLesson.type !== 'school'
+    });
+  }, [activeLesson, data]);
 
   const extraLogsForDay = useMemo(() => {
     const dayOfWeek = getDayOfWeekFromDate(selectedDate);
@@ -2240,7 +2146,11 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               <History size={12} className="text-primary md:w-3.5 md:h-3.5" />
               <span className="text-[9px] md:text-[10px] font-black text-primary uppercase tracking-tight">Retrospectiva</span>
             </div>
-            <p className="text-xs font-bold text-slate-700 dark:text-slate-300 italic mb-2">"{lastLessonInfo.subject}"</p>
+            {lastLessonInfo.subject ? (
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-300 italic mb-2">"{lastLessonInfo.subject}"</p>
+            ) : (
+              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 mb-2">{lastLessonInfo.hasContent ? 'Sem conteúdo cadastrado (só tarefa)' : 'Sem conteúdo cadastrado'}</p>
+            )}
             <div className="flex gap-4">
               {lastLessonInfo.homework && <div className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase">Tarefa: {lastLessonInfo.homework}</div>}
               <div className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase">Em: {formatDateBR(lastLessonInfo.date)}</div>

@@ -4,4 +4,3 @@ dist/
 .DS_Store
 coverage/
 .vscode/
-api/_lib/conector.js

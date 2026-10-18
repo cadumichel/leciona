@@ -37,6 +37,8 @@ export interface Plano {
   conteudos?: { id: string; subject: string; homework: string; antes: { subject: string; homework: string }; descricao: string }[];
   /** Calendários (um por escola) criados ou alterados, com o valor visto na prévia (null = novo) */
   calendarios?: { id: string; novo: any; antes: any | null; descricao: string }[];
+  /** Restaurar uma cópia de segurança (connector/copias.ts) */
+  restaurar?: { copia: string; descricao: string };
 }
 
 /** O que foi gravado, para desfazer. */
@@ -47,6 +49,8 @@ export interface Lote {
   situacoesAnteriores: { id: string; prepared: boolean; scheduled: boolean; descricao: string }[];
   conteudosAnteriores?: { id: string; subject: string; homework: string; descricao: string }[];
   calendariosAnteriores?: { id: string; antes: any | null; descricao: string }[];
+  /** Restauração feita: desfazer = restaurar a cópia guardada antes dela */
+  restauracao?: { desfazerCom: string };
 }
 
 export interface ItemDaPrevia {

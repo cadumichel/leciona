@@ -763,7 +763,6 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       schoolId: filterInstId,
       classId: filterClassId,
       periodIdx: filterPeriodIdx,
-      periodIdx: filterPeriodIdx,
       showWithContent: filterStatus !== 'pending',
       showWithoutContent: filterStatus !== 'completed'
     });

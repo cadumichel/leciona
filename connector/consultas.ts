@@ -121,7 +121,7 @@ export interface Avaliacao {
   titulo: string;
   descricao: string;
   aula?: string;
-  /** Mesma caixa do app: Pendente → Agendada (alunos avisados) → Pronta (elaborada, enviada e alunos avisados) */
+  /** Mesma caixa do app: Pendente (vai acontecer, alunos ainda não avisados) → Agendada (comunicada aos alunos) → Pronta (enviada para a coordenação e impressão) */
   situacao: 'Pendente' | 'Agendada' | 'Pronta';
   elaborada: boolean;
   comunicadaAosAlunos: boolean;

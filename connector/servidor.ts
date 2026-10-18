@@ -140,7 +140,7 @@ Se faltar informação (ex.: a turma tem aulas seguidas e é preciso escolher a 
 Conteúdo de aula ("hoje na 183 dei…"): use preparar_conteudo. Se a turma tiver aulas seguidas no dia, pergunte se o conteúdo vale para todas ou só para uma. Por padrão o texto é acrescentado ao que já estiver no diário; só use modo "substituir" se o Cadu pedir.
 Calendário: ano letivo, bimestres/trimestres e recesso de meio de ano com preparar_calendario. Feriados nacionais já estão no app; feriado municipal, da escola ou dia sem aula entram como recesso (preparar_recessos; sem escola = todas as escolas). Reuniões, festas, passeios etc. com preparar_eventos; pergunte se o evento suspende as aulas quando não estiver claro.
 Depois de gravar, diga que dá para desfazer e guarde o "codigo_desfazer" para usar em "desfazer_gravacao" se ele pedir.
-Situação das avaliações: Pendente → Agendada (alunos avisados) → Pronta (elaborada, enviada e alunos avisados).`;
+Situação das avaliações: Pendente (vai acontecer, alunos ainda não avisados) → Agendada (comunicada aos alunos) → Pronta (enviada para a coordenação e impressão; os alunos já sabem). "Falta elaborar" = ainda não está Pronta.`;
 
 const somenteLeitura = { readOnlyHint: true, openWorldHint: false };
 
@@ -167,13 +167,13 @@ export const criarServidorMcp = (dados: AppData, hoje: string, escrita?: Escrita
 
   servidor.registerTool('listar_avaliacoes', {
     title: 'Listar avaliações',
-    description: 'Provas e trabalhos cadastrados, com data, turma, aula e situação (Pendente, Agendada = alunos avisados, Pronta = elaborada, enviada e alunos avisados). Filtre por período, escola, turma ou pelas que faltam elaborar.',
+    description: 'Provas e trabalhos cadastrados, com data, turma, aula e situação (Pendente = vai acontecer, alunos ainda não avisados; Agendada = comunicada aos alunos; Pronta = enviada para a coordenação e impressão). Filtre por período, escola, turma ou pelas que faltam elaborar.',
     inputSchema: {
       de: data.optional().describe('Data inicial (AAAA-MM-DD)'),
       ate: data.optional().describe('Data final (AAAA-MM-DD)'),
       escola: z.string().optional().describe('Nome da escola'),
       turma: z.string().optional().describe('Nome da turma, ex.: "183"'),
-      elaborada: z.boolean().optional().describe('true = só as já elaboradas; false = só as que faltam elaborar')
+      elaborada: z.boolean().optional().describe('true = só as Prontas (enviadas para a coordenação e impressão); false = só as que ainda não estão prontas')
     },
     annotations: somenteLeitura
   }, async args => responder(() => listarAvaliacoes(dados, args)));
@@ -273,7 +273,7 @@ const registrarEscrita = (servidor: McpServer, dados: AppData, hoje: string, esc
 
   servidor.registerTool('preparar_situacao', {
     title: 'Preparar mudança de situação',
-    description: 'Mostra a prévia da mudança de situação de avaliações (Pendente, Agendada = alunos avisados, Pronta = elaborada, enviada e alunos avisados). NÃO grava: devolve um código para confirmar_gravacao.',
+    description: 'Mostra a prévia da mudança de situação de avaliações (Pendente = vai acontecer, alunos ainda não avisados; Agendada = comunicada aos alunos; Pronta = enviada para a coordenação e impressão). NÃO grava: devolve um código para confirmar_gravacao.',
     inputSchema: {
       avaliacoes: z.array(z.object({
         turma: z.string(),

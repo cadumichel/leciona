@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { AppData, CustomAssessment, GradeEntry, SchoolEvent, GradingConfig } from '../types';
+import { calculateStudentResult, columnNumbers, frozenColumnOrder, latestGrade, setGrade } from '../utils/grades';
 
 import {
    GraduationCap,
@@ -73,13 +74,16 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
    const currentTerm = terms[selectedTermIndex];
 
    // Configuração de Média (Ponderada ou Aritmética ou Custom)
-   const gradingConfig = useMemo(() => {
-      return data.gradingConfigs?.find(gc =>
-         gc.schoolId === selectedSchoolId &&
-         gc.classId === selectedClassId &&
-         gc.termIndex === selectedTermIndex
-      ) || { formula: 'arithmetic' as const, customFormula: '' };
-   }, [data.gradingConfigs, selectedSchoolId, selectedClassId, selectedTermIndex]);
+   const storedConfig = useMemo(() => data.gradingConfigs?.find(gc =>
+      gc.schoolId === selectedSchoolId &&
+      gc.classId === selectedClassId &&
+      gc.termIndex === selectedTermIndex
+   ), [data.gradingConfigs, selectedSchoolId, selectedClassId, selectedTermIndex]);
+
+   const gradingConfig = useMemo(
+      () => storedConfig || { formula: 'arithmetic' as const, customFormula: '', columnOrder: undefined as string[] | undefined },
+      [storedConfig]
+   );
 
    // Carrega a fórmula atual no estado temporário ao abrir modal ou mudar config
    useEffect(() => {
@@ -139,6 +143,17 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
       return [...scheduled, ...custom].sort((a, b) => a.date.localeCompare(b.date));
    }, [data.events, data.customAssessments, selectedSchoolId, selectedClassId, currentTerm, selectedTermIndex]);
 
+   // Número fixo de cada coluna (N1, N2…): colunas novas entram no fim, a fórmula não se desloca
+   const numbers = useMemo(() => columnNumbers(columns, gradingConfig.columnOrder), [columns, gradingConfig.columnOrder]);
+
+   // Fórmulas personalizadas salvas antes dos números fixos: congela a numeração atual uma vez
+   useEffect(() => {
+      if (storedConfig?.formula !== 'custom' || storedConfig.columnOrder || columns.length === 0) return;
+      onUpdateData({
+         gradingConfigs: data.gradingConfigs.map(gc => gc.id === storedConfig.id ? { ...gc, columnOrder: frozenColumnOrder(columns) } : gc)
+      });
+   }, [storedConfig, columns]);
+
    const handleGradeChange = (studentId: string, assessmentId: string, valueStr: string) => {
       const value = parseFloat(valueStr.replace(',', '.'));
       const col = columns.find(c => c.id === assessmentId);
@@ -149,74 +164,20 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
          return;
       }
 
-      // Remove nota anterior se existir
-      const otherGrades = data.grades.filter(g => !(g.studentId === studentId && g.assessmentId === assessmentId));
-
+      // Mantém o mesmo código da nota ao editar (evita notas repetidas entre aparelhos)
       if (!isNaN(value)) {
-         onUpdateData({ grades: [...otherGrades, { id: crypto.randomUUID(), studentId, assessmentId, value }] });
+         onUpdateData({ grades: setGrade(data.grades, studentId, assessmentId, value) });
       } else if (valueStr === '') {
-         onUpdateData({ grades: otherGrades });
+         onUpdateData({ grades: setGrade(data.grades, studentId, assessmentId, null) });
       }
    };
 
    const getStudentGrade = (studentId: string, assessmentId: string) => {
-      const entry = data.grades.find(g => g.studentId === studentId && g.assessmentId === assessmentId);
+      const entry = latestGrade(data.grades, studentId, assessmentId);
       return entry ? entry.value : '';
    };
 
-   const calculateAverage = (studentId: string) => {
-      if (columns.length === 0) return '-';
-
-      // Lógica para Fórmula Personalizada
-      if (gradingConfig.formula === 'custom' && gradingConfig.customFormula) {
-         try {
-            let formula = gradingConfig.customFormula.toUpperCase();
-
-            // Substitui N1, N2, etc pelos valores
-            columns.forEach((col, index) => {
-               const varName = `N${index + 1}`;
-               const grade = data.grades.find(g => g.studentId === studentId && g.assessmentId === col.id);
-               const val = grade ? grade.value : 0; // Se não tiver nota, assume 0
-               // Substituição segura usando regex com boundary \b para evitar substituir N1 em N10
-               const regex = new RegExp(`\\b${varName}\\b`, 'g');
-               formula = formula.replace(regex, val.toString());
-            });
-
-            // Avaliação segura simples
-            // Remove caracteres perigosos, permite apenas números, operadores básicos e parênteses
-            const sanitized = formula.replace(/[^0-9+\-*/().\s]/g, '');
-            if (!sanitized.trim()) return '-';
-
-            // eslint-disable-next-line no-new-func
-            const result = new Function(`return ${sanitized}`)();
-            return isNaN(result) || !isFinite(result) ? 'Erro' : result.toFixed(1);
-         } catch (e) {
-            return 'Erro';
-         }
-      }
-
-      let totalWeight = 0;
-      let weightedSum = 0;
-      let count = 0;
-      let sum = 0;
-
-      columns.forEach(col => {
-         const grade = data.grades.find(g => g.studentId === studentId && g.assessmentId === col.id);
-         if (grade) {
-            const w = col.weight || 1;
-            weightedSum += grade.value * w;
-            totalWeight += w;
-            sum += grade.value;
-            count++;
-         }
-      });
-
-      if (gradingConfig.formula === 'weighted') {
-         return totalWeight > 0 ? (weightedSum / totalWeight).toFixed(1) : '-';
-      } else {
-         return count > 0 ? (sum / count).toFixed(1) : '-';
-      }
-   };
+   const calculateAverage = (studentId: string) => calculateStudentResult(columns, data.grades, studentId, gradingConfig);
 
    const handleAddColumn = () => {
       if (!newColumnForm.title) return;
@@ -232,7 +193,13 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
          date: newColumnForm.date // Salva a data escolhida
       };
 
-      onUpdateData({ customAssessments: [...data.customAssessments, newCustom] });
+      onUpdateData({
+         customAssessments: [...data.customAssessments, newCustom],
+         // Coluna nova ganha o próximo número (N…) se a numeração já estiver guardada
+         ...(storedConfig?.columnOrder ? {
+            gradingConfigs: data.gradingConfigs.map(gc => gc.id === storedConfig.id ? { ...gc, columnOrder: [...storedConfig.columnOrder!, newCustom.id] } : gc)
+         } : {})
+      });
       setNewColumnForm({ title: '', weight: 1, maxGrade: 10, date: new Date().toISOString().split('T')[0] });
       setIsAddColumnModalOpen(false);
    };
@@ -271,14 +238,16 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
       }
    };
 
-   const handleSaveConfig = (formula: 'arithmetic' | 'weighted' | 'custom') => {
+   const handleSaveConfig = (formula: GradingConfig['formula']) => {
       const newConfig: GradingConfig = {
-         id: crypto.randomUUID(),
+         id: storedConfig?.id || crypto.randomUUID(), // mantém o mesmo código ao editar
          schoolId: selectedSchoolId,
          classId: selectedClassId,
          termIndex: selectedTermIndex,
          formula,
-         customFormula: formula === 'custom' ? tempCustomFormula : undefined
+         customFormula: formula === 'custom' ? tempCustomFormula : undefined,
+         // Guarda a numeração (N1, N2…) que está na tela
+         columnOrder: frozenColumnOrder(columns, storedConfig?.columnOrder)
       };
 
       // Remove config antiga se houver
@@ -384,7 +353,7 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
                            <th key={col.id} className="p-4 min-w-[140px] text-[10px] font-black text-slate-500 uppercase tracking-widest text-center relative group">
                               <div className="flex flex-col items-center gap-1">
                                  {/* Identificador N1, N2... */}
-                                 <span className="text-[8px] bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 px-1.5 rounded font-black mb-0.5">N{idx + 1}</span>
+                                 <span className="text-[8px] bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 px-1.5 rounded font-black mb-0.5">N{numbers.get(col.id)}</span>
 
                                  <span className={col.isCustom ? 'text-indigo-600' : 'text-slate-700 dark:text-slate-300'}>{col.title}</span>
 
@@ -417,7 +386,7 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
                            </th>
                         ))}
                         <th className="p-4 min-w-[100px] text-[10px] font-black text-slate-800 dark:text-white uppercase tracking-widest text-center bg-indigo-50/50 dark:bg-indigo-900/10">
-                           Média
+                           {gradingConfig.formula === 'sum' ? 'Soma' : 'Média'}
                         </th>
                      </tr>
                   </thead>
@@ -495,9 +464,10 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
                   </div>
 
                   <div className="space-y-6">
-                     <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-x-auto">
+                     <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
                         <button onClick={() => handleSaveConfig('arithmetic')} className={`flex-1 py-3 px-2 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${gradingConfig.formula === 'arithmetic' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Média Aritmética</button>
                         <button onClick={() => handleSaveConfig('weighted')} className={`flex-1 py-3 px-2 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${gradingConfig.formula === 'weighted' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Média Ponderada</button>
+                        <button onClick={() => handleSaveConfig('sum')} className={`flex-1 py-3 px-2 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${gradingConfig.formula === 'sum' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Soma</button>
                         <button onClick={() => handleSaveConfig('custom')} className={`flex-1 py-3 px-2 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${gradingConfig.formula === 'custom' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Fórmula Personalizada</button>
                      </div>
 
@@ -507,7 +477,7 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
                            {columns.map((col, idx) => (
                               <div key={col.id} className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
                                  <div className="flex-1">
-                                    <span className="block text-[10px] font-black text-slate-700 dark:text-white uppercase"><span className="text-indigo-500">N{idx + 1}</span> - {col.title}</span>
+                                    <span className="block text-[10px] font-black text-slate-700 dark:text-white uppercase"><span className="text-indigo-500">N{numbers.get(col.id)}</span> - {col.title}</span>
                                     <span className="text-[9px] font-bold text-slate-400 uppercase">{col.isCustom ? 'Personalizada' : 'Agendada'} ({col.displayDate})</span>
                                  </div>
                                  <div className="flex items-center gap-2">
@@ -528,7 +498,14 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
                      {gradingConfig.formula === 'arithmetic' && (
                         <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/20 text-center">
                            <p className="text-[10px] font-bold text-blue-600 uppercase">Na média aritmética, todas as notas têm o mesmo peso.</p>
-                           <p className="text-[9px] text-blue-400 mt-2 font-medium">(Soma das Notas) / (Total de Avaliações)</p>
+                           <p className="text-[9px] text-blue-400 mt-2 font-medium">Cada nota conta proporcionalmente à sua nota máxima (ex.: 3 de 3 conta como 10).</p>
+                        </div>
+                     )}
+
+                     {gradingConfig.formula === 'sum' && (
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/20 text-center">
+                           <p className="text-[10px] font-bold text-blue-600 uppercase">Na soma, a nota final é a soma das notas lançadas.</p>
+                           <p className="text-[9px] text-blue-400 mt-2 font-medium">Ex.: prova valendo 7 + trabalho valendo 3. Use a nota máxima de cada coluna.</p>
                         </div>
                      )}
 
@@ -539,7 +516,7 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
                               <div className="flex flex-wrap gap-2">
                                  {columns.map((col, idx) => (
                                     <span key={col.id} className="text-[9px] font-bold bg-white dark:bg-slate-800 px-2 py-1 rounded text-slate-600 dark:text-slate-300 border border-indigo-200 dark:border-indigo-800">
-                                       <strong className="text-indigo-600">N{idx + 1}</strong>: {col.title}
+                                       <strong className="text-indigo-600">N{numbers.get(col.id)}</strong>: {col.title}
                                     </span>
                                  ))}
                               </div>

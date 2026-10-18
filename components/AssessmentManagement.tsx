@@ -575,45 +575,28 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4 md:space-y-6 pb-20">
+    <div className="space-y-3 pb-20">
 
-      {/* ── Header ── */}
-      <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
-            <FileCheck className="text-blue-600 w-5 h-5" /> Avaliações
+      {/* ── Header (faixa compacta: título, total e botão) ── */}
+      <div className="bg-white dark:bg-slate-900 px-4 py-2.5 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
+            <FileCheck className="text-blue-600 w-4 h-4" /> Avaliações
           </h3>
-          <p className="text-[9px] text-slate-500 font-black uppercase tracking-tight mt-0.5">
+          <p className="text-[9px] text-slate-500 font-black uppercase tracking-tight">
             {filteredEvents.length} avaliação{filteredEvents.length !== 1 ? 'ões' : ''} {filterSchoolId !== 'all' || filterClassId !== 'all' || filterTermIdx !== 'all' || searchQuery ? 'encontrada' + (filteredEvents.length !== 1 ? 's' : '') : 'no total'}
           </p>
         </div>
         <button
           onClick={openNewForm}
-          className="bg-blue-600 text-white px-5 py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight shadow-lg shadow-blue-100 hover:brightness-110 transition-all flex items-center gap-2 self-start sm:self-auto shrink-0"
+          className="bg-blue-600 text-white px-4 py-2 rounded-md font-black uppercase text-[9px] tracking-tight shadow-md shadow-blue-100 hover:brightness-110 transition-all flex items-center gap-1.5 shrink-0"
         >
-          <Plus size={15} /> Nova Avaliação
+          <Plus size={14} /> Nova Avaliação
         </button>
       </div>
 
       {/* ── Filter Toolbar ── */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-3 md:p-4 space-y-3">
-        {/* Search row */}
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Buscar avaliação..."
-            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg border-none text-sm font-bold dark:text-white placeholder:text-slate-400 placeholder:font-normal"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-              <X size={14} />
-            </button>
-          )}
-        </div>
-
+      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm p-2.5 space-y-2">
         {/* Filter dropdowns row */}
         <div className="flex gap-2 flex-wrap">
           <div className="flex items-center gap-1 shrink-0">
@@ -656,11 +639,11 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
         </div>
 
         {/* Layout row */}
-        <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
           {/* Cards per row */}
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight shrink-0">Cards/linha:</span>
-            <div className="flex gap-1 overflow-x-auto custom-scrollbar pb-1">
+            <div className="flex gap-1 overflow-x-auto custom-scrollbar">
               {[1, 2, 3, 4, 5, 6].map(n => (
                 <button
                   key={n}
@@ -712,12 +695,29 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
               </button>
             ))}
           </div>
+
+          {/* Busca: ocupa o resto da linha (no celular, linha própria) */}
+          <div className="relative flex-1 min-w-[180px] max-sm:basis-full">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Buscar avaliação..."
+              className="w-full pl-8 pr-8 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-md border-none text-xs font-bold dark:text-white placeholder:text-slate-400 placeholder:font-normal"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X size={13} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* ── Grouped Assessment List ── */}
       {grouped.length === 0 ? (
-        <div className="py-16 bg-white dark:bg-slate-900 rounded-2xl border-2 border-dashed border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center gap-4 text-center">
+        <div className="py-16 bg-white dark:bg-slate-900 rounded-lg border-2 border-dashed border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center gap-4 text-center">
           <FileCheck size={40} className="text-slate-300 dark:text-slate-700" />
           <div>
             <p className="text-slate-500 font-black uppercase text-[10px] tracking-tight">
@@ -765,7 +765,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   onClick={() => openEditForm(event)}
                   title={event.title}
                   data-compact={cardsPerRow >= 3}
-                  className={`relative rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group overflow-hidden flex flex-col ${event.prepared
+                  className={`relative rounded-lg border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group overflow-hidden flex flex-col ${event.prepared
                     ? 'bg-emerald-100 border-emerald-300 dark:bg-emerald-900/40 dark:border-emerald-700'
                     : event.scheduled
                       ? 'bg-orange-100 border-orange-300 dark:bg-orange-900/40 dark:border-orange-700'
@@ -777,7 +777,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
 
                     {/* LEFT: Colored date badge */}
                     <div
-                      className="rounded-xl flex flex-col items-center justify-center shrink-0 data-[compact=true]:px-1.5 data-[compact=true]:py-1 px-2.5 py-1.5 data-[compact=true]:min-w-[40px] min-w-[48px]"
+                      className="rounded-md flex flex-col items-center justify-center shrink-0 data-[compact=true]:px-1.5 data-[compact=true]:py-1 px-2.5 py-1.5 data-[compact=true]:min-w-[40px] min-w-[48px]"
                       style={{ backgroundColor: color }}
                     >
                       <span className="data-[compact=true]:text-[6px] text-[8px] font-black text-white/80 uppercase tracking-widest leading-none">{dayAbbr}</span>
@@ -819,15 +819,18 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                     </div>
                   </div>
 
-                  {/* Removed Action Buttons */}
+                  {/* Assunto da avaliação: linha própria, largura toda (até 2 linhas) */}
+                  {event.description && event.description.trim() && (
+                    <p className="px-3 pb-2 -mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium flex items-start gap-1 leading-snug" title={event.description}>
+                      <BookOpen size={10} className="text-slate-300 shrink-0 mt-[2px]" />
+                      <span className="line-clamp-2 break-words">{event.description}</span>
+                    </p>
+                  )}
 
-                  {/* Bottom strip: school name + status badge + optional description */}
-                  <div className="border-t border-slate-50 dark:border-slate-800 px-3 py-1.5 flex items-center gap-2">
-                    <span className="data-[compact=true]:text-[7px] text-[9px] font-black truncate max-w-[50%]" style={{ color }}>{school?.name}</span>
-                    <div className="flex-1" />
-
+                  {/* Rodapé: situação, escola e indicador */}
+                  <div className="mt-auto border-t border-slate-50 dark:border-slate-800 px-3 py-1.5 flex items-center gap-2">
                     {/* Status Dropdown */}
-                    <div className="flex items-center z-10" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center z-10 shrink-0" onClick={e => e.stopPropagation()}>
                        <select
                          value={event.prepared ? 'ready' : event.scheduled ? 'scheduled' : 'pending'}
                          onChange={(e) => {
@@ -841,7 +844,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                             );
                             onUpdateData({ events: updatedEvents });
                          }}
-                         className={`text-[9px] font-bold uppercase tracking-tight outline-none border rounded-lg px-2 py-1 cursor-pointer transition-colors max-md:appearance-none text-center min-w-[70px] ${
+                         className={`text-[9px] font-bold uppercase tracking-tight outline-none border rounded-md px-2 py-1 cursor-pointer transition-colors max-md:appearance-none text-center min-w-[70px] ${
                             event.prepared ? 'bg-emerald-500 border-emerald-600 text-white' :
                             event.scheduled ? 'bg-orange-500 border-orange-600 text-white' :
                             'bg-slate-100 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
@@ -853,12 +856,8 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                        </select>
                     </div>
 
-                    {event.description && event.description.trim() && (
-                      <p className="data-[compact=true]:hidden text-[9px] text-slate-400 font-medium truncate flex items-center gap-1 max-w-[140px]">
-                        <BookOpen size={9} className="text-slate-300 shrink-0" />
-                        {event.description}
-                      </p>
-                    )}
+                    <span className="flex-1 min-w-0 text-[9px] font-black truncate" style={{ color }}>{school?.name}</span>
+
                     <span title={status.label} className={`p-1 rounded-md border shrink-0 flex items-center justify-center cursor-help transition-colors ${status.color}`}>
                       {status.icon}
                     </span>

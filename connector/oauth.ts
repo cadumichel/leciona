@@ -24,6 +24,17 @@ export const redirecionamentoPermitido = (uri: string): boolean => {
   return url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
 };
 
+/** Endereço recusado, para a mensagem de erro (sem parâmetros), para saber o que liberar. */
+const enderecoRecusado = (uri?: string) => {
+  if (!uri) return 'Endereço de retorno não permitido.';
+  try {
+    const url = new URL(uri);
+    return `Endereço de retorno não permitido: ${url.protocol}//${url.host}${url.pathname}`;
+  } catch {
+    return `Endereço de retorno não permitido: ${uri.slice(0, 120)}`;
+  }
+};
+
 export const urlsDoServidor = (origem: string) => ({
   emissor: origem,
   recurso: `${origem}/api/mcp`,
@@ -83,7 +94,7 @@ export interface PedidoDeAutorizacao {
 export const validarPedido = (p: Record<string, string | undefined>, origem: string): PedidoDeAutorizacao => {
   if (!p.client_id) throw new ErroOAuth('invalid_request', 'Falta client_id.');
   if (!p.redirect_uri || !redirecionamentoPermitido(p.redirect_uri)) {
-    throw new ErroOAuth('invalid_request', 'Endereço de retorno não permitido.');
+    throw new ErroOAuth('invalid_request', enderecoRecusado(p.redirect_uri));
   }
   if (p.response_type !== 'code') throw new ErroOAuth('unsupported_response_type', 'Use response_type=code.');
   if (!p.code_challenge || p.code_challenge_method !== 'S256') {
@@ -216,7 +227,8 @@ export const verificarAcesso = async (a: Assinatura, emailPermitido: string, cab
 export const registrarCliente = (corpo: any) => {
   const uris: unknown = corpo?.redirect_uris;
   if (!Array.isArray(uris) || !uris.length || !uris.every(u => typeof u === 'string' && redirecionamentoPermitido(u))) {
-    throw new ErroOAuth('invalid_redirect_uri', 'Endereço de retorno não permitido.');
+    const recusado = Array.isArray(uris) ? uris.find(u => typeof u !== 'string' || !redirecionamentoPermitido(u)) : undefined;
+    throw new ErroOAuth('invalid_redirect_uri', enderecoRecusado(typeof recusado === 'string' ? recusado : undefined));
   }
   return {
     client_id: `leciona-${crypto.randomUUID()}`,

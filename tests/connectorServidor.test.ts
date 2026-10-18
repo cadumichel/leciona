@@ -125,7 +125,10 @@ describe('conector: metadados e registro', () => {
     const ok = await reg([CALLBACK]);
     expect(ok.status).toBe(201);
     expect((await ok.json()).client_id).toMatch(/^leciona-/);
-    expect((await reg(['https://golpe.com/cb'])).status).toBe(400);
+    const recusado = await reg(['https://golpe.com/cb?x=1']);
+    expect(recusado.status).toBe(400);
+    // Mostra o endereço recusado (sem parâmetros), para saber o que liberar
+    expect((await recusado.json()).error_description).toBe('Endereço de retorno não permitido: https://golpe.com/cb');
   });
 });
 

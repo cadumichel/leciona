@@ -362,8 +362,10 @@ var descreverAvaliacao = (data, school, e) => {
     titulo: e.title,
     descricao: e.description || "",
     aula: descreverAula(school, e.slotId)?.texto,
+    situacao: e.prepared ? "Pronta" : e.scheduled ? "Agendada" : "Pendente",
     elaborada: !!e.prepared,
-    comunicadaAosAlunos: !!e.scheduled
+    // No app, escolher "Pronta" desliga "Agendada"; pronta já foi enviada e os alunos já sabem
+    comunicadaAosAlunos: !!e.prepared || !!e.scheduled
   };
 };
 var ordemDaAvaliacao = (school, e) => `${dia(e.date)} ${descreverAula(school, e.slotId)?.inicio || "99:99"}`;
@@ -614,7 +616,7 @@ var criarServidorMcp = (dados, hoje) => {
   const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use AAAA-MM-DD");
   servidor.registerTool("listar_avaliacoes", {
     title: "Listar avalia\xE7\xF5es",
-    description: "Provas e trabalhos cadastrados, com data, turma, aula e se j\xE1 foram elaborados. Filtre por per\xEDodo, escola, turma ou pelas que faltam elaborar.",
+    description: "Provas e trabalhos cadastrados, com data, turma, aula e situa\xE7\xE3o (Pendente, Agendada = alunos avisados, Pronta = elaborada, enviada e alunos avisados). Filtre por per\xEDodo, escola, turma ou pelas que faltam elaborar.",
     inputSchema: {
       de: data.optional().describe("Data inicial (AAAA-MM-DD)"),
       ate: data.optional().describe("Data final (AAAA-MM-DD)"),

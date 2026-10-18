@@ -124,8 +124,11 @@ describe('conector: avaliações', () => {
     const p2 = r.find(a => a.titulo === 'P2 Era Napoleônica')!;
     expect(p2).toMatchObject({
       data: '2026-10-27', dataBR: '27/10/2026', diaSemana: 'terça', escola: 'Cônsul', turma: '183',
-      tipo: 'Prova', aula: '5ª aula (16:45)', elaborada: false, comunicadaAosAlunos: true
+      tipo: 'Prova', aula: '5ª aula (16:45)', situacao: 'Agendada', elaborada: false, comunicadaAosAlunos: true
     });
+    // "Pronta" no app: elaborada, enviada e alunos avisados (o app desliga "Agendada")
+    expect(r.find(a => a.titulo === 'P1 Revolução Francesa')).toMatchObject({ situacao: 'Pronta', elaborada: true, comunicadaAosAlunos: true });
+    expect(r.find(a => a.titulo === 'Prova turma excluída')).toMatchObject({ situacao: 'Pendente', elaborada: false, comunicadaAosAlunos: false });
     expect(r.find(a => a.titulo === 'Prova turma excluída')!.turma).toBe('153');
     semDadosDeAlunos(r);
   });

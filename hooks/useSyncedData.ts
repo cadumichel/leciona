@@ -208,8 +208,16 @@ interface SyncOptions {
 export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, localDelayMs = 400, retryDelayMs = 30000 }: SyncOptions) => {
   const [data, setData] = useState<SyncedData>(loadLocalData);
   const [user, setUser] = useState<User | null>(null);
+  // O Firebase já respondeu se há conta conectada (antes disso "user" é null mesmo conectado)
+  const [authReady, setAuthReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  // Desde quando a gravação na nuvem está falhando sem parar (null = não está falhando)
+  const [errorSince, setErrorSince] = useState<number | null>(null);
+  useEffect(() => {
+    if (saveStatus === 'error') setErrorSince(prev => prev ?? Date.now());
+    else if (saveStatus === 'saved') setErrorSince(null);
+  }, [saveStatus]);
   // Muda para forçar uma nova tentativa de envio (voltou a internet, falhou, chegou dado da nuvem)
   const [syncTick, setSyncTick] = useState(0);
 
@@ -372,6 +380,7 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
 
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      setAuthReady(true);
       userRef.current = currentUser;
       cloudReadyRef.current = false;
       lastCloudRef.current = null;
@@ -570,5 +579,5 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
 
   const requestSync = useCallback(() => setSyncTick(t => t + 1), []);
 
-  return { data, user, saveStatus, lastSavedTime, updateData, logout, restoreData, startNewSchoolYear, requestSync };
+  return { data, user, authReady, errorSince, saveStatus, lastSavedTime, updateData, logout, restoreData, startNewSchoolYear, requestSync };
 };

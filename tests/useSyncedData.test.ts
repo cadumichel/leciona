@@ -7,6 +7,7 @@ const fb = vi.hoisted(() => ({
   authCb: null as null | ((u: any) => void),
   snapCb: null as null | ((s: any) => void),
   setDoc: vi.fn(),
+  getDocFromServer: vi.fn(),
   signOut: vi.fn(async () => {})
 }));
 
@@ -18,6 +19,7 @@ vi.mock('firebase/auth', () => ({
 vi.mock('firebase/firestore', () => ({
   doc: (_db: any, ...path: string[]) => ({ path: path.join('/') }),
   setDoc: (...args: any[]) => fb.setDoc(...args),
+  getDocFromServer: (...args: any[]) => fb.getDocFromServer(...args),
   onSnapshot: (_ref: any, cb: any) => { fb.snapCb = cb; return () => {}; },
   Timestamp: { now: () => ({ toDate: () => new Date('2026-10-17T12:00:00Z') }) }
 }));
@@ -50,6 +52,9 @@ beforeEach(() => {
   fb.snapCb = null;
   fb.setDoc.mockReset();
   fb.setDoc.mockImplementation(async () => {});
+  // Padrão: sem resposta do servidor (como sem internet), o envio segue direto
+  fb.getDocFromServer.mockReset();
+  fb.getDocFromServer.mockImplementation(async () => { throw new Error('offline'); });
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
@@ -207,5 +212,40 @@ describe('virada do ano letivo entre aparelhos', () => {
     expect(lastSetDocPayload()._yearResetAt).toBe('2026-12-20T15:00:00.000Z');
     expect(lastSetDocPayload().logs).toEqual([]);
     expect(localStorage.getItem('leciona-year-reset-seen')).toBe('2026-12-20T15:00:00.000Z');
+  });
+});
+
+describe('gravação do app não apaga o que outro aparelho ou o conector gravou', () => {
+  it('se a nuvem mudou e o app ainda não viu, junta antes de enviar', async () => {
+    const hook = renderHook(() => useSyncedData(opts));
+    await login();
+    act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L0')] }))));
+
+    // O conector grava uma prova na nuvem; o app (em segundo plano) não recebeu o aviso
+    const comProva = cloudDoc({
+      logs: [log('L0')],
+      events: [{ id: 'prova-do-claude', type: 'test', schoolId: 'S1', classId: 'C1', date: '2026-10-20T00:00:00.000Z', title: 'P3', _m: 5 }]
+    });
+    fb.getDocFromServer.mockImplementation(async () => snap(comProva));
+
+    // O professor edita no app
+    act(() => hook.result.current.updateData({ logs: [...hook.result.current.data.logs, log('A')] }));
+
+    await waitFor(() => expect(fb.setDoc).toHaveBeenCalled());
+    const enviado = lastSetDocPayload();
+    expect(enviado.events.map((e: any) => e.id)).toEqual(['prova-do-claude']);
+    expect(enviado.logs.map((l: any) => l.id).sort()).toEqual(['A', 'L0']);
+    expect(hook.result.current.data.events.map((e: any) => e.id)).toEqual(['prova-do-claude']);
+  });
+
+  it('sem novidade na nuvem, envia direto (uma consulta, uma gravação)', async () => {
+    const hook = renderHook(() => useSyncedData(opts));
+    await login();
+    const nuvem = cloudDoc({ logs: [log('L0')] });
+    act(() => fb.snapCb!(snap(nuvem)));
+    fb.getDocFromServer.mockImplementation(async () => snap(nuvem));
+    act(() => hook.result.current.updateData({ logs: [...hook.result.current.data.logs, log('A')] }));
+    await waitFor(() => expect(fb.setDoc).toHaveBeenCalledTimes(1));
+    expect(lastSetDocPayload().logs.map((l: any) => l.id)).toEqual(['L0', 'A']);
   });
 });

@@ -14,7 +14,7 @@ import {
 } from '../utils/sync';
 import { auth, db } from '../services/firebaseConnection';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { doc, setDoc, onSnapshot, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, getDocFromServer, onSnapshot, Timestamp } from 'firebase/firestore';
 
 export const STORAGE_KEY = 'leciona-data-v1';
 /** '1' = há alterações locais que ainda não chegaram à nuvem */
@@ -296,8 +296,43 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
     saveInFlightRef.current = true;
     setSaveStatus(navigator.onLine === false ? 'pending' : 'saving');
     const normalized = normalizeForCompare(payloadData);
+    const docRef = doc(db, 'users', currentUser.uid);
+
+    // Antes de gravar (o documento inteiro), confere se alguém gravou na nuvem algo que este
+    // aparelho ainda não viu (outro aparelho ou o conector do Claude, ex.: o celular voltando do
+    // segundo plano). Se sim, junta primeiro e grava na próxima tentativa, sem apagar nada.
+    // Sem internet a consulta falha e o envio segue como antes (fica na fila do Firestore).
+    if (navigator.onLine !== false) {
+      try {
+        const server = await withTimeout(getDocFromServer(docRef), 5000);
+        if (server.exists()) {
+          const cloud = prepareCloudData(server.data());
+          const normalizedCloud = normalizeForCompare(cloud);
+          const novidade = lastCloudRef.current && !deepEqual(normalizedCloud, lastCloudRef.current) && !deepEqual(normalizedCloud, normalized);
+          if (novidade) {
+            console.log('🔀 [SYNC] A nuvem mudou desde a última leitura: juntando antes de enviar.');
+            lastCloudRef.current = normalizedCloud;
+            setData(prev => {
+              const merged = mergeAppData(cloud, prev);
+              return {
+                ...merged,
+                logs: deduplicateLogs(merged.logs as LessonLog[]),
+                settings: { ...merged.settings, googleSyncEnabled: true }
+              } as SyncedData;
+            });
+            saveInFlightRef.current = false;
+            setSaveStatus('pending');
+            setSyncTick(t => t + 1);
+            return;
+          }
+        }
+      } catch {
+        // Sem conexão com o servidor: segue para o envio normal
+      }
+    }
+
     try {
-      await setDoc(doc(db, 'users', currentUser.uid), { ...payloadData, updatedAt: Timestamp.now() });
+      await setDoc(docRef, { ...payloadData, updatedAt: Timestamp.now() });
       lastCloudRef.current = normalized;
       if (dataRef.current === snapshot) clearPending();
       setLastSavedTime(new Date().toLocaleTimeString());

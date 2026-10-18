@@ -3,7 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { z } from 'zod';
 import { AppData } from '../types';
 import {
-  ConsultaError, avaliacoesProximas, calendario, conteudoDesdeUltimaAvaliacao, hojeEmBrasilia, listarAvaliacoes, turmasEGrade
+  ConsultaError, aulasRestantes, avaliacoesProximas, calendario, conteudoDesdeUltimaAvaliacao, hojeEmBrasilia, listarAvaliacoes, turmasEGrade
 } from './consultas';
 import {
   CAMPO_COPIA, InfoDaCopia, copiasVencidas, dadosDaCopia, documentoRestaurado, idAntesDeRestaurar, idDaCopiaDiaria,
@@ -235,6 +235,17 @@ export const criarServidorMcp = (dados: AppData, hoje: string, escrita?: Escrita
     },
     annotations: somenteLeitura
   }, async args => responder(() => avaliacoesProximas(dados, { ...args, hoje })));
+
+  servidor.registerTool('aulas_restantes', {
+    title: 'Aulas que faltam',
+    description: 'Quantas aulas ainda faltam com uma turma (de hoje até o fim do bimestre/trimestre atual, ou até uma data), sem feriados, recessos e eventos que suspendem aula, com as datas e a próxima avaliação. Útil para planejar o ritmo do conteúdo.',
+    inputSchema: {
+      turma: z.string().describe('Nome da turma, ex.: "183"'),
+      escola: z.string().optional().describe('Nome da escola (necessário se a turma existir em mais de uma)'),
+      ate: data.optional().describe('Data final (padrão: fim do período atual)')
+    },
+    annotations: somenteLeitura
+  }, async args => responder(() => aulasRestantes(dados, { ...args, hoje })));
 
   servidor.registerTool('turmas_e_grade', {
     title: 'Turmas e grade',

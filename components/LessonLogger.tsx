@@ -45,6 +45,7 @@ import { getClassName } from '../utils/classRefs';
 import { getLessonDisplayItems, deriveStatsFromLessons, LessonDisplayItem } from '../utils/lessonStats';
 import { sanitizeText, LIMITS } from '../utils/validation';
 import { findPreviousLesson } from '../utils/retrospective';
+import { countRemainingLessons } from '../utils/remainingLessons';
 import { useToast } from '../hooks/useToast';
 
 interface LessonLoggerProps {
@@ -828,6 +829,17 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       slotId: activeLesson.schedule.slotId,
       startTime: activeLesson.slot.startTime,
       isPrivate: activeLesson.type !== 'school'
+    });
+  }, [activeLesson, data]);
+
+  // Aulas que faltam até o fim do período (utils/remainingLessons.ts)
+  const remainingInfo = useMemo(() => {
+    if (!activeLesson || activeLesson.type !== 'school') return null;
+    return countRemainingLessons(data, {
+      schoolId: activeLesson.institution.id,
+      classId: activeLesson.schedule.classId,
+      date: activeLesson.date,
+      afterStartTime: activeLesson.slot.startTime
     });
   }, [activeLesson, data]);
 
@@ -2155,6 +2167,23 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               {lastLessonInfo.homework && <div className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase">Tarefa: {lastLessonInfo.homework}</div>}
               <div className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase">Em: {formatDateBR(lastLessonInfo.date)}</div>
             </div>
+          </div>
+        )}
+
+        {remainingInfo && activeLesson && (
+          <div className="-mt-4 md:-mt-6 mb-6 md:mb-8 px-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] md:text-[10px] font-bold text-slate-500 dark:text-slate-400">
+            <CalendarRange size={12} className="text-primary shrink-0" />
+            <span>
+              {remainingInfo.count === 0
+                ? `Última aula da ${getClassName(data, activeLesson.institution.id, activeLesson.schedule.classId)} no ${remainingInfo.term.name}`
+                : `${remainingInfo.count === 1 ? 'Falta 1 aula' : `Faltam ${remainingInfo.count} aulas`} da ${getClassName(data, activeLesson.institution.id, activeLesson.schedule.classId)} até o fim do ${remainingInfo.term.name} (${formatDateBR(remainingInfo.term.end)})`}
+            </span>
+            {remainingInfo.nextAssessment && (
+              <span className="text-slate-400">
+                · próxima avaliação: {remainingInfo.nextAssessment.title} em {formatDateBR(remainingInfo.nextAssessment.date).slice(0, 5)}
+                {remainingInfo.nextAssessment.lessonsBefore > 0 && `, daqui a ${remainingInfo.nextAssessment.lessonsBefore} ${remainingInfo.nextAssessment.lessonsBefore === 1 ? 'aula' : 'aulas'}`}
+              </span>
+            )}
           </div>
         )}
 

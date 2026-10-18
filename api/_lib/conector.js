@@ -25,9 +25,12 @@ var getSafeDate = (dateStr) => {
 };
 var getHolidayName = (date) => {
   const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const key = `${month}-${day}`;
+  const day2 = String(date.getDate()).padStart(2, "0");
+  const key = `${month}-${day2}`;
   return BRAZIL_HOLIDAYS[key] || null;
+};
+var isHoliday = (date) => {
+  return !!getHolidayName(date);
 };
 var parseTimeToMinutes = (time) => {
   const [hours, minutes] = time.split(":").map(Number);
@@ -186,9 +189,188 @@ var isLessonBlocked = (data, dateStr, schoolId, shiftId, classId) => {
   }
   return false;
 };
+var getLessonDisplayItems = (data, filters) => {
+  const items = [];
+  const { start, end, schoolId: filterInstId, classId: filterClassId, periodIdx: filterPeriodIdx, showWithContent, showWithoutContent } = filters;
+  const startDate = /* @__PURE__ */ new Date(start + "T00:00:00");
+  const endDate = /* @__PURE__ */ new Date(end + "T00:00:00");
+  const now = /* @__PURE__ */ new Date();
+  const todayStr = now.toLocaleDateString("en-CA");
+  const currentMins = now.getHours() * 60 + now.getMinutes();
+  const cursor = new Date(startDate);
+  while (cursor <= endDate) {
+    const dateStr = cursor.toLocaleDateString("en-CA");
+    const dayOfWeek = cursor.getDay();
+    if (!isHoliday(cursor)) {
+      const dailySchedules = getSchedulesForDate(data, dateStr);
+      dailySchedules.forEach((s) => {
+        if (Number(s.dayOfWeek) !== dayOfWeek || s.classId === "window") return;
+        if (filterInstId !== "all" && s.schoolId !== filterInstId) return;
+        if (filterClassId !== "all" && s.classId !== filterClassId) return;
+        const school = data.schools.find((sc) => sc.id === s.schoolId);
+        if (!school || school.deleted) return;
+        if (isLessonBlocked(data, dateStr, s.schoolId, s.shiftId, s.classId)) return;
+        const slot = school.shifts.find((sh) => sh.id === s.shiftId)?.slots.find((sl) => sl.id === s.slotId);
+        if (!slot) return;
+        const schoolCalendars = data.calendars.filter((c) => c.schoolId === s.schoolId);
+        let matchingCalendar = null;
+        if (schoolCalendars.length > 0) {
+          matchingCalendar = schoolCalendars.find((c) => dateStr >= c.start && dateStr <= c.end);
+          if (!matchingCalendar) return;
+          if (filterPeriodIdx && filterPeriodIdx !== "all") {
+            const term = matchingCalendar.terms[Number(filterPeriodIdx)];
+            if (term && (dateStr < term.start || dateStr > term.end)) return;
+          }
+        }
+        let log = data.logs.find((l) => l.date.startsWith(dateStr) && l.slotId === s.slotId && l.schoolId === s.schoolId);
+        if (!log) {
+          log = data.logs.find((l) => {
+            if (!l.date.startsWith(dateStr)) return false;
+            if (l.schoolId !== s.schoolId) return false;
+            if (l.startTime !== slot.startTime) return false;
+            if (l.classId === s.classId) return true;
+            const classObj = school.classes.find((c) => (typeof c === "string" ? c : c.id) === s.classId);
+            const className = classObj ? typeof classObj === "string" ? classObj : classObj.name : s.classId;
+            if (l.classId === className) return true;
+            const logClassObj = school.classes.find((c) => (typeof c === "string" ? c : c.id) === l.classId);
+            const logClassName = logClassObj ? typeof logClassObj === "string" ? logClassObj : logClassObj.name : l.classId;
+            return className === logClassName;
+          });
+        }
+        if (log && log.status === "removed") return;
+        if (log && log.type === "substitution") return;
+        const hasContent = !!(log && (log.subject || log.homework || log.notes || log.attendance && log.attendance.length > 0));
+        if (showWithContent !== void 0 && showWithoutContent !== void 0) {
+          if (hasContent && !showWithContent) return;
+          if (!hasContent && !showWithoutContent) return;
+        }
+        let isPast = false;
+        if (dateStr < todayStr) isPast = true;
+        else if (dateStr === todayStr) isPast = currentMins >= parseTimeToMinutes(slot.endTime);
+        items.push({
+          id: `${dateStr}-${s.schoolId}-${s.slotId}`,
+          schedule: s,
+          log,
+          date: dateStr,
+          institution: school,
+          slot,
+          dayOfWeek,
+          hasContent,
+          isPast
+        });
+      });
+      if (data.settings.isPrivateTeacher && data.students) {
+        data.students.forEach((st) => {
+          if (filterInstId !== "all" && st.id !== filterInstId) return;
+          if (filterClassId !== "all" && st.name !== filterClassId) return;
+          if (dateStr < st.startDate) return;
+          if (isLessonBlocked(data, dateStr, st.id)) return;
+          st.schedules.filter((ps) => Number(ps.dayOfWeek) === dayOfWeek).forEach((ps) => {
+            const log = data.logs.find((l) => l.date.startsWith(dateStr) && l.slotId === ps.id && l.studentId === st.id);
+            if (log && log.status === "removed") return;
+            const hasContent = !!(log && (log.subject || log.homework || log.notes));
+            if (showWithContent !== void 0 && showWithoutContent !== void 0) {
+              if (hasContent && !showWithContent) return;
+              if (!hasContent && !showWithoutContent) return;
+            }
+            const slot = { id: ps.id, startTime: ps.startTime, endTime: ps.endTime, label: "Particular", type: "class" };
+            let isPast = false;
+            if (dateStr < todayStr) isPast = true;
+            else if (dateStr === todayStr) isPast = currentMins >= parseTimeToMinutes(ps.endTime);
+            items.push({
+              id: `${dateStr}-${st.id}-${ps.id}`,
+              schedule: { dayOfWeek, schoolId: st.id, shiftId: "private", slotId: ps.id, classId: st.name },
+              log,
+              date: dateStr,
+              institution: st,
+              slot,
+              dayOfWeek,
+              hasContent,
+              isPast
+            });
+          });
+        });
+      }
+    }
+    const manualLogs = data.logs.filter(
+      (l) => l.date.startsWith(dateStr) && (l.type === "extra" || l.type === "substitution" || l.type === "regular") && (filterInstId === "all" || l.schoolId === filterInstId) && (filterClassId === "all" || l.classId === filterClassId)
+    );
+    manualLogs.forEach((l) => {
+      const alreadyProcessed = items.some((i) => i.log?.id === l.id);
+      if (alreadyProcessed) return;
+      const school = data.schools.find((sc) => sc.id === l.schoolId);
+      if (!school || school.deleted) return;
+      const schoolCalendars = data.calendars.filter((c) => c.schoolId === l.schoolId);
+      if (schoolCalendars.length > 0) {
+        const matchingCalendar = schoolCalendars.find((c) => dateStr >= c.start && dateStr <= c.end);
+        if (!matchingCalendar) return;
+        if (filterPeriodIdx && filterPeriodIdx !== "all") {
+          const term = matchingCalendar.terms[Number(filterPeriodIdx)];
+          if (term && (dateStr < term.start || dateStr > term.end)) return;
+        }
+      }
+      const hasContent = true;
+      if (showWithContent !== void 0 && showWithoutContent !== void 0) {
+        if (!showWithContent) return;
+      }
+      let slot = { id: l.slotId, startTime: l.startTime || "00:00", endTime: l.endTime || "00:00", label: l.type === "extra" ? "Extra" : "Substitui\xE7\xE3o", type: "class" };
+      if (school.shifts) {
+        const found = school.shifts.flatMap((s) => s.slots).find((s) => s.id === l.slotId);
+        if (found) slot = found;
+      }
+      items.push({
+        id: l.id,
+        schedule: { dayOfWeek, schoolId: l.schoolId, shiftId: l.type || "extra", slotId: l.slotId, classId: l.classId },
+        log: l,
+        date: dateStr,
+        institution: school,
+        slot,
+        dayOfWeek,
+        isExtra: l.type === "extra",
+        isSubstitution: l.type === "substitution",
+        hasContent: true,
+        isPast: true
+        // Logs are usually past/done
+      });
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return items;
+};
 
 // utils/dashboardWeb.ts
 var lessonNumberInShift = (slots, slotId) => slots.filter((s) => s.type !== "break").findIndex((s) => s.id === slotId) + 1;
+
+// utils/remainingLessons.ts
+var day = (d) => String(d || "").split("T")[0];
+var findTerm = (data, schoolId, date) => {
+  const calendar = (data.calendars || []).find((c) => c.schoolId === schoolId && date >= day(c.start) && date <= day(c.end));
+  if (!calendar) return null;
+  const index = (calendar.terms || []).findIndex((t) => t.start && t.end && date >= day(t.start) && date <= day(t.end));
+  return index >= 0 ? { term: calendar.terms[index], index } : null;
+};
+var countRemainingLessons = (data, ref) => {
+  const found = findTerm(data, ref.schoolId, ref.date);
+  if (!found) return null;
+  const until = ref.until || day(found.term.end);
+  if (until < ref.date) return { count: 0, dates: [], term: found.term, termIndex: found.index };
+  const after = ref.afterStartTime !== void 0 ? parseTimeToMinutes(ref.afterStartTime) : -1;
+  const lessons = getLessonDisplayItems(data, { start: ref.date, end: until, schoolId: ref.schoolId, classId: "all" }).filter((item) => item.institution.id === ref.schoolId && isSameClassRef(data, ref.schoolId, item.schedule.classId, ref.classId)).filter((item) => item.date > ref.date || parseTimeToMinutes(item.slot.startTime || "00:00") > after).sort((a, b) => a.date.localeCompare(b.date) || parseTimeToMinutes(a.slot.startTime || "00:00") - parseTimeToMinutes(b.slot.startTime || "00:00"));
+  const result = { count: lessons.length, dates: lessons.map((l) => l.date), term: found.term, termIndex: found.index };
+  const next = (data.events || []).filter((e) => (e.type === "test" || e.type === "work") && e.schoolId === ref.schoolId && isSameClassRef(data, ref.schoolId, e.classId, ref.classId) && day(e.date) >= ref.date && day(e.date) <= until).filter((e) => {
+    if (day(e.date) !== ref.date || after < 0) return true;
+    const slot = (data.schools.find((s) => s.id === ref.schoolId)?.shifts || []).flatMap((s) => s.slots).find((s) => s.id === e.slotId);
+    return !slot || parseTimeToMinutes(slot.startTime) > after;
+  }).sort((a, b) => day(a.date).localeCompare(day(b.date)))[0];
+  if (next) {
+    const nextDay = day(next.date);
+    const slot = (data.schools.find((s) => s.id === ref.schoolId)?.shifts || []).flatMap((s) => s.slots).find((s) => s.id === next.slotId);
+    const nextStart = slot ? parseTimeToMinutes(slot.startTime) : 0;
+    const lessonsBefore = lessons.filter((l) => l.date < nextDay || l.date === nextDay && parseTimeToMinutes(l.slot.startTime || "00:00") < nextStart).length;
+    result.nextAssessment = { title: next.title, date: nextDay, lessonsBefore };
+  }
+  return result;
+};
 
 // connector/consultas.ts
 var ConsultaError = class extends Error {
@@ -421,6 +603,29 @@ var calendario = (data, opcoes) => {
         }))
       };
     })
+  };
+};
+var aulasRestantes = (data, opcoes) => {
+  const { school, cls } = encontrarTurma(data, opcoes.turma, opcoes.escola);
+  const ate = validarData(opcoes.ate, "ate");
+  const r = countRemainingLessons(data, { schoolId: school.id, classId: cls.id, date: opcoes.hoje, until: ate });
+  if (!r) throw new ConsultaError(`A ${school.name} n\xE3o tem bimestres/trimestres cadastrados que incluam hoje. Cadastre o calend\xE1rio da escola.`);
+  const fim = ate || dia(r.term.end);
+  return {
+    escola: school.name,
+    turma: cls.name,
+    periodo: r.term.name,
+    de: opcoes.hoje,
+    ate: fim,
+    ateBR: formatDateBR(fim),
+    aulas: r.count,
+    datas: r.dates.map((d) => `${DIAS_SEMANA[diaDaSemana(d)]} ${formatDateBR(d)}`),
+    proximaAvaliacao: r.nextAssessment && {
+      titulo: r.nextAssessment.title,
+      data: r.nextAssessment.date,
+      dataBR: formatDateBR(r.nextAssessment.date),
+      aulasAntes: r.nextAssessment.lessonsBefore
+    }
   };
 };
 
@@ -1512,6 +1717,16 @@ var criarServidorMcp = (dados, hoje, escrita) => {
     },
     annotations: somenteLeitura
   }, async (args) => responder(() => avaliacoesProximas(dados, { ...args, hoje })));
+  servidor.registerTool("aulas_restantes", {
+    title: "Aulas que faltam",
+    description: "Quantas aulas ainda faltam com uma turma (de hoje at\xE9 o fim do bimestre/trimestre atual, ou at\xE9 uma data), sem feriados, recessos e eventos que suspendem aula, com as datas e a pr\xF3xima avalia\xE7\xE3o. \xDAtil para planejar o ritmo do conte\xFAdo.",
+    inputSchema: {
+      turma: z.string().describe('Nome da turma, ex.: "183"'),
+      escola: z.string().optional().describe("Nome da escola (necess\xE1rio se a turma existir em mais de uma)"),
+      ate: data.optional().describe("Data final (padr\xE3o: fim do per\xEDodo atual)")
+    },
+    annotations: somenteLeitura
+  }, async (args) => responder(() => aulasRestantes(dados, { ...args, hoje })));
   servidor.registerTool("turmas_e_grade", {
     title: "Turmas e grade",
     description: "Escolas, turmas, hor\xE1rios dos turnos e grade semanal em vigor na data (aulas seguidas aparecem separadas).",

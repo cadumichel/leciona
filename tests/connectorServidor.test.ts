@@ -216,7 +216,7 @@ describe('conector: servidor MCP', () => {
     expect(resp.status).toBe(200);
     const { result } = await resp.json();
     expect(result.tools.map((t: any) => t.name).sort()).toEqual([
-      'avaliacoes_proximas', 'calendario', 'confirmar_gravacao', 'conteudo_desde_ultima_avaliacao', 'desfazer_gravacao',
+      'aulas_restantes', 'avaliacoes_proximas', 'calendario', 'confirmar_gravacao', 'conteudo_desde_ultima_avaliacao', 'desfazer_gravacao',
       'listar_avaliacoes', 'listar_copias', 'preparar_avaliacoes', 'preparar_calendario', 'preparar_conteudo', 'preparar_eventos',
       'preparar_recessos', 'preparar_restauracao', 'preparar_situacao', 'turmas_e_grade'
     ]);

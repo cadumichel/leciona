@@ -104,9 +104,9 @@ export const validarPedido = (p: Record<string, string | undefined>, origem: str
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 
-type TipoDeToken = 'codigo' | 'acesso' | 'renovacao';
+type TipoDeToken = 'codigo' | 'acesso' | 'renovacao' | 'plano' | 'lote';
 
-interface Assinatura { chave: Uint8Array; origem: string; agora?: Date }
+export interface Assinatura { chave: Uint8Array; origem: string; agora?: Date }
 
 const emitir = (a: Assinatura, tipo: TipoDeToken, dados: Record<string, unknown>, sub: string, duracao: number) => {
   const agora = Math.floor((a.agora ?? new Date()).getTime() / 1000);
@@ -136,6 +136,29 @@ const ler = async (a: Assinatura, tipo: TipoDeToken, token: string) => {
 };
 
 export interface Conta { uid: string; email: string }
+
+/**
+ * Prévias de gravação (plano) e lotes gravados (para desfazer) viajam assinados: o Claude só
+ * consegue gravar exatamente o que foi mostrado ao Cadu, e só desfazer o que o conector gravou.
+ */
+const DURACAO_PLANO = 60 * 60;
+const DURACAO_LOTE = 30 * 24 * 60 * 60;
+
+export const assinarPlano = (a: Assinatura, uid: string, plano: unknown) =>
+  emitir(a, 'plano', { plano }, uid, DURACAO_PLANO);
+
+export const assinarLote = (a: Assinatura, uid: string, lote: unknown) =>
+  emitir(a, 'lote', { lote }, uid, DURACAO_LOTE);
+
+export const lerPlano = async (a: Assinatura, uid: string, codigo: string) => {
+  const t = await ler(a, 'plano', codigo);
+  return t && t.sub === uid ? (t.plano as unknown) : null;
+};
+
+export const lerLote = async (a: Assinatura, uid: string, codigo: string) => {
+  const t = await ler(a, 'lote', codigo);
+  return t && t.sub === uid ? (t.lote as unknown) : null;
+};
 
 export const emitirCodigo = (a: Assinatura, pedido: PedidoDeAutorizacao, conta: Conta) =>
   emitir(a, 'codigo', {

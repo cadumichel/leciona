@@ -8,7 +8,7 @@ export default {
       conector = await import('../_lib/conector.js');
     } catch (e) {
       console.error(e);
-      return Response.json({ error: 'server_error', error_description: `Falha ao carregar o conector: ${(e as Error).message}` }, { status: 500 });
+      return Response.json({ error: 'server_error', error_description: `Falha ao carregar o conector (Node ${process.version}): ${(e as Error).message}` }, { status: 500 });
     }
     return conector.tratar(r => (req: Request) => (req.method === 'POST' ? r.autorizarPost(req) : r.autorizarGet(req)))(req);
   }

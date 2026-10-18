@@ -4,6 +4,7 @@ import { getClassName, isSameClassRef } from '../utils/classRefs';
 import { getSchedulesForDate } from '../utils/schedule';
 import { isLessonBlocked } from '../utils/lessonStats';
 import { lessonNumberInShift } from '../utils/dashboardWeb';
+import { countRemainingLessons } from '../utils/remainingLessons';
 
 /**
  * Consultas do conector do Leciona para o Claude (etapa 1: só leitura).
@@ -439,5 +440,35 @@ export const calendario = (data: AppData, opcoes: { de: string; ate: string; esc
           }))
       };
     })
+  };
+};
+
+// ── Aulas que faltam ──────────────────────────────────────────────────────────
+
+/**
+ * Aulas que faltam para a turma de hoje (inclusive) até o fim do período atual ou até uma data,
+ * sem feriados, recessos e eventos que suspendem aula (utils/remainingLessons.ts).
+ */
+export const aulasRestantes = (data: AppData, opcoes: { turma: string; escola?: string; ate?: string; hoje: string }) => {
+  const { school, cls } = encontrarTurma(data, opcoes.turma, opcoes.escola);
+  const ate = validarData(opcoes.ate, 'ate');
+  const r = countRemainingLessons(data, { schoolId: school.id, classId: cls.id, date: opcoes.hoje, until: ate });
+  if (!r) throw new ConsultaError(`A ${school.name} não tem bimestres/trimestres cadastrados que incluam hoje. Cadastre o calendário da escola.`);
+  const fim = ate || dia(r.term.end);
+  return {
+    escola: school.name,
+    turma: cls.name,
+    periodo: r.term.name,
+    de: opcoes.hoje,
+    ate: fim,
+    ateBR: formatDateBR(fim),
+    aulas: r.count,
+    datas: r.dates.map(d => `${DIAS_SEMANA[diaDaSemana(d)]} ${formatDateBR(d)}`),
+    proximaAvaliacao: r.nextAssessment && {
+      titulo: r.nextAssessment.title,
+      data: r.nextAssessment.date,
+      dataBR: formatDateBR(r.nextAssessment.date),
+      aulasAntes: r.nextAssessment.lessonsBefore
+    }
   };
 };

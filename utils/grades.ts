@@ -1,4 +1,4 @@
-import { GradeEntry, GradingConfig } from '../types';
+import { CustomAssessment, GradeEntry, GradingConfig, SchoolEvent, Term } from '../types';
 
 /**
  * Cálculo das notas (tela Notas).
@@ -8,6 +8,11 @@ import { GradeEntry, GradingConfig } from '../types';
  * - Soma: soma das notas como lançadas (ex.: prova valendo 7 + trabalho valendo 3).
  * - Fórmula personalizada: N1, N2… são as notas como lançadas. Cada coluna tem um número fixo
  *   (`columnOrder` na configuração), para a fórmula não mudar quando entra uma coluna nova.
+ * - Recuperação e 2ª chamada (utils/recovery.ts), nas médias e na soma:
+ *   - REC paralela: vale a nota mais alta entre a prova e a REC (a REC não conta como outra nota);
+ *   - 2ª chamada: a nota vai na coluna da prova original (a 2ª chamada não ganha coluna);
+ *   - REC trimestral: tem coluna, mas fica fora da média até haver a fórmula da escola.
+ *   Na fórmula personalizada, todas as colunas entram como lançadas (a fórmula decide).
  */
 
 export interface GradeColumn {
@@ -15,7 +20,84 @@ export interface GradeColumn {
   weight: number;
   maxGrade: number;
   date: string;
+  /** REC paralela desta avaliação: vale a nota mais alta */
+  recoveryOf?: string;
+  /** 2ª chamada desta avaliação (só aparece se já tiver nota lançada nela, de antes) */
+  secondCallOf?: string;
+  /** REC trimestral: fora da média automática */
+  outOfAverage?: boolean;
 }
+
+export interface GradeTableColumn extends GradeColumn {
+  title: string;
+  type: string;
+  isCustom: boolean;
+  displayDate: string;
+}
+
+const day = (d: string) => (d || '').slice(0, 10);
+
+/**
+ * Colunas da tela Notas para a turma e o período: provas e trabalhos agendados + colunas
+ * personalizadas, em ordem de data (a REC paralela logo depois da sua prova).
+ * - A REC paralela fica no período da prova original, mesmo que caia no período seguinte.
+ * - A 2ª chamada não tem coluna (a nota vai na da prova original), a não ser que já tenha nota
+ *   lançada nela.
+ */
+export const buildGradeColumns = (
+  events: SchoolEvent[],
+  customAssessments: CustomAssessment[],
+  grades: GradeEntry[],
+  schoolId: string,
+  classId: string,
+  term: Pick<Term, 'start' | 'end'> | undefined,
+  termIndex: number
+): GradeTableColumn[] => {
+  if (!term) return [];
+  const inTerm = (d: string) => day(d) >= day(term.start || '') && day(d) <= day(term.end || '');
+  const byId = new Map(events.map(e => [e.id, e]));
+  const display = (d: string) => new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+
+  const scheduled = events.filter(e => {
+    if (e.schoolId !== schoolId || e.classId !== classId || !['test', 'work'].includes(e.type)) return false;
+    const parent = e.parentId ? byId.get(e.parentId) : undefined;
+    if (e.kind === 'second_call' && !grades.some(g => g.assessmentId === e.id)) return false;
+    if (e.kind === 'recovery' && parent) return inTerm(parent.date);
+    return inTerm(e.date);
+  }).map(e => ({
+    id: e.id,
+    title: e.title,
+    type: e.type,
+    weight: e.weight ?? 1,
+    maxGrade: e.maxGrade ?? 10,
+    isCustom: false,
+    date: e.date,
+    displayDate: display(e.date),
+    ...(e.kind === 'recovery' && e.parentId ? { recoveryOf: e.parentId } : {}),
+    ...(e.kind === 'second_call' && e.parentId ? { secondCallOf: e.parentId } : {}),
+    ...(e.kind === 'term_recovery' ? { outOfAverage: true } : {})
+  }));
+
+  const custom = customAssessments.filter(c =>
+    c.schoolId === schoolId && c.classId === classId && c.termIndex === termIndex
+  ).map(c => ({
+    id: c.id,
+    title: c.title,
+    type: 'custom',
+    weight: c.weight,
+    maxGrade: c.maxGrade ?? 10,
+    isCustom: true,
+    date: c.date,
+    displayDate: display(c.date)
+  }));
+
+  // Em ordem de data; a REC paralela logo depois da sua prova
+  const sortKey = (c: { date: string; recoveryOf?: string }) => {
+    const parent = c.recoveryOf ? byId.get(c.recoveryOf) : undefined;
+    return parent ? `${parent.date}~${c.date}` : c.date;
+  };
+  return [...scheduled, ...custom].sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+};
 
 type Entry = GradeEntry & { _m?: number };
 
@@ -94,19 +176,44 @@ export const calculateStudentResult = (
     }
   }
 
+  const ids = new Set(columns.map(c => c.id));
+  const maxOf = (c: GradeColumn) => (c.maxGrade > 0 ? c.maxGrade : 10);
+  /** Fração da nota máxima (0 a 1) ou undefined sem nota */
+  const fraction = (c: GradeColumn) => {
+    const g = latestGrade(grades, studentId, c.id);
+    return g ? g.value / maxOf(c) : undefined;
+  };
+
   let count = 0;
   let sum = 0;
   let sumNormalized = 0;
   let weightedSum = 0;
   let totalWeight = 0;
   columns.forEach(c => {
-    const grade = latestGrade(grades, studentId, c.id);
-    if (!grade) return;
-    const max = c.maxGrade > 0 ? c.maxGrade : 10;
-    const normalized = (grade.value / max) * 10;
+    // REC paralela e 2ª chamada entram na nota da avaliação original; REC trimestral fica fora
+    if (c.outOfAverage) return;
+    if ((c.recoveryOf && ids.has(c.recoveryOf)) || (c.secondCallOf && ids.has(c.secondCallOf))) return;
+
+    let best = fraction(c);
+    if (best === undefined) {
+      // Faltou na prova: vale a 2ª chamada (se a nota foi lançada na coluna dela)
+      for (const sc of columns.filter(x => x.secondCallOf === c.id)) {
+        const f = fraction(sc);
+        if (f !== undefined) { best = f; break; }
+      }
+    }
+    for (const rec of columns.filter(x => x.recoveryOf === c.id)) {
+      const f = fraction(rec);
+      if (f !== undefined && (best === undefined || f > best)) best = f;
+    }
+    if (best === undefined) return;
+
+    const max = maxOf(c);
+    const value = best * max;
+    const normalized = best * 10;
     const w = c.weight || 1;
     count++;
-    sum += grade.value;
+    sum += value;
     sumNormalized += normalized;
     weightedSum += normalized * w;
     totalWeight += w;

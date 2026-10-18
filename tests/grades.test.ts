@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateStudentResult, columnNumbers, frozenColumnOrder, latestGrade, setGrade } from '../utils/grades';
+import { buildGradeColumns, calculateStudentResult, columnNumbers, frozenColumnOrder, latestGrade, setGrade } from '../utils/grades';
 
 // Dados inventados
 const PROVA = { id: 'prova', weight: 2, maxGrade: 7, date: '2026-10-10' };
@@ -72,5 +72,62 @@ describe('notas: mesmo código ao editar', () => {
     const repetidas = [g('velha', 'prova', 4, 100), g('nova', 'prova', 5, 200)];
     expect(latestGrade(repetidas, 'a1', 'prova')!.id).toBe('nova');
     expect(setGrade(repetidas, 'a1', 'prova', 6)).toEqual([{ id: 'nova', studentId: 'a1', assessmentId: 'prova', value: 6, _m: 200 }]);
+  });
+});
+
+describe('notas: recuperação e 2ª chamada', () => {
+  const P1 = { id: 'p1', weight: 1, maxGrade: 10, date: '2026-10-05' };
+  const REC = { id: 'rec', weight: 1, maxGrade: 10, date: '2026-10-20', recoveryOf: 'p1' };
+  const T1 = { id: 't1', weight: 1, maxGrade: 10, date: '2026-10-10' };
+
+  it('REC paralela: vale a nota mais alta e não conta como outra nota', () => {
+    // P1 = 4, REC = 7 → conta 7; média com T1 = 9 → 8,0
+    expect(calculateStudentResult([P1, REC, T1], [g('a', 'p1', 4), g('b', 'rec', 7), g('c', 't1', 9)], 'a1', { formula: 'arithmetic' })).toBe('8.0');
+    // REC menor que a prova: fica a da prova
+    expect(calculateStudentResult([P1, REC, T1], [g('a', 'p1', 6), g('b', 'rec', 3), g('c', 't1', 9)], 'a1', { formula: 'arithmetic' })).toBe('7.5');
+    // Sem REC lançada: só a prova
+    expect(calculateStudentResult([P1, REC], [g('a', 'p1', 6)], 'a1', { formula: 'arithmetic' })).toBe('6.0');
+  });
+
+  it('REC com nota máxima diferente compara proporcionalmente; na soma usa o valor da prova', () => {
+    const p = { ...P1, maxGrade: 7 };
+    const r = { ...REC, maxGrade: 10 };
+    // prova 3,5 de 7 (50%), REC 8 de 10 (80%) → 5,6 de 7
+    expect(calculateStudentResult([p, r], [g('a', 'p1', 3.5), g('b', 'rec', 8)], 'a1', { formula: 'sum' })).toBe('5.6');
+    expect(calculateStudentResult([p, r], [g('a', 'p1', 3.5), g('b', 'rec', 8)], 'a1', { formula: 'arithmetic' })).toBe('8.0');
+  });
+
+  it('REC trimestral fica fora da média', () => {
+    const TR = { id: 'tr', weight: 1, maxGrade: 10, date: '2026-11-30', outOfAverage: true };
+    expect(calculateStudentResult([P1, TR], [g('a', 'p1', 4), g('b', 'tr', 10)], 'a1', { formula: 'arithmetic' })).toBe('4.0');
+  });
+
+  it('2ª chamada com nota antiga na própria coluna vale quando faltou na prova', () => {
+    const SC = { id: 'sc', weight: 1, maxGrade: 10, date: '2026-10-12', secondCallOf: 'p1' };
+    expect(calculateStudentResult([P1, SC, T1], [g('a', 'sc', 6), g('c', 't1', 8)], 'a1', { formula: 'arithmetic' })).toBe('7.0');
+  });
+
+  it('fórmula personalizada: todas as colunas entram como lançadas', () => {
+    expect(calculateStudentResult([P1, REC], [g('a', 'p1', 4), g('b', 'rec', 7)], 'a1',
+      { formula: 'custom', customFormula: 'N1 + N2', columnOrder: ['p1', 'rec'] })).toBe('11.0');
+  });
+
+  it('colunas da tela: 2ª chamada sem coluna, REC no período da prova, REC trimestral marcada', () => {
+    const ev = (over: any) => ({ schoolId: 'S', classId: 'C', type: 'test', title: over.id, ...over });
+    const events = [
+      ev({ id: 'p1', date: '2026-09-25T00:00:00.000Z' }),
+      ev({ id: 'rec', date: '2026-10-10T00:00:00.000Z', kind: 'recovery', parentId: 'p1' }), // cai no período seguinte
+      ev({ id: 'sc', date: '2026-09-29T00:00:00.000Z', kind: 'second_call', parentId: 'p1' }),
+      ev({ id: 'tr', date: '2026-09-28T00:00:00.000Z', kind: 'term_recovery' })
+    ] as any;
+    const term = { start: '2026-07-20T00:00:00.000Z', end: '2026-09-30T00:00:00.000Z' };
+    const cols = buildGradeColumns(events, [], [], 'S', 'C', term, 1);
+    expect(cols.map(c => c.id)).toEqual(['p1', 'rec', 'tr']);
+    expect(cols.find(c => c.id === 'rec')!.recoveryOf).toBe('p1');
+    expect(cols.find(c => c.id === 'tr')!.outOfAverage).toBe(true);
+    // no período seguinte a REC não aparece de novo
+    expect(buildGradeColumns(events, [], [], 'S', 'C', { start: '2026-10-01T00:00:00.000Z', end: '2026-12-15T00:00:00.000Z' }, 2)).toEqual([]);
+    // 2ª chamada que já tem nota lançada nela continua aparecendo
+    expect(buildGradeColumns(events, [], [g('x', 'sc', 5)], 'S', 'C', term, 1).map(c => c.id)).toContain('sc');
   });
 });

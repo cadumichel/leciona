@@ -85,6 +85,10 @@ objetivo.
     ganha o próximo número e número de coluna apagada não é reaproveitado.
   - Editar nota mantém o mesmo id (`setGrade`); com notas repetidas vale a mais recente
     (`latestGrade`). Nunca gerar id novo ao editar um item sincronizado.
+  - Colunas: `buildGradeColumns`. REC paralela fica no período da prova, logo depois dela, e na
+    média/soma vale a nota mais alta; 2ª chamada não tem coluna (nota na coluna da original); REC
+    trimestral tem coluna mas fica fora da média (falta a fórmula da escola). Na fórmula
+    personalizada todas as colunas entram como lançadas.
 
 ## Conector do Leciona para o Claude (etapas 1 e 2 prontas)
 Servidor MCP remoto no próprio projeto da Vercel: o Claude lê e grava no Leciona. Endereço do

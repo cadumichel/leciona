@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { AppData, CustomAssessment, GradeEntry, SchoolEvent, GradingConfig } from '../types';
-import { calculateStudentResult, columnNumbers, frozenColumnOrder, latestGrade, setGrade } from '../utils/grades';
+import { buildGradeColumns, calculateStudentResult, columnNumbers, frozenColumnOrder, latestGrade, setGrade } from '../utils/grades';
 
 import { todayLocal } from '../utils';
 import {
@@ -102,47 +102,22 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
       return record ? record.students.filter(s => s.active !== false) : [];
    }, [data.classRecords, selectedSchoolId, selectedClassId]);
 
-   // Avaliações (Agendadas + Personalizadas) ORDENADAS POR DATA
-   const columns = useMemo(() => {
-      if (!currentTerm) return [];
+   // Avaliações (Agendadas + Personalizadas) em ordem de data; REC e 2ª chamada: utils/grades.ts
+   const columns = useMemo(
+      () => buildGradeColumns(data.events || [], data.customAssessments || [], data.grades || [], selectedSchoolId, selectedClassId, currentTerm, selectedTermIndex),
+      [data.events, data.customAssessments, data.grades, selectedSchoolId, selectedClassId, currentTerm, selectedTermIndex]
+   );
 
-      // 1. Provas e Trabalhos Agendados dentro do período
-      const scheduled = (data.events || []).filter(e =>
-         e.schoolId === selectedSchoolId &&
-         e.classId === selectedClassId && // NOW EXPECTS UUID MATCH (if migrated)
-         ['test', 'work'].includes(e.type) &&
-         e.date >= (currentTerm.start || '') &&
-         e.date <= (currentTerm.end || '')
-      ).map(e => ({
-         id: e.id,
-         title: e.title,
-         type: e.type,
-         weight: e.weight ?? 1,
-         maxGrade: e.maxGrade ?? 10,
-         isCustom: false,
-         date: e.date,
-         displayDate: new Date(e.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })
-      }));
-
-      // 2. Colunas Personalizadas para esta turma/bimestre
-      const custom = (data.customAssessments || []).filter(c =>
-         c.schoolId === selectedSchoolId &&
-         c.classId === selectedClassId &&
-         c.termIndex === selectedTermIndex
-      ).map(c => ({
-         id: c.id,
-         title: c.title,
-         type: 'custom',
-         weight: c.weight,
-         maxGrade: c.maxGrade ?? 10,
-         isCustom: true,
-         date: c.date,
-         displayDate: new Date(c.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })
-      }));
-
-      // Ordena cronologicamente
-      return [...scheduled, ...custom].sort((a, b) => a.date.localeCompare(b.date));
-   }, [data.events, data.customAssessments, selectedSchoolId, selectedClassId, currentTerm, selectedTermIndex]);
+   // 2ª chamada de cada avaliação (a nota vai na coluna da original)
+   const secondCallDates = useMemo(() => {
+      const map = new Map<string, string>();
+      (data.events || []).forEach(e => {
+         if (e.kind === 'second_call' && e.parentId) {
+            map.set(e.parentId, new Date(e.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' }));
+         }
+      });
+      return map;
+   }, [data.events]);
 
    // Número fixo de cada coluna (N1, N2…): colunas novas entram no fim, a fórmula não se desloca
    const numbers = useMemo(() => columnNumbers(columns, gradingConfig.columnOrder), [columns, gradingConfig.columnOrder]);
@@ -358,6 +333,17 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
 
                                  <span className={col.isCustom ? 'text-indigo-600' : 'text-slate-700 dark:text-slate-300'}>{col.title}</span>
 
+                                 {/* Recuperação e 2ª chamada (utils/grades.ts) */}
+                                 {col.recoveryOf && gradingConfig.formula !== 'custom' && (
+                                    <span className="text-[8px] normal-case tracking-normal bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded font-bold">REC: vale a nota mais alta</span>
+                                 )}
+                                 {col.outOfAverage && gradingConfig.formula !== 'custom' && (
+                                    <span className="text-[8px] normal-case tracking-normal bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded font-bold">Fora da média</span>
+                                 )}
+                                 {!col.recoveryOf && !col.secondCallOf && secondCallDates.has(col.id) && (
+                                    <span className="text-[8px] normal-case tracking-normal bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded font-bold">2ª chamada ({secondCallDates.get(col.id)}): nota aqui</span>
+                                 )}
+
                                  {/* DATA VISÍVEL */}
                                  <div className="flex items-center gap-1 text-[9px] text-slate-400 font-bold bg-slate-100 dark:bg-slate-700/50 px-2 py-0.5 rounded-lg mt-0.5 mb-1">
                                     <Calendar size={10} /> {col.displayDate}
@@ -500,6 +486,7 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
                         <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/20 text-center">
                            <p className="text-[10px] font-bold text-blue-600 uppercase">Na média aritmética, todas as notas têm o mesmo peso.</p>
                            <p className="text-[9px] text-blue-400 mt-2 font-medium">Cada nota conta proporcionalmente à sua nota máxima (ex.: 3 de 3 conta como 10).</p>
+                           <p className="text-[9px] text-blue-400 mt-1 font-medium">REC paralela: vale a nota mais alta. REC trimestral: fica fora da média.</p>
                         </div>
                      )}
 
@@ -533,6 +520,7 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
                                  rows={3}
                               />
                               <p className="text-[9px] text-slate-400 mt-2 ml-1 font-medium">Use parênteses para agrupar operações.</p>
+                              <p className="text-[9px] text-slate-400 mt-1 ml-1 font-medium">Aqui todas as colunas, inclusive as de REC, entram como lançadas: vale a regra que você escrever.</p>
                            </div>
                         </div>
                      )}

@@ -56,6 +56,12 @@ objetivo.
 - **Situação da avaliação** (uma caixa só no app): **Pendente** = vai acontecer, alunos ainda não
   avisados; **Agendada** (`scheduled`) = comunicada aos alunos; **Pronta** (`prepared`) = enviada
   para a coordenação e impressão. Escolher "Pronta" desliga `scheduled`, mas os alunos já sabem.
+- **Recuperação e 2ª chamada** (`utils/recovery.ts`): regra por escola em Ajustes → Escolas
+  (`School.recoveryPolicy`: nenhuma/paralela/trimestral, `recoveryDelayDays`, `secondCallMode`).
+  Avaliação derivada tem `kind` (`recovery`, `term_recovery`, `second_call`) e `parentId` (a
+  original). Cônsul: REC paralela 15 dias depois, criada junto com a prova; Uniavan e São Luiz: REC
+  trimestral com o conteúdo das provas do trimestre; 2ª chamada copia a original (no São Luiz, no
+  contraturno: sem aula e sem registro no diário). Apagar a original apaga as ligadas.
 - **Início**: `components/Dashboard.tsx` + `utils/dashboardWeb.ts` (linha do dia e grade semanal).
 - **Virada do ano letivo**: `utils/newSchoolYear.ts` + `components/NewSchoolYearWizard.tsx`.
 - **Planilhas exportadas**: `utils/exportRows.ts`.

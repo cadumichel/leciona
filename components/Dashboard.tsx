@@ -798,12 +798,13 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
   const showPendingAlert = pendingCount > 0 && !data.settings.hideUnregisteredClassesOnDashboard;
   const hasDesktopAlerts = showPendingAlert || !!unpreparedAlert || overduePayments.length > 0;
 
-  const renderAlerts = (containerClass: string) => (
+  // full: no celular cada faixa ocupa a largura toda
+  const renderAlerts = (containerClass: string, full = false) => (
     <div className={containerClass}>
       {showPendingAlert && (
-        <button onClick={onNavigateToPendencies} title="Ver registros pendentes" className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-amber-900 hover:scale-[1.02] transition-transform shrink-0" style={{ backgroundColor: '#fffbeb', borderColor: '#fde68a' }}>
+        <button onClick={onNavigateToPendencies} title="Ver registros pendentes" className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-amber-900 hover:scale-[1.02] transition-transform shrink-0 ${full ? 'w-full' : ''}`} style={{ backgroundColor: '#fffbeb', borderColor: '#fde68a' }}>
           <AlertTriangle size={14} className="text-amber-600 shrink-0" />
-          <span className="text-[10px] font-black uppercase whitespace-nowrap">{pendingCount} {pendingCount === 1 ? 'registro pendente' : 'registros pendentes'}</span>
+          <span className={`text-[10px] font-black uppercase whitespace-nowrap ${full ? 'flex-1 text-left' : ''}`}>{pendingCount} {pendingCount === 1 ? 'registro pendente' : 'registros pendentes'}</span>
           <ChevronRight size={14} className="text-amber-700 shrink-0" />
         </button>
       )}
@@ -811,17 +812,17 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         <button
           onClick={onNavigateToAssessments}
           title={`Elaboração pendente: ${unpreparedAlert.event.title} (${unpreparedAlert.className}) – ${unpreparedAlert.daysText}`}
-          className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-white min-w-0 max-w-full hover:scale-[1.02] transition-transform ${unpreparedAlert.daysLeft <= 3 ? 'animate-siren' : 'bg-red-600'}`}
+          className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-white min-w-0 max-w-full hover:scale-[1.02] transition-transform ${full ? 'w-full' : ''} ${unpreparedAlert.daysLeft <= 3 ? 'animate-siren' : 'bg-red-600'}`}
         >
           <FileCheck size={14} className="shrink-0" />
-          <span className="text-[10px] font-black uppercase truncate">
+          <span className={`text-[10px] font-black uppercase truncate ${full ? 'flex-1 text-left' : ''}`}>
             Elaborar: {unpreparedAlert.event.title} ({unpreparedAlert.className}) · {unpreparedAlert.daysText}{unpreparedAlert.more > 0 ? ` (+${unpreparedAlert.more})` : ''}
           </span>
           <ChevronRight size={14} className="shrink-0" />
         </button>
       )}
       {overduePayments.length > 0 && (
-        <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 text-white shrink-0" title={overduePayments.map(p => `${p.studentName} (${p.month})`).join(', ')}>
+        <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 text-white shrink-0 ${full ? 'w-full' : ''}`} title={overduePayments.map(p => `${p.studentName} (${p.month})`).join(', ')}>
           <DollarSign size={14} className="shrink-0" />
           <span className="text-[10px] font-black uppercase whitespace-nowrap">{overduePayments.length} {overduePayments.length === 1 ? 'pagamento em atraso' : 'pagamentos em atraso'}</span>
         </div>
@@ -1208,7 +1209,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         </p>
       </div>
 
-      {hasDesktopAlerts ? renderAlerts('flex flex-wrap items-center gap-2 w-full min-w-0') : (
+      {hasDesktopAlerts ? renderAlerts('flex flex-col gap-2 w-full min-w-0', true) : (
         <div className="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm w-fit">
           <Sparkles className="text-primary animate-pulse w-3 h-3" />
           <span className="text-[8px] font-black uppercase tracking-tight text-slate-500">Inspirado para hoje</span>

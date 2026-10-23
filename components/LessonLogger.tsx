@@ -1551,6 +1551,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       label: string;
       isWindow?: boolean;
       isFree?: boolean;
+      /** Feriado, recesso ou evento que suspende a aula nesse dia (aula não fica pendente) */
+      blockedReason?: string | null;
       startTimeMin: number;
       endTimeMin: number;
       isActive: boolean;
@@ -1565,6 +1567,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
     // Get versioned schedules for the selected date
     const dailySchedules = getSchedulesForDate(data, selectedDate);
+    const holidayName = getHolidayName(dObj);
 
     data.schools.filter(s => !s.deleted).forEach(school => {
       // Proteção: garantir que shifts existe
@@ -1616,6 +1619,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           const startMin = parseTimeToMinutes(slot.startTime);
           const endMin = parseTimeToMinutes(slot.endTime);
           const isActive = isToday && currentTime >= startMin && currentTime < endMin;
+          const blockedReason = isWindow ? null : (holidayName || getBlockReason(selectedDate, school.id, shift.id, schedule.classId));
 
           if (!groupedShifts[shift.name]) groupedShifts[shift.name] = [];
           groupedShifts[shift.name].push({
@@ -1626,6 +1630,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             label: displayLabel,
             isWindow,
             isFree,
+            blockedReason,
             startTimeMin: startMin,
             endTimeMin: endMin,
             isActive
@@ -1833,7 +1838,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     });
 
     return { sortedKeys, groupedShifts };
-  }, [data.scheduleVersions, data.schedules, selectedDate, data.schools, data.students, data.logs, viewMode]);
+  }, [data.scheduleVersions, data.schedules, selectedDate, data.schools, data.students, data.logs, data.calendars, data.events, viewMode]);
 
   // Calculate statistics for history and planning views
   const lessonStats = useMemo(() => {
@@ -3038,6 +3043,11 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                                 {item.log.subject || 'Planejado'}
                               </span>
                             )}
+                            {!item.log && item.blockedReason && item.slot.type !== 'break' ? (
+                              <span className="shrink-0 max-w-[110px] truncate text-[7px] font-black uppercase text-pink-600 dark:text-pink-300 bg-pink-100 dark:bg-pink-900/30 px-1.5 py-0.5 rounded" title={item.blockedReason}>
+                                {item.blockedReason}
+                              </span>
+                            ) : (
                             <div className={`flex items-center gap-1 shrink-0 text-[7px] font-black uppercase ${item.slot.type === 'break' ? 'hidden' : item.isFree ? 'text-slate-500' : item.isWindow ? 'text-slate-500' : item.log ? (isFutureDate ? 'text-purple-500' : 'text-green-500') : (isFutureDate || (selectedDate === getYYYYMMDD(new Date()) && currentTime < (item as any).endTimeMin)) ? 'text-slate-400' : 'text-blue-500'}`}>
                               {item.log ? <CheckCircle2 size={10} /> : null}
                               {
@@ -3050,6 +3060,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                                             'Pendente'
                               }
                             </div>
+                            )}
                           </div>
                         </div>
                       </div>

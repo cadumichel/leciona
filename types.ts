@@ -282,6 +282,8 @@ export interface AppSettings {
   // Controles de Exibição de Alertas
   hideUnregisteredClassesOnDiary?: boolean;
   hideUnregisteredClassesOnDashboard?: boolean;
+  /** Esconde no Diário a linha "Faltam N aulas…" (botão de olho na própria linha) */
+  hideRemainingLessons?: boolean;
   termsAccepted?: boolean;
 }
 

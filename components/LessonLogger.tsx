@@ -36,7 +36,8 @@ import {
   ArrowUpNarrowWide,
   ArrowDownWideNarrow,
   Edit3,
-  Eye
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { DAYS_OF_WEEK_NAMES } from '../constants';
 import { parseTimeToMinutes, getCurrentTimeInMinutes, getHolidayName, isHoliday, getDayOfWeekFromDate, toSafeISO, formatDateBR } from '../utils';
@@ -2142,7 +2143,22 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           </div>
         )}
 
-        {remainingInfo && activeLesson && (
+        {remainingInfo && activeLesson && data.settings.hideRemainingLessons && (
+          <div className="-mt-4 md:-mt-6 lg:mt-0 mb-6 md:mb-8 lg:mb-3 px-1">
+            <button
+              type="button"
+              onClick={() => onUpdateData({ settings: { ...data.settings, hideRemainingLessons: false } })}
+              className="flex items-center gap-1.5 text-[9px] md:text-[10px] font-bold text-slate-400 hover:text-primary transition-colors"
+              title="Mostrar quantas aulas faltam"
+            >
+              <CalendarRange size={12} className="shrink-0" />
+              <Eye size={12} className="shrink-0" />
+              <span>Aulas que faltam</span>
+            </button>
+          </div>
+        )}
+
+        {remainingInfo && activeLesson && !data.settings.hideRemainingLessons && (
           <div className="-mt-4 md:-mt-6 lg:mt-0 mb-6 md:mb-8 lg:mb-3 px-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] md:text-[10px] font-bold text-slate-500 dark:text-slate-400">
             <CalendarRange size={12} className="text-primary shrink-0" />
             <span>
@@ -2156,6 +2172,15 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 {remainingInfo.nextAssessment.lessonsBefore > 0 && `, daqui a ${remainingInfo.nextAssessment.lessonsBefore} ${remainingInfo.nextAssessment.lessonsBefore === 1 ? 'aula' : 'aulas'}`}
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => onUpdateData({ settings: { ...data.settings, hideRemainingLessons: true } })}
+              className="p-0.5 text-slate-400 hover:text-primary transition-colors"
+              title="Ocultar quantas aulas faltam"
+              aria-label="Ocultar quantas aulas faltam"
+            >
+              <EyeOff size={12} />
+            </button>
           </div>
         )}
 

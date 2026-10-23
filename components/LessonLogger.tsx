@@ -42,7 +42,7 @@ import { DAYS_OF_WEEK_NAMES } from '../constants';
 import { parseTimeToMinutes, getCurrentTimeInMinutes, getHolidayName, isHoliday, getDayOfWeekFromDate, toSafeISO, formatDateBR } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName } from '../utils/classRefs';
-import { getLessonDisplayItems, deriveStatsFromLessons, LessonDisplayItem } from '../utils/lessonStats';
+import { getLessonDisplayItems, deriveStatsFromLessons, LessonDisplayItem, isLessonBlocked as isLessonBlockedIn, getLessonBlockReason } from '../utils/lessonStats';
 import { sanitizeText, LIMITS } from '../utils/validation';
 import { findPreviousLesson } from '../utils/retrospective';
 import { DisconnectedNotice } from './ConnectionWarnings';
@@ -654,51 +654,12 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     return calendar.terms.map((t, idx) => ({ label: t.name, value: idx.toString() }));
   }, [data.calendars, filterInstId]);
 
-  const isLessonBlocked = (dateStr: string, schoolId: string, shiftId?: string, classId?: string) => {
-    const calendar = data.calendars.find(c => c.schoolId === schoolId);
-    if (calendar) {
-      if (calendar.midYearBreak.start && dateStr >= calendar.midYearBreak.start && dateStr <= calendar.midYearBreak.end) return true;
-      if (calendar.extraRecesses?.some(r => r.date === dateStr)) return true;
-    }
+  // Recesso, recesso de meio de ano ou evento que suspende aula (regra única em utils/lessonStats.ts)
+  const isLessonBlocked = (dateStr: string, schoolId: string, shiftId?: string, classId?: string) =>
+    isLessonBlockedIn(data, dateStr, schoolId, shiftId, classId);
 
-    const events = data.events.filter(e => e.schoolId === schoolId && e.date.startsWith(dateStr) && e.blocksClasses);
-    for (const event of events) {
-      if (!event.slotId && !event.classId) return true;
-      if (event.slotId && event.slotId === shiftId) return true;
-      if (event.classId && event.classId === classId) return true;
-    }
-    return false;
-  };
-
-  const getBlockReason = (dateStr: string, schoolId: string, shiftId?: string, classId?: string): string | null => {
-    const calendar = data.calendars.find(c => c.schoolId === schoolId);
-
-    // Check mid-year break
-    if (calendar?.midYearBreak.start && dateStr >= calendar.midYearBreak.start && dateStr <= calendar.midYearBreak.end) {
-      return "Recesso de Meio de Ano";
-    }
-
-    // Check extra recesses
-    const recess = calendar?.extraRecesses?.find(r => r.date === dateStr);
-    if (recess) {
-      return recess.name; // e.g., "Carnaval", "Páscoa"
-    }
-
-    // Check blocking events
-    const event = data.events.find(e =>
-      e.schoolId === schoolId &&
-      e.date.startsWith(dateStr) &&
-      e.blocksClasses &&
-      (!e.slotId || e.slotId === shiftId) &&
-      (!e.classId || e.classId === classId)
-    );
-
-    if (event) {
-      return event.title; // e.g., "Reunião Pedagógica", "Conselho de Classe"
-    }
-
-    return null;
-  };
+  const getBlockReason = (dateStr: string, schoolId: string, shiftId?: string, classId?: string): string | null =>
+    getLessonBlockReason(data, dateStr, schoolId, shiftId, classId);
 
   const pendingLessons = useMemo(() => {
     const now = new Date();

@@ -61,4 +61,14 @@ describe('aulas que faltam até o fim do período', () => {
     expect(aulasRestantes(base(), { turma: '183', hoje: '2026-10-14', ate: '2026-10-19' }).aulas).toBe(3);
     expect(() => aulasRestantes({ ...base(), calendars: [] }, { turma: '183', hoje: '2026-10-14' })).toThrow(/não tem bimestres/);
   });
+
+  it('evento que suspende aula de uma turma só desconta a aula dela (evento guarda o código, grade guarda o nome)', () => {
+    const doc = base();
+    doc.events.push({ id: 'v', type: 'trip', schoolId: 'C', classId: 'c183', date: '2026-10-19T00:00:00.000Z', title: 'Viagem', blocksClasses: true });
+    const r = countRemainingLessons(doc, { schoolId: 'C', classId: '183', date: '2026-10-14', afterStartTime: '13:30' })!;
+    expect(r.dates).toEqual(['2026-10-14', '2026-10-26', '2026-10-28', '2026-10-28']);
+    // A outra turma não muda
+    const outra = countRemainingLessons(doc, { schoolId: 'C', classId: 'c163', date: '2026-10-14' })!;
+    expect(outra.dates).toEqual(['2026-10-20', '2026-10-27']);
+  });
 });

@@ -12,6 +12,9 @@ objetivo.
 - Ele também edita pelo Antigravity. Antes de começar qualquer trabalho, rode `git pull`. Use uma
   ferramenta de cada vez.
 - Commits, PRs e textos de interface em português.
+- **Versão do app = 1.1.N**, com N = número do pull request. Em cada PR, atualize `version.ts`
+  (`APP_VERSION`, mostrado no rodapé do Início e de Ajustes) e o `version` do `package.json`.
+  O próximo número é o do último PR + 1 (confira na lista de PRs antes de abrir).
 - Mudou algo visual? Mostre como ficou (capturas de tela) antes de pedir o merge.
 - **Nunca** coloque no repositório backups ou dados reais: os nomes de alunos são de menores de idade.
 
@@ -57,7 +60,11 @@ objetivo.
   itens no mesmo horário; avaliações vão junto com o registro "Avaliação:".
 - **Aulas, pendências e bloqueios** (feriado, recesso, evento que suspende aula):
   `utils/lessonStats.ts` (`getLessonDisplayItems`, `isLessonBlocked`).
-- **Avaliações**: `events` com `type` `test`/`work`; `slotId` = a aula em que acontece. Ao
+- **Avaliações**: `events` com `type` `test`/`work`; `slotId` = a aula em que acontece. Sem
+  `slotId` = **contraturno** (outro funcionário aplica, pode ser em dia sem aula da turma); `slotId`
+  de uma **atividade fixa** da grade = o professor aplica nesse horário. Nos dois casos não há
+  registro no diário nem conta como aula (`utils/assessmentPlace.ts`: `assessmentPlaces`,
+  `activityAt`, `isOffLesson`). O conector usa `onde: aula | contraturno | atividade`. Ao
   cadastrar, o app cria no diário o registro "Avaliação: {título}" naquela aula
   (`components/AssessmentManagement.tsx`, `handleSaveEvent`).
 - **Situação da avaliação** (uma caixa só no app): **Pendente** = vai acontecer, alunos ainda não

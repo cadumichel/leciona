@@ -1,3 +1,4 @@
+import { activityAt } from '../utils/assessmentPlace';
 import { AppData, AcademicCalendar, School, SchoolClass, SchoolEvent } from '../types';
 import { formatDateBR, getHolidayName, getSafeDate, parseTimeToMinutes } from '../utils';
 import { getClassName, isSameClassRef } from '../utils/classRefs';
@@ -152,7 +153,12 @@ export const descreverAvaliacao = (data: AppData, school: School, e: SchoolEvent
     // No app, escolher "Pronta" desliga "Agendada"; pronta já foi enviada e os alunos já sabem
     comunicadaAosAlunos: !!e.prepared || !!e.scheduled,
     ...(e.kind ? { especie: KIND_LABELS[e.kind] } : {}),
-    ...(e.kind && !e.slotId ? { aula: 'contraturno' } : {}),
+    // Contraturno (sem horário) e atividade fixa da grade (ex.: "Aplicação de provas")
+    ...(!e.slotId ? { aula: 'contraturno' } : (() => {
+      const atividade = activityAt(data, e.schoolId, e.date, e.slotId);
+      const texto = descreverAula(school, e.slotId)?.texto;
+      return atividade && texto ? { aula: `${texto} · ${atividade}` } : {};
+    })()),
     ...(e.parentId ? (() => {
       const o = (data.events || []).find(x => x.id === e.parentId);
       return o ? { original: `${o.title} (${formatDateBR(dia(o.date))})` } : {};

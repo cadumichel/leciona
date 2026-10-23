@@ -314,7 +314,8 @@ const registrarEscrita = (servidor: McpServer, dados: AppData, hoje: string, esc
         tipo: z.enum(['prova', 'trabalho']).optional().describe('Obrigatório na avaliação regular (REC e 2ª chamada seguem a original)'),
         titulo: z.string().optional().describe('Título curto, ex.: "P3" ou "Trabalho Iluminismo". REC e 2ª chamada têm título padrão'),
         descricao: z.string().optional().describe('Conteúdo ou capítulos, ex.: "Cap. 12, 13 e 14"'),
-        aula: z.number().int().min(1).max(12).optional().describe('Número da aula no turno (1ª, 2ª…). Obrigatório quando a turma tem aulas seguidas no dia'),
+        aula: z.number().int().min(1).max(12).optional().describe('Número da aula no turno (1ª, 2ª…). Obrigatório quando a turma tem aulas seguidas no dia (ou, com onde "atividade", quando há mais de uma atividade fixa)'),
+        onde: z.enum(['aula', 'contraturno', 'atividade']).optional().describe('Onde a avaliação acontece. "aula" (padrão): numa aula da turma. "contraturno": fora das aulas, aplicada por outro funcionário da escola (pode ser num dia sem aula da turma; sem registro no diário). "atividade": numa atividade fixa da grade, como "Aplicação de provas" (o professor aplica; sem registro no diário)'),
         situacao: situacao.optional().describe('Padrão: Pendente'),
         especie: z.enum(['regular', 'rec', 'rec_trimestral', 'segunda_chamada']).optional()
           .describe('Padrão: regular. rec = recuperação de uma prova; rec_trimestral = recuperação do trimestre (o conteúdo vem das provas do trimestre); segunda_chamada = para quem faltou'),
@@ -340,6 +341,7 @@ const registrarEscrita = (servidor: McpServer, dados: AppData, hoje: string, esc
         acao: z.enum(['alterar', 'apagar']),
         nova_data: data.optional(),
         nova_aula: z.number().int().min(1).max(12).optional().describe('Número da aula no turno, se a turma tiver aulas seguidas na nova data'),
+        nova_onde: z.enum(['aula', 'contraturno', 'atividade']).optional().describe('Mudar para uma aula da turma, para o contraturno (outro funcionário aplica) ou para uma atividade fixa da grade (o professor aplica)'),
         novo_titulo: z.string().optional(),
         nova_descricao: z.string().optional().describe('Novo conteúdo (substitui o atual)'),
         novo_tipo: z.enum(['prova', 'trabalho']).optional()

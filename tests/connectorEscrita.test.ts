@@ -600,3 +600,40 @@ describe('conector (gravação): remarcar, corrigir e apagar avaliações', () =
     expect(() => aplicarPlano(doc, plano!, AGORA + 1000)).toThrow(/mudou no app depois da prévia/);
   });
 });
+
+describe('conector (gravação): contraturno e atividade fixa', () => {
+  // Quarta, 2ª aula: atividade fixa "Aplicação de provas"
+  const comAtividade = () => {
+    const doc = base();
+    doc.scheduleVersions[0].schedules.push({ id: 'w', dayOfWeek: 3, schoolId: 'C', shiftId: 'cv', slotId: 's2', classId: 'window', activityLabel: 'Aplicação de provas' });
+    return doc;
+  };
+
+  it('prova no contraturno num dia sem aula da turma: sem horário e sem registro no diário', () => {
+    const { itens, plano } = prepararAvaliacoes(comAtividade(), [{ ...P3, data: '2026-11-18', onde: 'contraturno' }], HOJE, AGORA);
+    expect(itens[0].descricao).toBe('Prova "P3" — 183 (Cônsul), quarta 18/11/2026, no contraturno — Pendente');
+    expect(plano!.criar.events[0]).not.toHaveProperty('slotId');
+    expect(plano!.criar.logs).toEqual([]);
+  });
+
+  it('prova na atividade fixa: no horário da atividade, sem registro no diário', () => {
+    const { itens, plano } = prepararAvaliacoes(comAtividade(), [{ ...P3, data: '2026-11-18', onde: 'atividade' }], HOJE, AGORA);
+    expect(itens[0].descricao).toBe('Prova "P3" — 183 (Cônsul), quarta 18/11/2026, 2ª aula (14:15) · Aplicação de provas — Pendente');
+    expect(plano!.criar.events[0].slotId).toBe('s2');
+    expect(plano!.criar.logs).toEqual([]);
+    const semAtividade = prepararAvaliacoes(comAtividade(), [{ ...P3, onde: 'atividade' }], HOJE, AGORA);
+    expect(semAtividade.itens[0].erro).toMatch(/não há atividade fixa/);
+  });
+
+  it('remarcar para o contraturno tira o registro automático do diário', () => {
+    const doc = comAtividade();
+    doc.logs.push({ id: 'lp2', date: '2026-10-27T00:00:00.000Z', schoolId: 'C', classId: 'c183', slotId: 's5', subject: 'Avaliação: P2', homework: '', notes: '' });
+    const { itens, plano } = prepararAlteracoes(doc, [{ turma: '183', data: '2026-10-27', acao: 'alterar', nova_data: '2026-10-28', nova_onde: 'contraturno' }], HOJE, AGORA);
+    expect(itens[0].descricao).toBe('"P2" — 183 (Cônsul): de terça 27/10/2026, 5ª aula (16:45) para quarta 28/10/2026, no contraturno');
+    const r = aplicarPlano(doc, plano!, AGORA + 1000);
+    Object.assign(doc, r.alteracoes);
+    expect(doc.events[0]).not.toHaveProperty('slotId');
+    expect(doc.events[0].date).toBe('2026-10-28T00:00:00.000Z');
+    expect(doc.logs.find((l: any) => l.id === 'lp2')).toBeUndefined();
+  });
+});

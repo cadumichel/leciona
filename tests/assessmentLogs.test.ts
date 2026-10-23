@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { planAssessmentLogs, removeAssessmentLogs } from '../utils/assessmentLogs';
+import { assessmentPlaceLabel, assessmentPlaces } from '../utils/assessmentPlace';
 
 // Dados inventados (nenhum nome real)
 const SLOTS = [
@@ -97,5 +98,40 @@ describe('registro da avaliação no Diário ao remarcar', () => {
     doc.logs.push(log('cadu', '2026-10-19', 's3', 'Avaliação: P5', 'Revisar'));
     const left = removeAssessmentLogs(doc.logs, [P3, { ...P3, id: 'p5', title: 'P5', slotId: 's3', date: D('2026-10-19') }]);
     expect(left.map((l: any) => l.id)).toEqual(['l5', 'l6', 'l7', 'cadu']);
+  });
+});
+
+describe('contraturno e atividade fixa', () => {
+  // Quarta, 3ª aula: atividade fixa "Aplicação de provas" (sem turma)
+  const comAtividade = () => {
+    const doc = base();
+    doc.scheduleVersions[0].schedules.push({ id: 'w', dayOfWeek: 3, schoolId: 'C', shiftId: 'cv', slotId: 's3', classId: 'window', activityLabel: 'Aplicação de provas' });
+    return doc;
+  };
+
+  it('opções do horário: aulas da turma e atividades fixas do dia', () => {
+    const doc = comAtividade();
+    const { lessons, activities } = assessmentPlaces(doc, doc.schools[0], 'c183', '2026-10-28');
+    expect(lessons.map(l => [l.slot.id, l.number])).toEqual([['s1', 1], ['s2', 2]]);
+    expect(activities.map(a => [a.slot.id, a.activity])).toEqual([['s3', 'Aplicação de provas']]);
+    // Terça: a turma não tem aula (só contraturno)
+    expect(assessmentPlaces(doc, doc.schools[0], 'c183', '2026-10-27').lessons).toEqual([]);
+  });
+
+  it('prova na atividade fixa ou no contraturno não cria registro no diário', () => {
+    const doc = comAtividade();
+    const naAtividade = { ...P3, id: 'p9', title: 'P9', date: D('2026-10-28'), slotId: 's3' };
+    expect(planAssessmentLogs(doc, undefined, naAtividade, undefined, newId).logs).toEqual(doc.logs);
+    const contraturno = { ...P3, id: 'p8', title: 'P8', date: D('2026-10-27'), slotId: undefined };
+    expect(planAssessmentLogs(doc, undefined, contraturno, undefined, newId).logs).toEqual(doc.logs);
+    expect(assessmentPlaceLabel(doc, naAtividade)).toBe('3ª aula (15:15) · Aplicação de provas');
+    expect(assessmentPlaceLabel(doc, contraturno)).toBe('Contraturno');
+  });
+
+  it('remarcar para a atividade fixa tira o registro automático da aula antiga', () => {
+    const doc = comAtividade();
+    const { logs } = planAssessmentLogs(doc, P3, { ...P3, date: D('2026-10-28'), slotId: 's3' }, undefined, newId);
+    expect(logs.find((l: any) => l.id === 'auto')).toBeUndefined();
+    expect(logs).toHaveLength(3);
   });
 });

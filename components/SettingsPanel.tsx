@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { APP_VERSION } from '../version';
 import { AppData, AcademicCalendar, Term, Recess, ClassRecord, ClassStudent } from '../types';
 import {
    Download, User, Briefcase, Calendar as CalendarIcon, ShieldCheck,
@@ -2357,7 +2358,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          {/* RODAPÉ DO MENU AJUSTES */}
          <div className="pt-10 pb-8 text-center opacity-60">
             <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight">
-               Leciona v1.0 - Codex
+               Leciona v{APP_VERSION}
             </p>
             <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-1">
                Criado para professores pelo professor Cadu Michel

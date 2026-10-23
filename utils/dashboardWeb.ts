@@ -69,10 +69,15 @@ export const buildTodayTimeline = (data: AppData, dateStr: string): TodayGroup[]
   // Provas e trabalhos de hoje
   const todaysAssessments = (data.events || []).filter(e =>
     (e.type === 'test' || e.type === 'work') && (e.date || '').startsWith(dateStr));
-  // A avaliação guarda o horário (aula) escolhido; sem horário, vale para todas as aulas da turma
+  // A avaliação guarda o horário (aula) escolhido; sem horário é no contraturno (fora das aulas)
   const assessmentFor = (schoolId: string, classRef: string, slotId: string) =>
     todaysAssessments.find(e => e.schoolId === schoolId && isSameClassRef(data, schoolId, e.classId, classRef) &&
-      (!e.slotId || e.slotId === slotId))?.title;
+      e.slotId === slotId)?.title;
+  // Atividade fixa (ex.: Aplicação de provas): as avaliações marcadas nesse horário, de qualquer turma
+  const assessmentsInActivity = (schoolId: string, slotId: string) => {
+    const list = todaysAssessments.filter(e => e.schoolId === schoolId && e.slotId === slotId);
+    return list.length ? list.map(e => `${e.title} (${getClassName(data, schoolId, e.classId, e.classId)})`).join(', ') : undefined;
+  };
 
   getSchedulesForDate(data, dateStr).forEach((s: ScheduleEntry) => {
     if (Number(s.dayOfWeek) !== dayOfWeek) return;
@@ -106,7 +111,7 @@ export const buildTodayTimeline = (data: AppData, dateStr: string): TodayGroup[]
       isWindow,
       blocked,
       hasContent: classInSlot ? !!(classInSlot.subject || classInSlot.homework) : !!item?.hasContent,
-      assessment: isWindow ? undefined : assessmentFor(s.schoolId, classInSlot ? classInSlot.classId : s.classId, s.slotId),
+      assessment: isWindow ? assessmentsInActivity(s.schoolId, s.slotId) : assessmentFor(s.schoolId, classInSlot ? classInSlot.classId : s.classId, s.slotId),
       // A aula da turma abre pelo próprio registro (aula extra)
       schedule: classInSlot ? { ...s, shiftId: 'extra', slotId: classInSlot.id, classId: classInSlot.classId } : s
     });

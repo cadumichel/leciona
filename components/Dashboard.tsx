@@ -1,10 +1,12 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { APP_VERSION } from '../version';
 import { AppData, DayOfWeek, SchoolEvent, LessonLog, Reminder } from '../types';
 import { getCurrentTimeInMinutes, parseTimeToMinutes, isHoliday, getHolidayName, getShortWeekDay, getDayMonth, getSafeDate } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName } from '../utils/classRefs';
 import { getLessonDisplayItems, isLessonBlocked, deriveStatsFromLessons } from '../utils/lessonStats';
 import { findPreviousLesson } from '../utils/retrospective';
+import { activityAt } from '../utils/assessmentPlace';
 import { buildTodayTimeline, buildWeeklyGrid, todayLessonStatus, TodayLessonStatus, TodayLesson } from '../utils/dashboardWeb';
 import {
   Clock,
@@ -765,7 +767,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
   const dashboardFooter = (
       <div className="pt-10 pb-8 text-center opacity-60">
         <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-          Leciona v1.0 - Codex
+          Leciona v{APP_VERSION}
         </p>
         <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-1">
           Criado para professores pelo professor Cadu Michel
@@ -945,7 +947,11 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
       </button>
     );
   };
-  const assessmentSubtitle = (e: SchoolEvent) => `${e.type === 'test' ? 'Prova' : 'Trabalho'} · ${getClassName(data, e.schoolId, e.classId)}`;
+  const assessmentSubtitle = (e: SchoolEvent) => {
+    // Contraturno ou atividade fixa aparecem na linha (aula da turma não precisa)
+    const where = !e.slotId ? 'Contraturno' : activityAt(data, e.schoolId, e.date, e.slotId);
+    return `${e.type === 'test' ? 'Prova' : 'Trabalho'} · ${getClassName(data, e.schoolId, e.classId)}${where ? ` · ${where}` : ''}`;
+  };
   const shownThisWeek = thisWeekAssessments.slice(0, COMPACT_LIMIT);
   const shownNextWeek = nextWeekAssessments.slice(0, Math.max(0, COMPACT_LIMIT - shownThisWeek.length));
   const hiddenAssessments = thisWeekAssessments.length + nextWeekAssessments.length - shownThisWeek.length - shownNextWeek.length;

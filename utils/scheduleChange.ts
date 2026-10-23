@@ -28,6 +28,8 @@ export interface ScheduleDecision {
   /** Escolhida em "Outra aula neste dia": qualquer horário da escola na data (aula de outra turma,
    * atividade fixa ou horário livre). O registro vira aula extra nesse horário. */
   daySlot?: boolean;
+  /** O horário escolhido é uma atividade fixa (avaliação sem registro no diário) */
+  toActivity?: boolean;
 }
 
 export interface ScheduleChangePlan {
@@ -189,7 +191,8 @@ export const nextVersionStart = (data: AppData, activeFrom: string, ignoreId?: s
  * - MOVE: nova data e aula (registro e avaliação); com `daySlot`, outro horário do mesmo dia (o
  *   registro vira aula extra nesse horário);
  * - EXTRA: registro vira aula extra de verdade (o Diário mostra pelo tipo) na mesma data ou na
- *   escolhida; avaliação fica na data, sem aula;
+ *   escolhida; avaliação fica na data, no contraturno (sem aula), e o seu registro automático
+ *   "Avaliação: X" sai do diário (o mesmo vale para avaliação levada a uma atividade fixa);
  * - DELETE: registro sai; avaliação sai de verdade, com as ligadas (REC, 2ª chamada), as notas e o
  *   registro "Avaliação:".
  * O registro "Avaliação: X" sem decisão própria acompanha a sua avaliação.
@@ -217,8 +220,12 @@ export const applyScheduleDecisions = (
       e.slotId === log.slotId && (log.subject || '').startsWith('Avaliação:'))) return [];
     if (!movedLogIds.has(log.id)) return [log];
     const ev = eventAt(log);
-    const d = decisionOf.get(log.id) || (ev ? decisionOf.get(ev.id) : undefined);
+    const own = decisionOf.get(log.id);
+    const d = own || (ev ? decisionOf.get(ev.id) : undefined);
     if (!d) return [log];
+    // Avaliação foi para o contraturno ou para uma atividade fixa: o registro automático sai do diário
+    if (!own && ev && (d.type === 'EXTRA' || d.toActivity) &&
+      (log.subject || '').trim() === `Avaliação: ${ev.title}` && !(log.homework || '').trim()) return [];
     if (d.type === 'DELETE') return [];
     if (d.type === 'MOVE' && d.targetDate && d.targetSlotId) {
       // Horário que não é da turma na grade nova: aula extra no horário real (como "Dar aula para uma turma neste dia")

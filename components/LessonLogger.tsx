@@ -213,6 +213,10 @@ const formatWeekRange = (weekStartStr: string): string => {
   return `${formatDate(start)} - ${formatDate(end)}`;
 };
 
+/** Registro com algo escrito (aula criada vazia ainda não está registrada) */
+const hasLogText = (log?: LessonLog | null) =>
+  !!log && !!(log.subject || log.homework || log.notes || (log.attendance && log.attendance.length > 0));
+
 const LessonLogger: React.FC<LessonLoggerProps> = ({
   data,
   onUpdateData,
@@ -826,7 +830,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
   // Aulas que faltam até o fim do período (utils/remainingLessons.ts)
   const remainingInfo = useMemo(() => {
-    if (!activeLesson || activeLesson.type !== 'school') return null;
+    if (!activeLesson || activeLesson.type !== 'school' || activeLesson.schedule.classId === 'window') return null;
     return countRemainingLessons(data, {
       schoolId: activeLesson.institution.id,
       classId: activeLesson.schedule.classId,
@@ -2079,7 +2083,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           <div>
             {(() => {
               const school = activeLesson.institution as School;
-              let title = activeLesson.schedule.classId;
+              let title = activeLesson.schedule.classId === 'window' ? (activeLesson.schedule.activityLabel || 'Janela') : activeLesson.schedule.classId;
               let subtitle = `${activeLesson.institution.name}`;
               let isOfficial = false;
 
@@ -3131,13 +3135,13 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                                 {item.blockedReason}
                               </span>
                             ) : (
-                            <div className={`flex items-center gap-1 shrink-0 text-[7px] font-black uppercase ${item.slot.type === 'break' ? 'hidden' : item.isFree ? 'text-slate-500' : item.isWindow ? 'text-slate-500' : item.log ? (isFutureDate ? 'text-purple-500' : 'text-green-500') : (isFutureDate || (selectedDate === getYYYYMMDD(new Date()) && currentTime < (item as any).endTimeMin)) ? 'text-slate-400' : 'text-blue-500'}`}>
-                              {item.log ? <CheckCircle2 size={10} /> : null}
+                            <div className={`flex items-center gap-1 shrink-0 text-[7px] font-black uppercase ${item.slot.type === 'break' ? 'hidden' : item.isFree ? 'text-slate-500' : item.isWindow ? 'text-slate-500' : hasLogText(item.log) ? (isFutureDate ? 'text-purple-500' : 'text-green-500') : (isFutureDate || (selectedDate === getYYYYMMDD(new Date()) && currentTime < (item as any).endTimeMin)) ? 'text-slate-400' : 'text-blue-500'}`}>
+                              {hasLogText(item.log) ? <CheckCircle2 size={10} /> : null}
                               {
                                 item.slot.type === 'break' ? '' :
                                   item.isFree ? 'Livre' :
                                     item.isWindow ? (item.schedule?.activityLabel !== undefined ? 'Fixa' : 'Janela') :
-                                      item.log ? (isFutureDate ? 'Planejado' : 'OK') :
+                                      hasLogText(item.log) ? (isFutureDate ? 'Planejado' : 'OK') :
                                         (isFutureDate || (selectedDate === getYYYYMMDD(new Date()) && currentTime < (item as any).startTimeMin)) ? 'Agendada' :
                                           (selectedDate === getYYYYMMDD(new Date()) && currentTime >= (item as any).startTimeMin && currentTime < (item as any).endTimeMin) ? 'Em aula' :
                                             'Pendente'

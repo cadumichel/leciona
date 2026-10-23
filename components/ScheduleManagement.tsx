@@ -3,7 +3,7 @@ import { AppData, School, DayOfWeek, Shift, TimeSlot, ScheduleEntry, Student, Pr
 import { DAYS_OF_WEEK_NAMES } from '../constants';
 import { Plus, Trash2, LayoutGrid, Calendar as CalendarIcon, Save, Info, AlertCircle, User, Clock, ShieldAlert, Layers, ChevronDown, Check, ArrowRight, PackageX } from 'lucide-react';
 import { MigrationWizard, MigrationDecision } from './MigrationWizard';
-import { checkTimeOverlap } from '../utils';
+import { checkTimeOverlap, formatDateBR, todayLocal } from '../utils';
 import { getClassName } from '../utils/classRefs';
 import { ScheduleChangePlan, applyScheduleDecisions, nextVersionStart, planScheduleChange } from '../utils/scheduleChange';
 
@@ -165,6 +165,25 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
       name: `Versão ${new Date(newVersionDate + 'T00:00:00').getFullYear()}`,
       schedules: baseSchedules
     };
+
+    // Alterações ainda não salvas vão para a nova versão: valem só a partir da data dela
+    if (hasChanges) {
+      const pendingVersion = { ...newVersion, schedules: editedSchedules };
+      const analysis = planScheduleChange(
+        data, baseSchedules, editedSchedules, newVersionDate,
+        nextVersionStart(data, newVersionDate, newVersion.id)
+      );
+      setIsVersionModalOpen(false);
+      if (analysis.orphans.length > 0 || analysis.orphanEvents.length > 0) {
+        setMigrationData({ ...analysis, pendingVersion, activeFrom: newVersionDate, newSchedules: editedSchedules });
+        setShowMigrationModal(true);
+        return;
+      }
+      onUpdateData({ scheduleVersions: [...(data.scheduleVersions || []), pendingVersion] });
+      setSelectedVersionId(newVersion.id);
+      setNewVersionDate('');
+      return;
+    }
 
     // A nova versão começa como cópia da grade atual: nada muda até ela ser editada e salva
     // No migrations needed, save directly
@@ -423,11 +442,35 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
         </div>
       </div>
 
+      {hasChanges && currentVersion && currentVersion.activeFrom < todayLocal() && (
+        <div className="flex flex-col md:flex-row md:items-center gap-3 p-4 lg:px-4 lg:py-3 rounded-xl lg:rounded-lg border border-amber-300 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-900/20 animate-in fade-in duration-300">
+          <AlertCircle size={20} className="text-amber-500 shrink-0 hidden md:block" />
+          <div className="flex-1 text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
+            <p className="font-black uppercase tracking-tight text-[11px] mb-0.5">Atenção: a edição vale desde {formatDateBR(currentVersion.activeFrom)}</p>
+            <p>
+              Ao clicar em <b>Salvar Alterações</b>, toda esta versão da grade muda, inclusive as <b>aulas anteriores</b> (desde {formatDateBR(currentVersion.activeFrom)}).
+              Se você quer criar uma nova versão do diário a partir de uma data, clique em <b>Nova Versão</b>: suas alterações vão para ela e as aulas anteriores ficam como estão.
+            </p>
+          </div>
+          <button
+            onClick={() => setIsVersionModalOpen(true)}
+            className="shrink-0 flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700/50 rounded-xl text-amber-700 dark:text-amber-300 font-black uppercase text-[10px] hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors shadow-sm"
+          >
+            <Plus size={14} /> Nova Versão
+          </button>
+        </div>
+      )}
+
       {isVersionModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl w-full max-w-sm animate-in zoom-in-95 duration-200">
             <h3 className="text-lg font-black text-slate-800 dark:text-white mb-1">Nova Versão da Grade</h3>
-            <p className="text-xs text-slate-500 mb-6">A partir de quando esta nova grade será válida?</p>
+            <p className={`text-xs text-slate-500 ${hasChanges ? 'mb-2' : 'mb-6'}`}>A partir de quando esta nova grade será válida?</p>
+            {hasChanges && (
+              <p className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg px-3 py-2 mb-6">
+                As alterações que você fez na grade (ainda não salvas) vão para a nova versão. Antes dessa data, nada muda.
+              </p>
+            )}
 
             <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Data de Início</label>
             <input

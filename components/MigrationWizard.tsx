@@ -132,6 +132,17 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
     }, [unifiedOrphans, newSchedules, schools, suggestions]);
 
 
+    /** A escolha feita na avaliação vale também para o seu registro "Avaliação:" no Diário */
+    const withPairedLog = (map: Map<string, MigrationDecision>, id: string) => {
+        const ev = orphanEvents.find(e => e.id === id);
+        const d = map.get(id);
+        if (!ev || !d) return map;
+        const paired = orphans.find(l => l.date.split('T')[0] === ev.date.split('T')[0] && l.schoolId === ev.schoolId &&
+            l.slotId === ev.slotId && (l.subject || '').startsWith('Avaliação:'));
+        if (paired) map.set(paired.id, { ...d, logId: paired.id });
+        return map;
+    };
+
     const handleDecisionChange = (logId: string, type: MigrationDecisionType, targetSlot?: ScheduleEntry, isCustom?: boolean, customDate?: string) => {
         const log = unifiedOrphans.find(l => l.id === logId);
         if (!log) return;
@@ -225,9 +236,47 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
             }
         }
 
-        setDecisions(newDecisions);
+        setDecisions(withPairedLog(newDecisions, logId));
     };
 
+
+    /** "Outra aula neste dia": todos os horários de aula da escola na data, com o que há na grade nova */
+    const daySlotsFor = (log: LessonLog | SchoolEvent) => {
+        const school = schools.find(s => s.id === log.schoolId);
+        const dow = new Date(log.date.split('T')[0] + 'T00:00:00').getDay();
+        const dayEntries = newSchedules.filter(s => s.schoolId === log.schoolId && Number(s.dayOfWeek) === dow);
+        const shifts = (school?.shifts || []).filter(sh => dayEntries.some(e => e.shiftId === sh.id));
+        return (shifts.length ? shifts : school?.shifts || []).flatMap(sh => {
+            const classSlots = sh.slots.filter(sl => sl.type === 'class').sort((a, b) => a.startTime.localeCompare(b.startTime));
+            return classSlots.map((sl, i) => {
+                const entry = dayEntries.find(e => e.shiftId === sh.id && e.slotId === sl.id);
+                const what = !entry ? 'Livre'
+                    : entry.classId === 'window' ? (entry.activityLabel || 'Janela')
+                    : getClassName(appData, log.schoolId, entry.classId, entry.classId);
+                return { shift: sh, slot: sl, number: i + 1, what, entry };
+            });
+        });
+    };
+
+    const handleDaySlot = (log: LessonLog | SchoolEvent, slotId: string) => {
+        const found = daySlotsFor(log).find(d => d.slot.id === slotId);
+        if (!found) return;
+        // Aula da própria turma: movimento normal
+        if (found.entry && found.entry.classId !== 'window' && isSameClass(found.entry.classId, log.classId, log.schoolId, schools)) {
+            handleDecisionChange(log.id, 'MOVE', found.entry);
+            return;
+        }
+        const newDecisions = new Map(decisions);
+        newDecisions.set(log.id, {
+            logId: log.id,
+            type: 'MOVE',
+            targetDate: log.date.split('T')[0],
+            targetSlotId: slotId,
+            targetTime: { startTime: found.slot.startTime, endTime: found.slot.endTime },
+            daySlot: true
+        });
+        setDecisions(withPairedLog(newDecisions, log.id));
+    };
 
     if (!isOpen) return null;
 
@@ -306,10 +355,12 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                                         <div className="flex flex-col gap-2">
                                             <select
                                                 className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm px-3 py-2 font-medium outline-none focus:ring-2 ring-violet-500/20"
-                                                value={decision?.isCustomDate ? 'CUSTOM' : (decision?.type === 'MOVE' ? decision?.targetSlot?.id : decision?.type)}
+                                                value={decision?.isCustomDate ? 'CUSTOM' : decision?.daySlot ? `DAY:${decision.targetSlotId}` : (decision?.type === 'MOVE' ? decision?.targetSlot?.id : decision?.type)}
                                                 onChange={(e) => {
                                                     const val = e.target.value;
-                                                    if (val === 'EXTRA') {
+                                                    if (val.startsWith('DAY:')) {
+                                                        handleDaySlot(log, val.slice(4));
+                                                    } else if (val === 'EXTRA') {
                                                         handleDecisionChange(log.id, 'EXTRA');
                                                     } else if (val === 'DELETE') {
                                                         handleDecisionChange(log.id, 'DELETE');
@@ -344,6 +395,13 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                                                         );
                                                     })}
                                                 </optgroup>
+                                                <optgroup label={`Outra aula neste dia (${DAYS_OF_WEEK_NAMES[logDate.getDay()]}, ${logDate.toLocaleDateString('pt-BR').slice(0, 5)})`}>
+                                                    {daySlotsFor(log).map(d => (
+                                                        <option key={`DAY:${d.slot.id}`} value={`DAY:${d.slot.id}`}>
+                                                            {d.number}ª aula, {d.slot.startTime} · {d.what}
+                                                        </option>
+                                                    ))}
+                                                </optgroup>
                                                 <optgroup label="Outras ações">
                                                     <option value="EXTRA">{isEvent ? 'Manter na data, sem aula' : 'Manter como aula extra (mesma data e horário)'}</option>
                                                     <option value="CUSTOM">Escolher outra data...</option>
@@ -367,7 +425,7 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                                         <div className="mt-2 text-[10px] font-bold">
                                             {decision?.type === 'MOVE' && (
                                                 <span className="text-emerald-600 flex items-center gap-1">
-                                                    <Check size={10} /> Será movido para {new Date(decision.targetDate! + 'T00:00:00').toLocaleDateString()}
+                                                    <Check size={10} /> Será movido para {new Date(decision.targetDate! + 'T00:00:00').toLocaleDateString()}{decision.daySlot && decision.targetTime?.startTime ? `, ${decision.targetTime.startTime}` : ''}
                                                 </span>
                                             )}
                                             {decision?.type === 'EXTRA' && (

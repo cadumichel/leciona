@@ -156,6 +156,17 @@ describe('nova versão do horário: gravar as decisões', () => {
     expect(items.some(i => i.isExtra && i.log?.subject === 'Avaliação: P3')).toBe(true);
   });
 
+  it('"outra aula neste dia": a prova vai para o horário escolhido e o registro vira aula extra nele', () => {
+    const { doc, plan } = cenario();
+    const r = applyScheduleDecisions(doc, plan, [
+      { logId: 'P3', type: 'MOVE', targetDate: '2026-10-26', targetSlotId: S1, targetTime: { startTime: '13:30', endTime: '14:15' }, daySlot: true }
+    ]);
+    expect(r.events.find(x => x.id === 'P3')).toMatchObject({ date: D('2026-10-26'), slotId: S1 });
+    expect(r.logs.find(l => l.id === 'aval')).toMatchObject({ type: 'extra', date: D('2026-10-26'), slotId: S1, startTime: '13:30' });
+    const items = getLessonDisplayItems({ ...doc, logs: r.logs, events: r.events } as any, { start: '2026-10-26', end: '2026-10-26', schoolId: 'C', classId: 'all' });
+    expect(items.some(i => i.isExtra && i.log?.subject === 'Avaliação: P3' && i.slot.startTime === '13:30')).toBe(true);
+  });
+
   it('"excluir a avaliação" apaga de verdade: a prova, a REC ligada, as notas e o registro "Avaliação:"', () => {
     const { doc, plan } = cenario();
     const r = applyScheduleDecisions(doc, plan, [{ logId: 'P3', type: 'DELETE' }]);

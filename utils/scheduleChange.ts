@@ -25,6 +25,9 @@ export interface ScheduleDecision {
   targetTime?: { startTime: string; endTime: string };
   targetSlot?: ScheduleEntry;
   isCustomDate?: boolean;
+  /** Escolhida em "Outra aula neste dia": qualquer horário da escola na data (aula de outra turma,
+   * atividade fixa ou horário livre). O registro vira aula extra nesse horário. */
+  daySlot?: boolean;
 }
 
 export interface ScheduleChangePlan {
@@ -183,7 +186,8 @@ export const nextVersionStart = (data: AppData, activeFrom: string, ignoreId?: s
 
 /**
  * Aplica as decisões da janela "Ajustar Planejamento Futuro":
- * - MOVE: nova data e aula (registro e avaliação);
+ * - MOVE: nova data e aula (registro e avaliação); com `daySlot`, outro horário do mesmo dia (o
+ *   registro vira aula extra nesse horário);
  * - EXTRA: registro vira aula extra de verdade (o Diário mostra pelo tipo) na mesma data ou na
  *   escolhida; avaliação fica na data, sem aula;
  * - DELETE: registro sai; avaliação sai de verdade, com as ligadas (REC, 2ª chamada), as notas e o
@@ -217,6 +221,11 @@ export const applyScheduleDecisions = (
     if (!d) return [log];
     if (d.type === 'DELETE') return [];
     if (d.type === 'MOVE' && d.targetDate && d.targetSlotId) {
+      // Horário que não é da turma na grade nova: aula extra no horário real (como "Dar aula para uma turma neste dia")
+      if (d.daySlot) {
+        return [{ ...log, type: 'extra' as const, date: toSafeISO(d.targetDate), slotId: d.targetSlotId,
+          startTime: d.targetTime?.startTime || log.startTime || '', endTime: d.targetTime?.endTime || log.endTime || '' }];
+      }
       return [{ ...log, date: toSafeISO(d.targetDate), slotId: d.targetSlotId,
         startTime: d.targetTime?.startTime || log.startTime, endTime: d.targetTime?.endTime || log.endTime }];
     }

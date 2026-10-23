@@ -248,7 +248,20 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
     }
   };
 
-  const handleUpdateSchedule = (shiftId: string, slotId: string, classId: string) => {
+  const ACTIVITY_OPTION = '__activity';
+
+  /** Renomeia a atividade fixa de um horário (só na grade em edição) */
+  const handleRenameActivity = (shiftId: string, slotId: string, label: string) => {
+    setEditedSchedules(editedSchedules.map(s =>
+      Number(s.dayOfWeek) === Number(selectedDay) && s.schoolId === selectedInstitutionId && s.shiftId === shiftId && s.slotId === slotId
+        ? { ...s, activityLabel: label } : s));
+    setHasChanges(true);
+  };
+
+  const handleUpdateSchedule = (shiftId: string, slotId: string, value: string) => {
+    // Atividade fixa = horário sem turma (como a Janela), com nome próprio
+    const isActivity = value === ACTIVITY_OPTION;
+    const classId = isActivity ? 'window' : value;
     if (!activeInstitution || activeInstitution.type === 'student') return;
     if (!currentVersion) {
       alert("Nenhuma versão de grade selecionada. Crie uma versão primeiro.");
@@ -309,7 +322,8 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
         schoolId: selectedInstitutionId,
         shiftId,
         slotId,
-        classId
+        classId,
+        ...(isActivity ? { activityLabel: 'Aplicação de provas' } : {})
       });
     }
 
@@ -592,7 +606,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                         return {
                           schoolName: conflictSchool?.name || 'Outra escola',
                           schoolColor: conflictSchool?.color || '#6366f1',
-                          className: getClassName(data, conflictingSchedule.schoolId, conflictingSchedule.classId)
+                          className: conflictingSchedule.activityLabel || getClassName(data, conflictingSchedule.schoolId, conflictingSchedule.classId)
                         };
                       }
                       return null;
@@ -637,11 +651,13 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                             </div>
                           </div>
                         ) : slot.type === 'class' ? (
+                          <div className="flex-1 flex items-center gap-2 min-w-0">
                           <select
-                            value={currentSchedule?.classId || ''}
+                            value={currentSchedule?.activityLabel !== undefined ? ACTIVITY_OPTION : (currentSchedule?.classId || '')}
                             disabled={activeInstitution.type === 'student'}
                             onChange={e => handleUpdateSchedule(shift.id, slot.id, e.target.value)}
                             className={`flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 md:px-3 py-1 md:py-1.5 text-xs font-bold outline-none cursor-pointer appearance-none ${ // Compactação no input
+                              currentSchedule?.activityLabel !== undefined ? 'text-teal-600' :
                               currentSchedule?.classId === 'window' ? 'text-amber-600' :
                                 currentSchedule?.classId ? 'text-primary' : 'text-slate-500'
                               } disabled:opacity-100 disabled:bg-white disabled:border-transparent`}
@@ -650,6 +666,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                               <>
                                 <option value="">Livre</option>
                                 <option value="window" className="text-amber-600 font-bold">Janela / Livre</option>
+                                <option value={ACTIVITY_OPTION} className="text-teal-600 font-bold">Atividade fixa (sem turma)</option>
                                 {(activeInstitution.data.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map((c, i) => {
                                   const name = typeof c === 'string' ? c : c.name;
                                   const key = typeof c === 'string' ? `${c}-${i}` : c.id;
@@ -660,6 +677,16 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                               <option value={activeInstitution.data.name}>Atendimento Particular</option>
                             )}
                           </select>
+                          {currentSchedule?.activityLabel !== undefined && (
+                            <input
+                              value={currentSchedule.activityLabel}
+                              onChange={e => handleRenameActivity(shift.id, slot.id, e.target.value)}
+                              placeholder="Nome da atividade"
+                              title="Nome da atividade fixa (ex.: Aplicação de provas)"
+                              className="flex-1 min-w-0 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg px-2 py-1 md:py-1.5 text-xs font-bold text-teal-700 dark:text-teal-300 outline-none"
+                            />
+                          )}
+                          </div>
                         ) : (
                           <div className="flex-1 text-center font-black text-slate-500 text-[8px] md:text-[9px] uppercase tracking-tight py-1">
                             Intervalo

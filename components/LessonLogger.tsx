@@ -36,13 +36,14 @@ import {
   ArrowUpNarrowWide,
   ArrowDownWideNarrow,
   Edit3,
-  Eye
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { DAYS_OF_WEEK_NAMES } from '../constants';
 import { parseTimeToMinutes, getCurrentTimeInMinutes, getHolidayName, isHoliday, getDayOfWeekFromDate, toSafeISO, formatDateBR } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName } from '../utils/classRefs';
-import { getLessonDisplayItems, deriveStatsFromLessons, LessonDisplayItem } from '../utils/lessonStats';
+import { getLessonDisplayItems, deriveStatsFromLessons, LessonDisplayItem, isLessonBlocked as isLessonBlockedIn, getLessonBlockReason } from '../utils/lessonStats';
 import { sanitizeText, LIMITS } from '../utils/validation';
 import { findPreviousLesson } from '../utils/retrospective';
 import { DisconnectedNotice } from './ConnectionWarnings';
@@ -211,6 +212,10 @@ const formatWeekRange = (weekStartStr: string): string => {
 
   return `${formatDate(start)} - ${formatDate(end)}`;
 };
+
+/** Registro com algo escrito (aula criada vazia ainda não está registrada) */
+const hasLogText = (log?: LessonLog | null) =>
+  !!log && !!(log.subject || log.homework || log.notes || (log.attendance && log.attendance.length > 0));
 
 const LessonLogger: React.FC<LessonLoggerProps> = ({
   data,
@@ -406,6 +411,30 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     shiftId: string;
     slotId: string;
   }>({ date: '', schoolId: '', classId: '', shiftId: '', slotId: '' });
+
+  // Horário de janela/atividade fixa: aula de uma turma só nesta data (aula extra no próprio horário da grade)
+  const [slotClassId, setSlotClassId] = useState('');
+  const handleTeachClassInSlot = () => {
+    if (!activeLesson || activeLesson.type !== 'school' || !slotClassId) return;
+    const newLog: LessonLog = {
+      id: crypto.randomUUID(),
+      date: toSafeISO(activeLesson.date),
+      schoolId: activeLesson.institution.id,
+      classId: slotClassId,
+      slotId: activeLesson.slot.id,
+      startTime: activeLesson.slot.startTime,
+      endTime: activeLesson.slot.endTime,
+      subject: '',
+      homework: '',
+      notes: '',
+      type: 'extra',
+      status: 'active'
+    };
+    onUpdateData({ logs: [...data.logs, newLog] });
+    setSlotClassId('');
+    setActiveLesson(null);
+    showSuccess('Aula criada! Toque no card da turma para registrar o conteúdo.');
+  };
 
   const handleCreateRegularSkeleton = () => {
     const { date, schoolId, classId, shiftId, slotId } = createRegularForm;
@@ -654,51 +683,12 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     return calendar.terms.map((t, idx) => ({ label: t.name, value: idx.toString() }));
   }, [data.calendars, filterInstId]);
 
-  const isLessonBlocked = (dateStr: string, schoolId: string, shiftId?: string, classId?: string) => {
-    const calendar = data.calendars.find(c => c.schoolId === schoolId);
-    if (calendar) {
-      if (calendar.midYearBreak.start && dateStr >= calendar.midYearBreak.start && dateStr <= calendar.midYearBreak.end) return true;
-      if (calendar.extraRecesses?.some(r => r.date === dateStr)) return true;
-    }
+  // Recesso, recesso de meio de ano ou evento que suspende aula (regra única em utils/lessonStats.ts)
+  const isLessonBlocked = (dateStr: string, schoolId: string, shiftId?: string, classId?: string) =>
+    isLessonBlockedIn(data, dateStr, schoolId, shiftId, classId);
 
-    const events = data.events.filter(e => e.schoolId === schoolId && e.date.startsWith(dateStr) && e.blocksClasses);
-    for (const event of events) {
-      if (!event.slotId && !event.classId) return true;
-      if (event.slotId && event.slotId === shiftId) return true;
-      if (event.classId && event.classId === classId) return true;
-    }
-    return false;
-  };
-
-  const getBlockReason = (dateStr: string, schoolId: string, shiftId?: string, classId?: string): string | null => {
-    const calendar = data.calendars.find(c => c.schoolId === schoolId);
-
-    // Check mid-year break
-    if (calendar?.midYearBreak.start && dateStr >= calendar.midYearBreak.start && dateStr <= calendar.midYearBreak.end) {
-      return "Recesso de Meio de Ano";
-    }
-
-    // Check extra recesses
-    const recess = calendar?.extraRecesses?.find(r => r.date === dateStr);
-    if (recess) {
-      return recess.name; // e.g., "Carnaval", "Páscoa"
-    }
-
-    // Check blocking events
-    const event = data.events.find(e =>
-      e.schoolId === schoolId &&
-      e.date.startsWith(dateStr) &&
-      e.blocksClasses &&
-      (!e.slotId || e.slotId === shiftId) &&
-      (!e.classId || e.classId === classId)
-    );
-
-    if (event) {
-      return event.title; // e.g., "Reunião Pedagógica", "Conselho de Classe"
-    }
-
-    return null;
-  };
+  const getBlockReason = (dateStr: string, schoolId: string, shiftId?: string, classId?: string): string | null =>
+    getLessonBlockReason(data, dateStr, schoolId, shiftId, classId);
 
   const pendingLessons = useMemo(() => {
     const now = new Date();
@@ -840,7 +830,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
   // Aulas que faltam até o fim do período (utils/remainingLessons.ts)
   const remainingInfo = useMemo(() => {
-    if (!activeLesson || activeLesson.type !== 'school') return null;
+    if (!activeLesson || activeLesson.type !== 'school' || activeLesson.schedule.classId === 'window') return null;
     return countRemainingLessons(data, {
       schoolId: activeLesson.institution.id,
       classId: activeLesson.schedule.classId,
@@ -1590,6 +1580,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       label: string;
       isWindow?: boolean;
       isFree?: boolean;
+      /** Feriado, recesso ou evento que suspende a aula nesse dia (aula não fica pendente) */
+      blockedReason?: string | null;
       startTimeMin: number;
       endTimeMin: number;
       isActive: boolean;
@@ -1604,6 +1596,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
     // Get versioned schedules for the selected date
     const dailySchedules = getSchedulesForDate(data, selectedDate);
+    const holidayName = getHolidayName(dObj);
 
     data.schools.filter(s => !s.deleted).forEach(school => {
       // Proteção: garantir que shifts existe
@@ -1646,7 +1639,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           let isFree = false;
 
           if (schedule.classId === 'window') {
-            displayLabel = 'Janela';
+            displayLabel = schedule.activityLabel || 'Janela';
             isWindow = true;
           } else {
             displayLabel = schedule.classId;
@@ -1655,6 +1648,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           const startMin = parseTimeToMinutes(slot.startTime);
           const endMin = parseTimeToMinutes(slot.endTime);
           const isActive = isToday && currentTime >= startMin && currentTime < endMin;
+          const blockedReason = isWindow ? null : (holidayName || getBlockReason(selectedDate, school.id, shift.id, schedule.classId));
 
           if (!groupedShifts[shift.name]) groupedShifts[shift.name] = [];
           groupedShifts[shift.name].push({
@@ -1665,6 +1659,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             label: displayLabel,
             isWindow,
             isFree,
+            blockedReason,
             startTimeMin: startMin,
             endTimeMin: endMin,
             isActive
@@ -1804,6 +1799,12 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       if (matchedShiftId === 'extra') {
         effectiveSlotId = log.id;
       }
+      // Aula de uma turma num horário de janela/atividade fixa: abre pelo próprio registro (continua aula extra)
+      const inGridSlot = log.type === 'extra' && !!matchedSlot && matchedSlot.id === log.slotId;
+      if (inGridSlot) {
+        effectiveShiftId = 'extra';
+        effectiveSlotId = log.id;
+      }
 
       const startMin = parseTimeToMinutes(slotInfo.startTime);
       const endMin = parseTimeToMinutes(slotInfo.endTime);
@@ -1835,7 +1836,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
         slot: slotInfo,
         log,
         label: log.type === 'substitution' ? `Subst: ${log.substitutionSubject}` :
-          log.type === 'regular' ? displayName :
+          log.type === 'regular' || inGridSlot ? displayName :
             `Extra: ${log.subject}`,
         isWindow: false,
         isFree: false,
@@ -1872,7 +1873,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     });
 
     return { sortedKeys, groupedShifts };
-  }, [data.scheduleVersions, data.schedules, selectedDate, data.schools, data.students, data.logs, viewMode]);
+  }, [data.scheduleVersions, data.schedules, selectedDate, data.schools, data.students, data.logs, data.calendars, data.events, viewMode]);
 
   // Calculate statistics for history and planning views
   const lessonStats = useMemo(() => {
@@ -2082,7 +2083,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           <div>
             {(() => {
               const school = activeLesson.institution as School;
-              let title = activeLesson.schedule.classId;
+              let title = activeLesson.schedule.classId === 'window' ? (activeLesson.schedule.activityLabel || 'Janela') : activeLesson.schedule.classId;
               let subtitle = `${activeLesson.institution.name}`;
               let isOfficial = false;
 
@@ -2176,7 +2177,22 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           </div>
         )}
 
-        {remainingInfo && activeLesson && (
+        {remainingInfo && activeLesson && data.settings.hideRemainingLessons && (
+          <div className="-mt-4 md:-mt-6 lg:mt-0 mb-6 md:mb-8 lg:mb-3 px-1">
+            <button
+              type="button"
+              onClick={() => onUpdateData({ settings: { ...data.settings, hideRemainingLessons: false } })}
+              className="flex items-center gap-1.5 text-[9px] md:text-[10px] font-bold text-slate-400 hover:text-primary transition-colors"
+              title="Mostrar quantas aulas faltam"
+            >
+              <CalendarRange size={12} className="shrink-0" />
+              <Eye size={12} className="shrink-0" />
+              <span>Aulas que faltam</span>
+            </button>
+          </div>
+        )}
+
+        {remainingInfo && activeLesson && !data.settings.hideRemainingLessons && (
           <div className="-mt-4 md:-mt-6 lg:mt-0 mb-6 md:mb-8 lg:mb-3 px-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] md:text-[10px] font-bold text-slate-500 dark:text-slate-400">
             <CalendarRange size={12} className="text-primary shrink-0" />
             <span>
@@ -2190,6 +2206,15 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 {remainingInfo.nextAssessment.lessonsBefore > 0 && `, daqui a ${remainingInfo.nextAssessment.lessonsBefore} ${remainingInfo.nextAssessment.lessonsBefore === 1 ? 'aula' : 'aulas'}`}
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => onUpdateData({ settings: { ...data.settings, hideRemainingLessons: true } })}
+              className="p-0.5 text-slate-400 hover:text-primary transition-colors"
+              title="Ocultar quantas aulas faltam"
+              aria-label="Ocultar quantas aulas faltam"
+            >
+              <EyeOff size={12} />
+            </button>
           </div>
         )}
 
@@ -2211,8 +2236,36 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           {activeLesson.schedule.classId === 'window' ? (
             <div className="bg-slate-50 dark:bg-slate-800/50 p-8 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 text-center">
               <Palmtree className="mx-auto text-slate-300 mb-3" size={32} />
-              <h3 className="text-sm font-black uppercase text-slate-500 mb-1">Horário de Janela</h3>
-              <p className="text-xs text-slate-400 max-w-xs mx-auto mb-6">Este horário está marcado como livre na sua grade. Você pode excluí-lo desta visualização se desejar.</p>
+              <h3 className="text-sm font-black uppercase text-slate-500 mb-1">{activeLesson.schedule.activityLabel || 'Horário de Janela'}</h3>
+              <p className="text-xs text-slate-400 max-w-xs mx-auto mb-6">
+                {activeLesson.schedule.activityLabel !== undefined
+                  ? 'Atividade fixa da sua grade, sem turma: não entra no planejamento nem nas aulas que faltam.'
+                  : 'Este horário está marcado como livre na sua grade. Você pode excluí-lo desta visualização se desejar.'}
+              </p>
+
+              {activeLesson.type === 'school' && (
+                <div className="max-w-xs mx-auto mb-6 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-left">
+                  <label className="block text-[9px] font-black text-slate-500 uppercase mb-1.5">Dar aula para uma turma neste dia</label>
+                  <div className="flex gap-2">
+                    <select value={slotClassId} onChange={e => setSlotClassId(e.target.value)} className="flex-1 min-w-0 bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-2 py-2 text-xs font-bold dark:text-white outline-none">
+                      <option value="">Escolha a turma…</option>
+                      {((activeLesson.institution as School).classes || [])
+                        .filter(c => typeof c === 'string' || !c.deleted)
+                        .map(c => ({ id: typeof c === 'string' ? c : c.id, name: typeof c === 'string' ? c : c.name }))
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <button
+                      onClick={handleTeachClassInSlot}
+                      disabled={!slotClassId}
+                      className="px-3 py-2 rounded-lg bg-primary text-white text-[10px] font-black uppercase disabled:opacity-40"
+                    >
+                      Criar aula
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-slate-400 mt-1.5">Vale só para {formatDateBR(activeLesson.date)}; a grade não muda.</p>
+                </div>
+              )}
 
               <button
                 onClick={() => setShowDeleteOptionsModal(true)}
@@ -3077,18 +3130,24 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                                 {item.log.subject || 'Planejado'}
                               </span>
                             )}
-                            <div className={`flex items-center gap-1 shrink-0 text-[7px] font-black uppercase ${item.slot.type === 'break' ? 'hidden' : item.isFree ? 'text-slate-500' : item.isWindow ? 'text-slate-500' : item.log ? (isFutureDate ? 'text-purple-500' : 'text-green-500') : (isFutureDate || (selectedDate === getYYYYMMDD(new Date()) && currentTime < (item as any).endTimeMin)) ? 'text-slate-400' : 'text-blue-500'}`}>
-                              {item.log ? <CheckCircle2 size={10} /> : null}
+                            {!item.log && item.blockedReason && item.slot.type !== 'break' ? (
+                              <span className="shrink-0 max-w-[110px] truncate text-[7px] font-black uppercase text-pink-600 dark:text-pink-300 bg-pink-100 dark:bg-pink-900/30 px-1.5 py-0.5 rounded" title={item.blockedReason}>
+                                {item.blockedReason}
+                              </span>
+                            ) : (
+                            <div className={`flex items-center gap-1 shrink-0 text-[7px] font-black uppercase ${item.slot.type === 'break' ? 'hidden' : item.isFree ? 'text-slate-500' : item.isWindow ? 'text-slate-500' : hasLogText(item.log) ? (isFutureDate ? 'text-purple-500' : 'text-green-500') : (isFutureDate || (selectedDate === getYYYYMMDD(new Date()) && currentTime < (item as any).endTimeMin)) ? 'text-slate-400' : 'text-blue-500'}`}>
+                              {hasLogText(item.log) ? <CheckCircle2 size={10} /> : null}
                               {
                                 item.slot.type === 'break' ? '' :
                                   item.isFree ? 'Livre' :
-                                    item.isWindow ? 'Janela' :
-                                      item.log ? (isFutureDate ? 'Planejado' : 'OK') :
+                                    item.isWindow ? (item.schedule?.activityLabel !== undefined ? 'Fixa' : 'Janela') :
+                                      hasLogText(item.log) ? (isFutureDate ? 'Planejado' : 'OK') :
                                         (isFutureDate || (selectedDate === getYYYYMMDD(new Date()) && currentTime < (item as any).startTimeMin)) ? 'Agendada' :
                                           (selectedDate === getYYYYMMDD(new Date()) && currentTime >= (item as any).startTimeMin && currentTime < (item as any).endTimeMin) ? 'Em aula' :
                                             'Pendente'
                               }
                             </div>
+                            )}
                           </div>
                         </div>
                       </div>

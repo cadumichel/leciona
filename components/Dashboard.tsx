@@ -683,7 +683,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
                     <h4 className="text-2xl md:text-4xl font-black text-slate-900 dark:text-white uppercase leading-none tracking-tighter mb-3 md:mb-4 truncate">
                       {activityInfo.current.type === 'school'
-                        ? (activityInfo.current.schedule.classId === 'window' ? 'Janela / Livre' : activityInfo.current.schedule.classId)
+                        ? (activityInfo.current.schedule.classId === 'window' ? (activityInfo.current.schedule.activityLabel || 'Janela / Livre') : activityInfo.current.schedule.classId)
                         : activityInfo.current.student.name}
                     </h4>
 
@@ -694,7 +694,8 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                   </div>
                 </button>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                {/* Aula anterior (a próxima aula aparece na linha de aulas do dia) */}
+                <div>
                   <div className="p-3 md:p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex flex-col justify-center">
                     <div className="flex items-center gap-2 mb-1 md:mb-2 text-slate-400">
                       <History size={10} className="md:w-3 md:h-3" />
@@ -713,33 +714,6 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                       </div>
                     ) : (
                       <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase">Sem registros anteriores.</p>
-                    )}
-                  </div>
-
-                  <div className="p-3 md:p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex flex-col justify-center">
-                    <div className="flex items-center gap-2 mb-1 md:mb-2 text-slate-400">
-                      <ArrowRight size={10} className="md:w-3 md:h-3" />
-                      <span className="text-[7px] md:text-[8px] font-black uppercase tracking-tight">Próxima Aula</span>
-                    </div>
-                    {activityInfo.isLast ? (
-                      <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                        <CheckCircle2 size={12} className="md:w-[14px] md:h-[14px]" />
-                        <span className="text-[9px] md:text-[10px] font-black uppercase tracking-tight">Fim do expediente! 🎉</span>
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] md:text-xs font-black text-primary uppercase">
-                            {activityInfo.next?.type === 'school'
-                              ? (activityInfo.next.schedule.classId === 'window' ? 'Janela / Livre' : activityInfo.next.schedule.classId)
-                              : activityInfo.next.student?.name}
-                          </span>
-                          <span className="text-[8px] md:text-[9px] font-bold text-slate-500 bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-100 dark:border-slate-600">{activityInfo.next?.startTime}</span>
-                        </div>
-                        {activityInfo.next?.type === 'school' && activityInfo.next.school?.id !== (activityInfo.current.type === 'school' ? activityInfo.current.school?.id : '') && (
-                          <span className="text-[8px] md:text-[9px] font-black text-orange-500 uppercase flex items-center gap-1"><MapPin size={9} /> {activityInfo.next.school?.name}</span>
-                        )}
-                      </div>
                     )}
                   </div>
                 </div>
@@ -762,7 +736,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                         <div className="text-left min-w-0 flex-1 overflow-hidden">
                           <p className="text-[9px] md:text-[10px] font-black uppercase text-primary truncate block w-full">
                             {nextGlobalActivity.type === 'school'
-                              ? (nextGlobalActivity.schedule.classId === 'window' ? 'Janela' : nextGlobalActivity.schedule.classId)
+                              ? (nextGlobalActivity.schedule.classId === 'window' ? (nextGlobalActivity.schedule.activityLabel || 'Janela') : nextGlobalActivity.schedule.classId)
                               : nextGlobalActivity.student.name}
                           </p>
                         </div>

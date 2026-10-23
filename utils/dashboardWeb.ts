@@ -82,9 +82,13 @@ export const buildTodayTimeline = (data: AppData, dateStr: string): TodayGroup[]
     const slot = shift?.slots.find(sl => sl.id === s.slotId);
     if (!shift || !slot) return;
 
-    const isWindow = s.classId === 'window';
-    const blocked = !isWindow && isLessonBlocked(data, dateStr, s.schoolId, s.shiftId, s.classId);
-    const item = itemBySchedule.get(s);
+    // Janela/atividade fixa em que o Cadu deu aula para uma turma nesse dia (aula extra no horário)
+    const classInSlot = s.classId === 'window'
+      ? (data.logs || []).find(l => l.type === 'extra' && l.status !== 'removed' && l.schoolId === s.schoolId && l.slotId === s.slotId && (l.date || '').startsWith(dateStr))
+      : undefined;
+    const isWindow = s.classId === 'window' && !classInSlot;
+    const blocked = !isWindow && isLessonBlocked(data, dateStr, s.schoolId, s.shiftId, classInSlot ? classInSlot.classId : s.classId);
+    const item = classInSlot ? items.find(i => i.log?.id === classInSlot.id) : itemBySchedule.get(s);
     // Aula que não conta (fora do calendário letivo da escola): não aparece
     if (!isWindow && !blocked && !item) return;
 
@@ -95,14 +99,16 @@ export const buildTodayTimeline = (data: AppData, dateStr: string): TodayGroup[]
       shiftName: shift.name,
       color: school.color,
       number: lessonNumberInShift(shift.slots, slot.id),
-      className: isWindow ? 'Janela' : getClassName(data, s.schoolId, s.classId, s.classId),
+      className: classInSlot ? getClassName(data, s.schoolId, classInSlot.classId, classInSlot.classId)
+        : isWindow ? (s.activityLabel || 'Janela') : getClassName(data, s.schoolId, s.classId, s.classId),
       startTime: slot.startTime,
       endTime: slot.endTime,
       isWindow,
       blocked,
-      hasContent: !!item?.hasContent,
-      assessment: isWindow ? undefined : assessmentFor(s.schoolId, s.classId, s.slotId),
-      schedule: s
+      hasContent: classInSlot ? !!(classInSlot.subject || classInSlot.homework) : !!item?.hasContent,
+      assessment: isWindow ? undefined : assessmentFor(s.schoolId, classInSlot ? classInSlot.classId : s.classId, s.slotId),
+      // A aula da turma abre pelo próprio registro (aula extra)
+      schedule: classInSlot ? { ...s, shiftId: 'extra', slotId: classInSlot.id, classId: classInSlot.classId } : s
     });
   });
 

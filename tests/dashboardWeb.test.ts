@@ -104,6 +104,23 @@ describe('linha do dia', () => {
     expect(todayLessonStatus(v.lessons[0], 7 * 60)).toBe('blocked');
   });
 
+  it('atividade fixa aparece com o nome; aula de uma turma nesse horário toma o lugar só naquele dia', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-19T07:00:00-03:00'));
+    const withActivity = { ...data, scheduleVersions: [{ ...data.scheduleVersions[0], schedules: data.scheduleVersions[0].schedules.map((e: any) =>
+      e.id === 'e5' ? { ...e, activityLabel: 'Aplicação de provas' } : e) }] };
+    const [, v] = buildTodayTimeline(withActivity, '2026-10-19');
+    expect(v.lessons[1]).toMatchObject({ className: 'Aplicação de provas', isWindow: true });
+
+    const withClass = { ...withActivity, logs: [...data.logs, { id: 'X', date: '2026-10-19T00:00:00.000Z', schoolId: 'C', classId: 'c163', slotId: 's2',
+      startTime: '14:15', endTime: '15:00', subject: '', homework: '', notes: '', type: 'extra', status: 'active' }] };
+    const [, v2] = buildTodayTimeline(withClass, '2026-10-19');
+    expect(v2.lessons[1]).toMatchObject({ className: '163', isWindow: false, hasContent: false });
+    expect(v2.lessons[1].schedule).toMatchObject({ shiftId: 'extra', slotId: 'X', classId: 'c163' });
+    // Na semana seguinte volta a ser a atividade fixa
+    expect(buildTodayTimeline(withClass, '2026-10-26')[1].lessons[1].className).toBe('Aplicação de provas');
+  });
+
   it('feriado: sem linha do dia', () => {
     expect(buildTodayTimeline(data, '2026-11-02')).toEqual([]);
   });

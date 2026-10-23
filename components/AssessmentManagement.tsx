@@ -8,6 +8,7 @@ import {
 import { isHoliday, getHolidayName, getDayOfWeekFromDate, getSafeDate, toSafeISO } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { DisconnectedNotice } from './ConnectionWarnings';
+import { PlannedChoice, planAssessmentLogs, removeAssessmentLogs } from '../utils/assessmentLogs';
 import {
   KIND_LABELS, buildRecovery, checkAssessmentDate, linkedAssessments, nextLessonDate, parentCandidates,
   recoveryPolicyOf, secondCallModeOf, suggestRecovery, termRecoveryContent
@@ -49,6 +50,28 @@ function getFridayOfWeek(mondayStr: string): string {
   return d.toLocaleDateString('en-CA');
 }
 
+function addDays(dateStr: string, n: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+const dayOf = (d: string) => String(d || '').split('T')[0];
+
+/** REC/2ª chamada ligada que pode ir junto quando a avaliação muda de data */
+interface LinkedMove { event: SchoolEvent; date: string; slotId?: string }
+
+/** Janela de escolha ao salvar: aula nova com conteúdo planejado e/ou avaliações ligadas */
+interface SaveDecision {
+  event: SchoolEvent;
+  original?: SchoolEvent;
+  conflictSubject?: string;
+  canSwap: boolean;
+  choice: PlannedChoice;
+  linked: LinkedMove[];
+  unmovable: SchoolEvent[];
+  moveLinked: boolean;
+}
+
 function fmtShort(dateStr: string): string {
   return getSafeDate(dateStr).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
@@ -73,6 +96,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   const [isInvalidDate, setIsInvalidDate] = useState(false);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveDecision, setSaveDecision] = useState<SaveDecision | null>(null);
 
   // ── Filter State ─────────────────────────────────────────────────────────
   const [filterSchoolId, setFilterSchoolId] = useState('all');
@@ -285,15 +309,6 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     if (formKind === 'second_call' && !newEvent.parentId) return;
     const safeDateISO = toSafeISO(newEvent.date!);
     const eventId = newEvent.id || crypto.randomUUID();
-    let currentLogs = [...data.logs];
-    let currentEvents = [...data.events];
-    if (newEvent.id) {
-      const orig = data.events.find(e => e.id === newEvent.id);
-      if (orig) {
-        currentEvents = currentEvents.filter(e => e.id !== newEvent.id);
-        currentLogs = currentLogs.filter(l => !(l.date.split('T')[0] === orig.date.split('T')[0] && l.schoolId === orig.schoolId && l.slotId === orig.slotId));
-      }
-    }
     // Ao editar, mantém o que não está no formulário (situação, peso, nota máxima, ligações)
     const original = newEvent.id ? data.events.find(e => e.id === newEvent.id) : undefined;
     const kind = formKind === 'regular' ? undefined : formKind;
@@ -308,17 +323,51 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     if ((kind === 'second_call' || kind === 'recovery') && newEvent.parentId) event.parentId = newEvent.parentId;
     else delete event.parentId;
 
-    const newEvents: SchoolEvent[] = [event];
-    if (event.slotId) {
-      currentLogs = currentLogs.filter(l =>
-        !(l.date.split('T')[0] === newEvent.date && l.schoolId === event.schoolId && l.slotId === event.slotId)
-      );
-      currentLogs.push({
-        id: crypto.randomUUID(), date: safeDateISO, schoolId: event.schoolId,
-        classId: event.classId!, slotId: event.slotId,
-        subject: `Avaliação: ${event.title}`, homework: '', notes: event.description || ''
+    // Aula nova já tem conteúdo planejado? (utils/assessmentLogs.ts)
+    const plan = planAssessmentLogs(data, original, event, undefined, () => crypto.randomUUID());
+
+    // Mudou de data: REC e 2ª chamada ligadas podem ir junto, mantendo a mesma distância
+    const linked: LinkedMove[] = [];
+    const unmovable: SchoolEvent[] = [];
+    if (original && dayOf(original.date) !== dayOf(event.date)) {
+      const offset = Math.round((getSafeDate(dayOf(event.date)).getTime() - getSafeDate(dayOf(original.date)).getTime()) / 86400000);
+      linkedAssessments(data.events, original.id).forEach(l => {
+        const date = addDays(dayOf(l.date), offset);
+        const school = data.schools.find(sc => sc.id === l.schoolId);
+        if (!school) { unmovable.push(l); return; }
+        // 2ª chamada no contraturno: só não pode cair em feriado
+        if (!l.slotId) { if (getHolidayName(getSafeDate(date))) unmovable.push(l); else linked.push({ event: l, date }); return; }
+        const check = checkAssessmentDate(data, school, l.classId || '', date);
+        const slotId = check.blocked ? undefined : (check.lessons.find(sl => sl.id === l.slotId) || check.lessons[0])?.id;
+        if (slotId) linked.push({ event: l, date, slotId }); else unmovable.push(l);
       });
     }
+
+    if (plan.conflict || linked.length || unmovable.length) {
+      setSaveDecision({
+        event, original, conflictSubject: plan.conflict ? (plan.conflict.subject || plan.conflict.homework || 'Registro sem conteúdo') : undefined,
+        canSwap: plan.canSwap, choice: plan.conflict ? (plan.canSwap ? 'swap' : 'push') : 'keep',
+        linked, unmovable, moveLinked: true
+      });
+      return;
+    }
+    commitSave(event, original, undefined, []);
+  };
+
+  const commitSave = (event: SchoolEvent, original: SchoolEvent | undefined, choice: PlannedChoice | undefined, linkedMoves: LinkedMove[]) => {
+    const newId = () => crypto.randomUUID();
+    let currentLogs = planAssessmentLogs(data, original, event, choice, newId).logs;
+    let currentEvents = data.events.filter(e => e.id !== event.id);
+    const newEvents: SchoolEvent[] = [event];
+
+    // REC/2ª chamada ligadas vão junto; se a aula nova delas já tem registro, ele fica como está
+    linkedMoves.forEach(({ event: l, date, slotId }) => {
+      const moved: SchoolEvent = { ...l, date: toSafeISO(date) };
+      if (slotId) moved.slotId = slotId;
+      currentLogs = planAssessmentLogs({ ...data, logs: currentLogs }, l, moved, 'keep', newId).logs;
+      currentEvents = currentEvents.filter(e => e.id !== l.id);
+      newEvents.push(moved);
+    });
 
     // REC paralela criada junto com a prova (só no cadastro novo)
     if (offerRec && createRec && recDate && recSlotId) {
@@ -333,8 +382,9 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       }
     }
     onUpdateData({ events: [...currentEvents, ...newEvents], logs: currentLogs });
+    setSaveDecision(null);
     setSaveSuccess(true);
-    if (!newEvent.id) setNewEvent(prev => ({ ...prev, id: eventId }));
+    if (!newEvent.id) setNewEvent(prev => ({ ...prev, id: event.id }));
     setTimeout(() => {
       setSaveSuccess(false);
       setIsAdding(false);
@@ -355,10 +405,8 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     const currentEvents = data.events.filter(e => !removedIds.has(e.id));
     const currentGrades = data.grades.filter(g => !removedIds.has(g.assessmentId));
 
-    // Remover o registro de diário (LessonLog) que foi gerado automaticamente para cada avaliação
-    const currentLogs = data.logs.filter(l => !removed.some(e =>
-      e.slotId && l.date.split('T')[0] === e.date.split('T')[0] && l.schoolId === e.schoolId && l.slotId === e.slotId && l.subject.startsWith('Avaliação:')
-    ));
+    // Remove só o registro automático "Avaliação: X" (registro escrito pelo Cadu fica)
+    const currentLogs = removeAssessmentLogs(data.logs, removed);
 
     onUpdateData({ events: currentEvents, grades: currentGrades, logs: currentLogs });
     setDeletingEventId(null);
@@ -375,15 +423,9 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       schoolId: copyData.targetSchoolId, classId: copyData.targetClassId, slotId: copyData.targetSlotId,
       type: newEvent.type as 'test' | 'work', description: newEvent.description || '', blocksClasses: false
     };
-    const newLog: LessonLog = {
-      id: crypto.randomUUID(), date: safeDateISO, schoolId: event.schoolId,
-      classId: event.classId!, slotId: event.slotId!,
-      subject: `Avaliação: ${event.title}`, homework: '', notes: event.description || ''
-    };
-    const filteredLogs = data.logs.filter(l =>
-      !(l.date.split('T')[0] === copyData.targetDate && l.schoolId === event.schoolId && l.slotId === event.slotId)
-    );
-    onUpdateData({ events: [...data.events, event], logs: [...filteredLogs, newLog] });
+    // Aula com conteúdo planejado: o conteúdo fica e ganha a linha "Avaliação: X"
+    const { logs } = planAssessmentLogs(data, undefined, event, 'merge', () => crypto.randomUUID());
+    onUpdateData({ events: [...data.events, event], logs });
     setCopyData(prev => ({ ...prev, targetClassId: '', targetSlotId: '' }));
     setCopySuccess(true);
     setTimeout(() => setCopySuccess(false), 2500);
@@ -1206,6 +1248,68 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
           </div>
         )
       }
+
+      {/* ── Escolha ao salvar: aula nova com planejamento e/ou REC ligada ── */}
+      {saveDecision && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 w-full max-w-md shadow-2xl animate-in zoom-in-95 max-h-[95vh] overflow-y-auto space-y-4">
+            <h3 className="text-sm font-black uppercase">Ajustar o Diário</h3>
+
+            {saveDecision.conflictSubject && (
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                  A aula de {fmtShort(saveDecision.event.date)} já tem conteúdo planejado:
+                  <span className="block mt-1 italic text-purple-700 dark:text-purple-300 line-clamp-3">"{saveDecision.conflictSubject}"</span>
+                </p>
+                {([
+                  ...(saveDecision.canSwap ? [['swap', 'Trocar', `O conteúdo vai para a aula que a avaliação deixou livre (${fmtShort(saveDecision.original!.date)}).`]] : []),
+                  ['push', 'Empurrar o planejamento', 'O conteúdo desta aula e das seguintes da turma anda uma aula para frente, até a primeira aula vazia.'],
+                  ['merge', 'Manter os dois', 'A aula fica com o conteúdo planejado e a linha da avaliação.']
+                ] as [PlannedChoice, string, string][]).map(([value, label, hint]) => (
+                  <label key={value} className={`flex gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${saveDecision.choice === value ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-100 dark:border-slate-800'}`}>
+                    <input type="radio" name="planned-choice" className="mt-0.5" checked={saveDecision.choice === value}
+                      onChange={() => setSaveDecision({ ...saveDecision, choice: value })} />
+                    <span>
+                      <span className="block text-[10px] font-black uppercase text-slate-700 dark:text-slate-200">{label}</span>
+                      <span className="block text-[10px] font-bold text-slate-500">{hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {saveDecision.linked.length > 0 && (
+              <label className="flex gap-3 p-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 cursor-pointer">
+                <input type="checkbox" className="mt-0.5" checked={saveDecision.moveLinked}
+                  onChange={e => setSaveDecision({ ...saveDecision, moveLinked: e.target.checked })} />
+                <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                  Mudar também, mantendo a mesma distância:
+                  {saveDecision.linked.map(l => (
+                    <span key={l.event.id} className="block font-black">{l.event.title}: {fmtShort(l.event.date)} → {fmtShort(l.date)}</span>
+                  ))}
+                </span>
+              </label>
+            )}
+
+            {saveDecision.unmovable.length > 0 && (
+              <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded-xl p-3">
+                Remarque à mão (a nova data cairia sem aula): {saveDecision.unmovable.map(e => `${e.title} (${fmtShort(e.date)})`).join(', ')}.
+              </p>
+            )}
+
+            <div className="flex gap-3">
+              <button onClick={() => setSaveDecision(null)} className="flex-1 py-3 font-black text-slate-400 uppercase text-[9px]">Voltar</button>
+              <button
+                onClick={() => commitSave(saveDecision.event, saveDecision.original, saveDecision.conflictSubject ? saveDecision.choice : undefined,
+                  saveDecision.moveLinked ? saveDecision.linked : [])}
+                className="flex-1 py-3 rounded-lg font-black uppercase text-[9px] tracking-tight bg-blue-600 text-white shadow-xl shadow-blue-100 hover:brightness-110"
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

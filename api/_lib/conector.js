@@ -175,19 +175,25 @@ var getSchedulesForDate = (data, dateStr) => {
 };
 
 // utils/lessonStats.ts
-var isLessonBlocked = (data, dateStr, schoolId, shiftId, classId) => {
-  const calendar = data.calendars.find((c) => c.schoolId === schoolId);
+var isLessonBlocked = (data, dateStr, schoolId, shiftId, classId) => getLessonBlockReason(data, dateStr, schoolId, shiftId, classId) !== null;
+var calendarForDate = (data, schoolId, dateStr) => {
+  const calendars = (data.calendars || []).filter((c) => c.schoolId === schoolId);
+  return calendars.find((c) => c.start && c.end && dateStr >= c.start.split("T")[0] && dateStr <= c.end.split("T")[0]) || calendars[0];
+};
+var getLessonBlockReason = (data, dateStr, schoolId, shiftId, classId) => {
+  const calendar = calendarForDate(data, schoolId, dateStr);
   if (calendar) {
-    if (calendar.midYearBreak.start && dateStr >= calendar.midYearBreak.start && dateStr <= calendar.midYearBreak.end) return true;
-    if (calendar.extraRecesses?.some((r) => r.date === dateStr)) return true;
+    if (calendar.midYearBreak?.start && dateStr >= calendar.midYearBreak.start && dateStr <= calendar.midYearBreak.end) return "Recesso de Meio de Ano";
+    const recess = calendar.extraRecesses?.find((r) => r.date === dateStr);
+    if (recess) return recess.name || "Recesso";
   }
-  const events = data.events.filter((e) => e.schoolId === schoolId && e.date.startsWith(dateStr) && e.blocksClasses);
+  const events = (data.events || []).filter((e) => e.schoolId === schoolId && e.date.startsWith(dateStr) && e.blocksClasses);
   for (const event of events) {
-    if (!event.slotId && !event.classId) return true;
-    if (event.slotId && event.slotId === shiftId) return true;
-    if (event.classId && event.classId === classId) return true;
+    if (!event.slotId && !event.classId) return event.title;
+    if (event.slotId && event.slotId === shiftId) return event.title;
+    if (event.classId && classId && isSameClassRef(data, schoolId, event.classId, classId)) return event.title;
   }
-  return false;
+  return null;
 };
 var getLessonDisplayItems = (data, filters) => {
   const items = [];

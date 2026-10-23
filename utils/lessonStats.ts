@@ -2,6 +2,7 @@
 import { AppData, LessonLog, ScheduleEntry, TimeSlot, School, DayOfWeek, Student } from '../types';
 import { isHoliday, parseTimeToMinutes, checkTimeOverlap } from '../utils';
 import { getSchedulesForDate } from './schedule';
+import { isSameClassRef } from './classRefs';
 
 export interface LessonDisplayItem {
     id: string; // unique key for rendering
@@ -34,20 +35,35 @@ export interface LessonFilters {
 }
 
 // Helper to check if a lesson is blocked
-export const isLessonBlocked = (data: AppData, dateStr: string, schoolId: string, shiftId?: string, classId?: string): boolean => {
-    const calendar = data.calendars.find(c => c.schoolId === schoolId);
+export const isLessonBlocked = (data: AppData, dateStr: string, schoolId: string, shiftId?: string, classId?: string): boolean =>
+    getLessonBlockReason(data, dateStr, schoolId, shiftId, classId) !== null;
+
+/** Calendário da escola que contém a data (ou o primeiro da escola, se nenhum contiver). */
+const calendarForDate = (data: AppData, schoolId: string, dateStr: string) => {
+    const calendars = (data.calendars || []).filter(c => c.schoolId === schoolId);
+    return calendars.find(c => c.start && c.end && dateStr >= c.start.split('T')[0] && dateStr <= c.end.split('T')[0]) || calendars[0];
+};
+
+/**
+ * Motivo de a aula não acontecer: recesso de meio de ano, recesso da escola ou evento que suspende aula
+ * (da escola toda, do turno ou da turma). Feriados nacionais ficam de fora (use getHolidayName).
+ * A turma do evento é o código e a da grade é o nome: compara com isSameClassRef.
+ */
+export const getLessonBlockReason = (data: AppData, dateStr: string, schoolId: string, shiftId?: string, classId?: string): string | null => {
+    const calendar = calendarForDate(data, schoolId, dateStr);
     if (calendar) {
-        if (calendar.midYearBreak.start && dateStr >= calendar.midYearBreak.start && dateStr <= calendar.midYearBreak.end) return true;
-        if (calendar.extraRecesses?.some(r => r.date === dateStr)) return true;
+        if (calendar.midYearBreak?.start && dateStr >= calendar.midYearBreak.start && dateStr <= calendar.midYearBreak.end) return 'Recesso de Meio de Ano';
+        const recess = calendar.extraRecesses?.find(r => r.date === dateStr);
+        if (recess) return recess.name || 'Recesso';
     }
 
-    const events = data.events.filter(e => e.schoolId === schoolId && e.date.startsWith(dateStr) && e.blocksClasses);
+    const events = (data.events || []).filter(e => e.schoolId === schoolId && e.date.startsWith(dateStr) && e.blocksClasses);
     for (const event of events) {
-        if (!event.slotId && !event.classId) return true;
-        if (event.slotId && event.slotId === shiftId) return true;
-        if (event.classId && event.classId === classId) return true;
+        if (!event.slotId && !event.classId) return event.title;
+        if (event.slotId && event.slotId === shiftId) return event.title;
+        if (event.classId && classId && isSameClassRef(data, schoolId, event.classId, classId)) return event.title;
     }
-    return false;
+    return null;
 };
 
 export const getLessonDisplayItems = (data: AppData, filters: LessonFilters): LessonDisplayItem[] => {

@@ -19,7 +19,10 @@ export default defineConfig({
       manifest: {
         name: 'Leciona - Gestão Escolar',
         short_name: 'Leciona',
+        // Mesmo id do manifest antigo: o app instalado continua sendo reconhecido
+        id: '/?source=pwa',
         description: 'Aplicativo para gestão de rotina educacional',
+        lang: 'pt-BR',
         theme_color: '#2563eb',
         background_color: '#ffffff',
         display: 'standalone',
@@ -28,26 +31,11 @@ export default defineConfig({
         orientation: 'portrait-primary',
         categories: ['education', 'productivity'],
         icons: [
-          // PNG Icons para WebAPK (OBRIGATÓRIO para Android)
-          {
-            src: '/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any maskable'
-          },
-          {
-            src: '/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
-          },
-          // SVG como fallback para outros dispositivos
-          {
-            src: 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 512 512\'%3E%3Crect width=\'512\' height=\'512\' fill=\'%232563eb\'/%3E%3Cg transform=\'translate(106 106) scale(12.5)\'%3E%3Cpath d=\'M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z\' fill=\'none\' stroke=\'white\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3Cpath d=\'M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z\' fill=\'none\' stroke=\'white\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3C/g%3E%3C/svg%3E',
-            sizes: '512x512',
-            type: 'image/svg+xml',
-            purpose: 'any'
-          }
+          // PNG de verdade (192 e 512): sem eles o Chrome do Android não instala o app (WebAPK)
+          // e cria só um atalho, com o símbolo do Chrome no canto do ícone
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
         ]
       },
 

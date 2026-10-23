@@ -141,19 +141,27 @@ describe('nova versão do horário: gravar as decisões', () => {
     expect(items.map(i => [i.slot.id, i.log?.subject])).toEqual([[S2, 'Avaliação: P3'], [S3, 'Planejamento']]);
   });
 
-  it('"manter como extra" vira aula extra que aparece no Diário; o registro da avaliação acompanha a prova', () => {
+  it('"manter como extra" vira aula extra que aparece no Diário; a prova no contraturno tira o seu registro automático', () => {
     const { doc, plan } = cenario();
     const r = applyScheduleDecisions(doc, plan, [
       { logId: 'plan', type: 'EXTRA' },
-      { logId: 'P3', type: 'EXTRA' } // a prova fica na data, sem aula; o "Avaliação: P3" vai junto
+      { logId: 'P3', type: 'EXTRA' } // a prova fica na data, no contraturno; o "Avaliação: P3" sai do diário
     ], () => 'novo-horario');
     expect(r.logs.find(l => l.id === 'plan')).toMatchObject({ type: 'extra', date: D('2026-10-26'), slotId: 'novo-horario', startTime: '14:15', endTime: '15:00' });
-    expect(r.logs.find(l => l.id === 'aval')).toMatchObject({ type: 'extra', date: D('2026-10-26') });
+    expect(r.logs.find(l => l.id === 'aval')).toBeUndefined();
     expect(r.events.find(x => x.id === 'P3')).not.toHaveProperty('slotId');
     const items = getLessonDisplayItems({ ...doc, logs: r.logs, events: r.events } as any, { start: '2026-10-26', end: '2026-10-26', schoolId: 'C', classId: 'all' });
-    // Não some do Diário (no mesmo horário de uma aula da turma, aparece nessa aula; o da prova, como extra)
+    // Não some do Diário (no mesmo horário de uma aula da turma, aparece nessa aula)
     expect(items.some(i => i.log?.subject === 'Planejamento')).toBe(true);
-    expect(items.some(i => i.isExtra && i.log?.subject === 'Avaliação: P3')).toBe(true);
+  });
+
+  it('prova levada a uma atividade fixa: fica no horário e o registro automático sai do diário', () => {
+    const { doc, plan } = cenario();
+    const r = applyScheduleDecisions(doc, plan, [
+      { logId: 'P3', type: 'MOVE', targetDate: '2026-10-26', targetSlotId: S1, targetTime: { startTime: '13:30', endTime: '14:15' }, daySlot: true, toActivity: true }
+    ]);
+    expect(r.events.find(x => x.id === 'P3')).toMatchObject({ slotId: S1 });
+    expect(r.logs.find(l => l.id === 'aval')).toBeUndefined();
   });
 
   it('"outra aula neste dia": a prova vai para o horário escolhido e o registro vira aula extra nele', () => {

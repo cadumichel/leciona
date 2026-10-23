@@ -9,6 +9,10 @@ import { isHoliday, getHolidayName, getDayOfWeekFromDate, getSafeDate, toSafeISO
 import { getSchedulesForDate } from '../utils/schedule';
 import { DisconnectedNotice } from './ConnectionWarnings';
 import { PlannedChoice, planAssessmentLogs, removeAssessmentLogs } from '../utils/assessmentLogs';
+import { activityAt, assessmentPlaceLabel, assessmentPlaces } from '../utils/assessmentPlace';
+
+/** Valor do campo Horário para "Contraturno" (a avaliação fica sem slotId) */
+const CONTRATURNO = '__contraturno';
 import {
   KIND_LABELS, buildRecovery, checkAssessmentDate, linkedAssessments, nextLessonDate, parentCandidates,
   recoveryPolicyOf, secondCallModeOf, suggestRecovery, termRecoveryContent
@@ -181,36 +185,15 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   };
 
   // ── Available slots for the form ─────────────────────────────────────────
-  const { restrictedAvailableSlots, isOutOfClassDay } = useMemo(() => {
-    if (!activeSchool || !newEvent.date || !newEvent.classId || isInvalidDate) return { restrictedAvailableSlots: [], isOutOfClassDay: false };
-    const dow = getDayOfWeekFromDate(newEvent.date);
-    const cls = activeSchool.classes.find(c => (typeof c === 'string' ? c : c.id) === newEvent.classId);
-    if (!cls) return { restrictedAvailableSlots: [], isOutOfClassDay: false };
-    const cName = typeof cls === 'string' ? cls : cls.name;
-    const cId = typeof cls === 'string' ? cls : cls.id;
-    const entries = getSchedulesForDate(data, newEvent.date).filter(s =>
-      Number(s.dayOfWeek) === dow && s.schoolId === newEvent.schoolId &&
-      (s.classId === cId || s.classId === cName)
-    );
-    const slots: TimeSlot[] = [];
-    let outOfClass = false;
-    if (entries.length > 0) {
-      entries.forEach(entry => {
-        const shift = activeSchool.shifts?.find(sh => sh.id === entry.shiftId);
-        const slot = shift?.slots.find(sl => sl.id === entry.slotId);
-        if (slot) slots.push(slot);
-      });
-    } else {
-      outOfClass = true;
-      activeSchool.shifts?.forEach(shift => {
-        shift.slots.forEach(slot => {
-          slots.push(slot);
-        });
-      });
-    }
-    const uniqueSlots = Array.from(new Map(slots.map(s => [s.id, s])).values());
-    return { restrictedAvailableSlots: uniqueSlots, isOutOfClassDay: outOfClass };
-  }, [activeSchool, newEvent.date, newEvent.classId, data.schedules, isInvalidDate]);
+  // Aulas da turma, atividades fixas do dia e contraturno (utils/assessmentPlace.ts)
+  const places = useMemo(() => {
+    if (!activeSchool || !newEvent.date || !newEvent.classId || isInvalidDate) return { lessons: [], activities: [] };
+    return assessmentPlaces(data, activeSchool, newEvent.classId, newEvent.date);
+  }, [activeSchool, newEvent.date, newEvent.classId, data.scheduleVersions, data.schedules, isInvalidDate]);
+  const isOutOfClassDay = !!newEvent.classId && !!newEvent.date && !isInvalidDate && places.lessons.length === 0;
+  // Horário atual de uma avaliação antiga que não está mais entre as opções (não some ao editar)
+  const currentPlaceMissing = !!newEvent.slotId && newEvent.slotId !== CONTRATURNO &&
+    ![...places.lessons, ...places.activities].some(p => p.slot.id === newEvent.slotId);
 
   // ── Recuperação: regra da escola e sugestões ──────────────────────────────
   const recoveryPolicy = recoveryPolicyOf(activeSchool);
@@ -304,8 +287,9 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const handleSaveEvent = () => {
-    const needsSlot = !secondCallOffSchedule;
-    if (!newEvent.title || !newEvent.classId || (needsSlot && !newEvent.slotId) || isInvalidDate) return;
+    // Contraturno: sem horário de aula (outro funcionário aplica; sem registro no diário)
+    const needsSlot = !secondCallOffSchedule && newEvent.slotId !== CONTRATURNO;
+    if (!newEvent.title || !newEvent.classId || (!secondCallOffSchedule && !newEvent.slotId) || isInvalidDate) return;
     if (formKind === 'second_call' && !newEvent.parentId) return;
     const safeDateISO = toSafeISO(newEvent.date!);
     const eventId = newEvent.id || crypto.randomUUID();
@@ -606,7 +590,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     setSaveSuccess(false);
     setNewEvent({
       id: event.id, title: event.title, date: event.date.split('T')[0],
-      schoolId: event.schoolId, classId: event.classId, slotId: event.slotId,
+      schoolId: event.schoolId, classId: event.classId, slotId: event.slotId || CONTRATURNO,
       type: event.type, description: event.description, parentId: event.parentId
     });
     setDateWarning(''); setIsInvalidDate(false);
@@ -791,10 +775,13 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
               const dayMonth = evDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
               const evtClassName = resolveClassName(event);
               const shiftInfo = (() => {
-                if (!school || !event.slotId) return { label: null, shiftName: null };
+                if (!event.slotId) return { label: 'Contraturno', shiftName: null };
+                if (!school) return { label: null, shiftName: null };
+                const activity = activityAt(data, event.schoolId, event.date, event.slotId);
                 for (const shift of (school.shifts || [])) {
                   const slot = shift.slots.find(s => s.id === event.slotId);
-                  if (slot) return { label: slot.label, shiftName: shift.name };
+                  // Atividade fixa: o nome dela aparece no lugar do turno
+                  if (slot) return { label: slot.label, shiftName: activity || shift.name };
                 }
                 return { label: null, shiftName: null };
               })();
@@ -1050,8 +1037,21 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                         <p className="text-[9px] font-bold text-slate-500 bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2.5">Contraturno: fora das suas aulas (sem registro no diário)</p>
                       ) : (
                       <select disabled={!newEvent.classId || isInvalidDate} value={newEvent.slotId} onChange={e => setNewEvent(prev => ({ ...prev, slotId: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white disabled:opacity-50 text-sm">
-                        <option value="">{restrictedAvailableSlots.length > 0 ? 'Escolha o horário...' : (newEvent.classId ? 'Nenhum horário' : 'Selecione a turma')}</option>
-                        {restrictedAvailableSlots.map(s => <option key={s.id} value={s.id}>{s.label} ({s.startTime})</option>)}
+                        <option value="">{newEvent.classId ? 'Escolha o horário...' : 'Selecione a turma'}</option>
+                        {places.lessons.length > 0 && (
+                          <optgroup label="Aulas da turma">
+                            {places.lessons.map(p => <option key={p.slot.id} value={p.slot.id}>{p.number}ª aula ({p.slot.startTime})</option>)}
+                          </optgroup>
+                        )}
+                        {places.activities.length > 0 && (
+                          <optgroup label="Atividade fixa (você aplica)">
+                            {places.activities.map(p => <option key={p.slot.id} value={p.slot.id}>{p.number}ª aula ({p.slot.startTime}) · {p.activity}</option>)}
+                          </optgroup>
+                        )}
+                        {currentPlaceMissing && (
+                          <option value={newEvent.slotId}>{assessmentPlaceLabel(data, { schoolId: newEvent.schoolId!, date: newEvent.date!, slotId: newEvent.slotId }) || 'Horário atual'}</option>
+                        )}
+                        {newEvent.classId && <option value={CONTRATURNO}>Contraturno (outro funcionário aplica)</option>}
                       </select>
                       )}
                     </div>
@@ -1221,10 +1221,10 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
               </div>
 
               <div className="mt-4 flex flex-col gap-3 shrink-0 pt-3 border-t border-slate-100 dark:border-slate-800">
-                {isOutOfClassDay && (
+                {isOutOfClassDay && !secondCallOffSchedule && (
                   <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 p-2.5 rounded-lg text-[10px] font-bold uppercase">
                     <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                    <span className="leading-tight text-left">A data selecionada não é um dia de aula regular da turma! A avaliação será agendada assim mesmo.</span>
+                    <span className="leading-tight text-left">A turma não tem aula nesse dia: escolha Contraturno{places.activities.length > 0 ? ' ou uma atividade fixa' : ''} no horário.</span>
                   </div>
                 )}
                 <div className="flex gap-3">

@@ -2,6 +2,7 @@ import { AppData, LessonLog, SchoolEvent } from '../types';
 import { parseTimeToMinutes, toSafeISO } from '../utils';
 import { isSameClassRef } from './classRefs';
 import { getLessonDisplayItems } from './lessonStats';
+import { isOffLesson } from './assessmentPlace';
 
 /**
  * Registro "Avaliação: {título}" do Diário ao cadastrar, remarcar, copiar ou apagar uma avaliação.
@@ -64,8 +65,8 @@ export const planAssessmentLogs = (
     }
   };
 
-  // 2ª chamada no contraturno: sem aula e sem registro
-  if (!event.slotId) {
+  // Contraturno ou atividade fixa (utils/assessmentPlace.ts): não é aula da turma, sem registro
+  if (isOffLesson(data, event)) {
     remove(oldAuto);
     return { logs, canSwap: false };
   }

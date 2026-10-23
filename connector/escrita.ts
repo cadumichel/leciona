@@ -4,6 +4,7 @@ import { getSchedulesForDate } from '../utils/schedule';
 import { isLessonBlocked } from '../utils/lessonStats';
 import { lessonNumberInShift } from '../utils/dashboardWeb';
 import { removeUndefined } from '../utils/sync';
+import { activityAt, assessmentPlaces } from '../utils/assessmentPlace';
 import {
   buildRecovery, checkAssessmentDate, isRegularAssessment, linkedAssessments, nextLessonDate, recoveryDaysOf, recoveryPolicyOf,
   secondCallModeOf, suggestRecovery, termRecoveryContent
@@ -114,8 +115,10 @@ export interface PedidoDeAvaliacao {
   /** Obrigatório na avaliação regular; nas outras há um título padrão */
   titulo?: string;
   descricao?: string;
-  /** Número da aula no turno (1ª, 2ª…), quando a turma tem mais de uma aula no dia */
+  /** Número da aula no turno (1ª, 2ª…), quando a turma tem mais de uma aula no dia (ou mais de uma atividade fixa) */
   aula?: number;
+  /** Onde: numa aula da turma (padrão), no contraturno (outro funcionário aplica) ou numa atividade fixa (o professor aplica) */
+  onde?: Onde;
   situacao?: Situacao;
   /** Padrão: regular. REC e 2ª chamada ficam ligadas à avaliação original */
   especie?: 'regular' | 'rec' | 'rec_trimestral' | 'segunda_chamada';
@@ -153,6 +156,52 @@ const escolherAula = (data: AppData, school: School, cls: SchoolClass, d: string
   return aula;
 };
 
+type Onde = 'aula' | 'contraturno' | 'atividade';
+const ONDES: Onde[] = ['aula', 'contraturno', 'atividade'];
+
+/** Contraturno e atividade fixa não são aula da turma: sem registro "Avaliação: X" no diário. */
+interface Lugar { slotId?: string; texto: string; semRegistro: boolean; numero?: number }
+
+const conferirDia = (data: AppData, school: School, cls: SchoolClass, d: string, aviso?: (t: string) => void) => {
+  const feriado = getHolidayName(getSafeDate(d));
+  if (feriado) throw new ConsultaError(`${formatDateBR(d)} é feriado (${feriado}).`);
+  if (isLessonBlocked(data, d, school.id, undefined, cls.id)) {
+    if (aviso) aviso('Nesse dia a escola está sem aula (recesso ou evento).');
+    else throw new ConsultaError(`${formatDateBR(d)} está sem aula nessa escola (recesso ou evento que suspende as aulas).`);
+  }
+};
+
+/** Onde fica a avaliação na data: aula da turma, contraturno ou atividade fixa da grade. */
+const escolherLugar = (data: AppData, school: School, cls: SchoolClass, d: string, onde: Onde, pedida: number | undefined,
+  campo: string, aviso: (t: string) => void): Lugar => {
+  if (!ONDES.includes(onde)) throw new ConsultaError('"onde" deve ser aula, contraturno ou atividade.');
+  if (onde === 'contraturno') {
+    conferirDia(data, school, cls, d, aviso);
+    return { texto: 'no contraturno', semRegistro: true };
+  }
+  if (onde === 'atividade') {
+    const atividades = assessmentPlaces(data, school, cls.id, d).activities;
+    if (!atividades.length) throw new ConsultaError(`Em ${quando(d)} não há atividade fixa na grade de ${school.name}.`);
+    const texto = (a: typeof atividades[number]) => `${a.number}ª aula (${a.slot.startTime}) · ${a.activity}`;
+    let escolhida = atividades[0];
+    if (pedida !== undefined) {
+      const achada = atividades.find(a => a.number === pedida);
+      if (!achada) throw new ConsultaError(`Atividades fixas nesse dia: ${atividades.map(texto).join(', ')}. Escolha uma delas.`);
+      escolhida = achada;
+    } else if (atividades.length > 1) {
+      throw new ConsultaError(`Nesse dia há mais de uma atividade fixa: ${atividades.map(texto).join(' e ')}. Pergunte ao Cadu qual e informe o número da aula (${campo}).`);
+    }
+    conferirDia(data, school, cls, d);
+    return { slotId: escolhida.slot.id, texto: texto(escolhida), semRegistro: true, numero: escolhida.number };
+  }
+  const aula = escolherAula(data, school, cls, d, pedida, campo);
+  return { slotId: aula.slotId, texto: aula.texto, semRegistro: false, numero: aula.numero };
+};
+
+/** Onde a avaliação está hoje. */
+const ondeDe = (data: AppData, ev: SchoolEvent): Onde =>
+  !ev.slotId ? 'contraturno' : activityAt(data, ev.schoolId, ev.date, ev.slotId) ? 'atividade' : 'aula';
+
 /** Encontra uma avaliação da turma no dia (pelo título, se houver mais de uma). */
 const acharAvaliacao = (data: AppData, school: School, cls: SchoolClass, d: string, titulo?: string, filtro: (e: SchoolEvent) => boolean = () => true) => {
   let candidatas = avaliacoesDe(data, school, cls).filter(e => dia(e.date) === d && filtro(e));
@@ -184,7 +233,7 @@ export const prepararAvaliacoes = (data: AppData, pedidos: PedidoDeAvaliacao[], 
   /** Cria a avaliação e o registro "Avaliação: X" no diário (sem apagar registro existente). */
   const criar = (item: ItemDaPrevia, evento: Item, d: string, prefixo = '') => {
     plano.criar.events.push(evento);
-    if (!evento.slotId) return;
+    if (!evento.slotId || activityAt(data, evento.schoolId, evento.date, evento.slotId)) return;
     const registro = registroNaAula(data, evento.schoolId, d, evento.slotId) ||
       plano.criar.logs.find(l => dia(l.date) === d && l.schoolId === evento.schoolId && l.slotId === evento.slotId);
     if (registro) {
@@ -236,18 +285,11 @@ export const prepararAvaliacoes = (data: AppData, pedidos: PedidoDeAvaliacao[], 
       const rotulo = especie === 'regular' ? (type === 'test' ? 'Prova' : 'Trabalho') : NOME_DA_ESPECIE[especie];
       item.descricao = `${rotulo} "${titulo}" — ${cls.name} (${school.name}), ${quando(d)}`;
 
-      // Em qual aula (2ª chamada no contraturno: sem aula e sem registro no diário, como o app)
-      const contraturno = especie === 'segunda_chamada' && secondCallModeOf(school) === 'off_schedule';
-      let aula: AulaNoDia | undefined;
-      if (contraturno) {
-        const feriado = getHolidayName(getSafeDate(d));
-        if (feriado) throw new ConsultaError(`${formatDateBR(d)} é feriado (${feriado}).`);
-        if (isLessonBlocked(data, d, school.id, undefined, cls.id)) item.avisos.push('Nesse dia a escola está sem aula (recesso ou evento).');
-        item.descricao += ', no contraturno';
-      } else {
-        aula = escolherAula(data, school, cls, d, p.aula);
-        item.descricao += `, ${aula.texto}`;
-      }
+      // Onde: aula da turma, contraturno (2ª chamada do São Luiz já é no contraturno) ou atividade fixa
+      const onde: Onde = p.onde ?? (especie === 'segunda_chamada' && secondCallModeOf(school) === 'off_schedule' ? 'contraturno' : 'aula');
+      const lugar = escolherLugar(data, school, cls, d, onde, p.aula, 'aula', t => item.avisos.push(t));
+      const aula = lugar.slotId ? { slotId: lugar.slotId } : undefined;
+      item.descricao += `, ${lugar.texto}`;
       if (original) item.descricao += ` (ligada a "${original.title}" de ${formatDateBR(original.date)})`;
       if ((data.calendars || []).some(c => c.schoolId === school.id) && !calendarioNaData(data, school.id, d)) {
         item.avisos.push('A data está fora do ano letivo cadastrado para essa escola.');
@@ -336,6 +378,8 @@ export interface PedidoDeAlteracao {
   acao: 'alterar' | 'apagar';
   nova_data?: string;
   nova_aula?: number;
+  /** Mudar para aula da turma, contraturno ou atividade fixa */
+  nova_onde?: Onde;
   novo_titulo?: string;
   nova_descricao?: string;
   novo_tipo?: 'prova' | 'trabalho';
@@ -367,7 +411,12 @@ export const prepararAlteracoes = (data: AppData, pedidos: PedidoDeAlteracao[], 
       const { school, cls } = encontrarTurma(data, p.turma, p.escola);
       const ev = acharAvaliacao(data, school, cls, d, p.titulo) as SchoolEvent & Item;
       const aulaAtual = ev.slotId ? aulasDaTurmaNoDia(data, school, cls, d).find(a => a.slotId === ev.slotId) : undefined;
-      const onde = `${quando(d)}${aulaAtual ? `, ${aulaAtual.texto}` : ev.slotId ? '' : ', no contraturno'}`;
+      const ondeAtual = ondeDe(data, ev);
+      const atividadeAtual = ondeAtual === 'atividade'
+        ? assessmentPlaces(data, school, cls.id, d).activities.find(a => a.slot.id === ev.slotId) : undefined;
+      const textoAtual = aulaAtual ? aulaAtual.texto : atividadeAtual ? `${atividadeAtual.number}ª aula (${atividadeAtual.slot.startTime}) · ${atividadeAtual.activity}`
+        : ev.slotId ? '' : 'no contraturno';
+      const onde = `${quando(d)}${textoAtual ? `, ${textoAtual}` : ''}`;
       const nome = `"${ev.title}" — ${cls.name} (${school.name})`;
 
       if (p.acao === 'apagar') {
@@ -397,27 +446,29 @@ export const prepararAlteracoes = (data: AppData, pedidos: PedidoDeAlteracao[], 
       if (p.novo_tipo && p.novo_tipo !== 'prova' && p.novo_tipo !== 'trabalho') throw new ConsultaError('O tipo deve ser "prova" ou "trabalho".');
       const novoType = p.novo_tipo ? (p.novo_tipo === 'prova' ? 'test' : 'work') : ev.type;
       const novaD = p.nova_data ? validarData(p.nova_data, 'nova_data')! : d;
-      const contraturno = !ev.slotId && ev.kind === 'second_call';
+      const novaOnde: Onde = p.nova_onde ?? ondeAtual;
 
-      // Nova aula: só muda se a data ou a aula mudarem
+      // Novo lugar: só muda se a data, a aula ou o "onde" mudarem
       let slotId = ev.slotId;
-      let aulaTexto = aulaAtual?.texto;
-      if (!contraturno && (novaD !== d || p.nova_aula !== undefined)) {
-        const mesma = novaD !== d ? aulasDaTurmaNoDia(data, school, cls, novaD).find(a => a.slotId === ev.slotId)?.numero : undefined;
-        const aula = escolherAula(data, school, cls, novaD, p.nova_aula ?? mesma, 'nova_aula');
-        slotId = aula.slotId;
-        aulaTexto = aula.texto;
-      } else if (contraturno && novaD !== d) {
-        const feriado = getHolidayName(getSafeDate(novaD));
-        if (feriado) throw new ConsultaError(`${formatDateBR(novaD)} é feriado (${feriado}).`);
+      let aulaTexto = textoAtual;
+      let semRegistro = ondeAtual !== 'aula';
+      if (novaD !== d || p.nova_aula !== undefined || novaOnde !== ondeAtual) {
+        const mesma = novaD !== d && novaOnde === ondeAtual
+          ? (novaOnde === 'aula' ? aulasDaTurmaNoDia(data, school, cls, novaD).find(a => a.slotId === ev.slotId)?.numero
+            : assessmentPlaces(data, school, cls.id, novaD).activities.find(a => a.slot.id === ev.slotId)?.number)
+          : undefined;
+        const lugar = escolherLugar(data, school, cls, novaD, novaOnde, p.nova_aula ?? mesma, 'nova_aula', t => item.avisos.push(t));
+        slotId = lugar.slotId;
+        aulaTexto = lugar.texto;
+        semRegistro = lugar.semRegistro;
       }
 
       const mudancas: string[] = [];
-      if (novaD !== d || slotId !== ev.slotId) mudancas.push(`de ${onde} para ${quando(novaD)}${contraturno ? ', no contraturno' : aulaTexto ? `, ${aulaTexto}` : ''}`);
+      if (novaD !== d || slotId !== ev.slotId) mudancas.push(`de ${onde} para ${quando(novaD)}${aulaTexto ? `, ${aulaTexto}` : ''}`);
       if (novoTitulo !== ev.title) mudancas.push(`título "${ev.title}" → "${novoTitulo}"`);
       if (novaDescricao !== (ev.description || '')) mudancas.push(`conteúdo: "${novaDescricao.slice(0, 80)}"`);
       if (novoType !== ev.type) mudancas.push(novoType === 'test' ? 'vira prova' : 'vira trabalho');
-      if (!mudancas.length) throw new ConsultaError(`Nada muda em ${nome}. Informe nova_data, nova_aula, novo_titulo, nova_descricao ou novo_tipo.`);
+      if (!mudancas.length) throw new ConsultaError(`Nada muda em ${nome}. Informe nova_data, nova_aula, nova_onde, novo_titulo, nova_descricao ou novo_tipo.`);
       item.descricao = `${nome}: ${mudancas.join('; ')}`;
 
       if (novaD < hoje && novaD !== d) item.avisos.push('A nova data já passou.');
@@ -436,7 +487,8 @@ export const prepararAlteracoes = (data: AppData, pedidos: PedidoDeAlteracao[], 
         }
       }
 
-      const novoEv = { ...ev, title: novoTitulo, description: novaDescricao, type: novoType, date: diaISO(novaD), ...(slotId ? { slotId } : {}) };
+      const novoEv: Item = { ...ev, title: novoTitulo, description: novaDescricao, type: novoType, date: diaISO(novaD), ...(slotId ? { slotId } : {}) };
+      if (!slotId) delete novoEv.slotId; // contraturno
       mudar('events', ev, novoEv, item.descricao);
 
       // Registro "Avaliação: X" do diário acompanha a avaliação, sem apagar registro do Cadu
@@ -451,6 +503,9 @@ export const prepararAlteracoes = (data: AppData, pedidos: PedidoDeAlteracao[], 
         if (automatico && (novoTitulo !== ev.title || novaDescricao !== (ev.description || ''))) {
           mudar('logs', automatico, { ...automatico, subject: `Avaliação: ${novoTitulo}`, notes: notas(automatico) }, `Registro do diário: "Avaliação: ${novoTitulo}"`);
         }
+      } else if (semRegistro) {
+        // Contraturno ou atividade fixa: sem registro no diário
+        if (automatico) mudar('logs', automatico, null, `Tirar o registro "Avaliação: ${ev.title}" de ${formatDateBR(d)} (a avaliação não fica numa aula da turma)`);
       } else if (slotId) {
         const destino = registroNaAula(data, school.id, novaD, slotId) as Item | undefined;
         if (destino && destino.id !== automatico?.id) {

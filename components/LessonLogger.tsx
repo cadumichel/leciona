@@ -293,6 +293,10 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     }
   }, []); // Run once on mount
 
+  // Avaliação marcada num horário (ex.: na atividade fixa "Aplicação de provas")
+  const assessmentInSlot = (schoolId: string | undefined, dateStr: string, slotId: string) =>
+    !!schoolId && (data.events || []).some(e => (e.type === 'test' || e.type === 'work') && e.schoolId === schoolId &&
+      e.slotId === slotId && e.date.split('T')[0] === String(dateStr).split('T')[0]);
   const [activeLesson, setActiveLesson] = useState<{ schedule: ScheduleEntry, institution: School | Student, slot: TimeSlot, date: string, type: 'school' | 'private' } | null>(null);
 
   const [isExtraLessonModalOpen, setIsExtraLessonModalOpen] = useState(false);
@@ -2248,6 +2252,24 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                   : 'Este horário está marcado como livre na sua grade. Você pode excluí-lo desta visualização se desejar.'}
               </p>
 
+              {/* Avaliações marcadas nesta atividade fixa (você aplica; sem registro no diário da turma) */}
+              {(() => {
+                const here = (data.events || []).filter(e => (e.type === 'test' || e.type === 'work') &&
+                  e.schoolId === activeLesson.institution.id && e.slotId === activeLesson.slot.id &&
+                  e.date.split('T')[0] === activeLesson.date.split('T')[0]);
+                if (!here.length) return null;
+                return (
+                  <div className="max-w-xs mx-auto mb-6 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 text-left">
+                    <span className="block text-[9px] font-black text-red-600 uppercase mb-1.5">Avaliações neste horário</span>
+                    {here.map(e => (
+                      <p key={e.id} className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                        {e.type === 'test' ? 'Prova' : 'Trabalho'}: {e.title} · {getClassName(data, e.schoolId, e.classId, e.classId)}
+                      </p>
+                    ))}
+                  </div>
+                );
+              })()}
+
               {activeLesson.type === 'school' && (
                 <div className="max-w-xs mx-auto mb-6 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-left">
                   <label className="block text-[9px] font-black text-slate-500 uppercase mb-1.5">Dar aula para uma turma neste dia</label>
@@ -3145,7 +3167,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                               {
                                 item.slot.type === 'break' ? '' :
                                   item.isFree ? 'Livre' :
-                                    item.isWindow ? (item.schedule?.activityLabel !== undefined ? 'Fixa' : 'Janela') :
+                                    item.isWindow ? (assessmentInSlot(item.schedule?.schoolId, (item as any).date || selectedDate, item.slot.id) ? 'Prova' : item.schedule?.activityLabel !== undefined ? 'Fixa' : 'Janela') :
                                       hasLogText(item.log) ? (isFutureDate ? 'Planejado' : 'OK') :
                                         (isFutureDate || (selectedDate === getYYYYMMDD(new Date()) && currentTime < (item as any).startTimeMin)) ? 'Agendada' :
                                           (selectedDate === getYYYYMMDD(new Date()) && currentTime >= (item as any).startTimeMin && currentTime < (item as any).endTimeMin) ? 'Em aula' :

@@ -14,6 +14,7 @@ import { DAYS_OF_WEEK_NAMES } from '../constants';
 import { getClassName } from '../utils/classRefs';
 import { ScheduleDecision } from '../utils/scheduleChange';
 import { isSameClass, calculateNewDate, calculateSameWeekValidDate } from '../utils/scheduleMigration';
+import { getSchedulesForDate } from '../utils/schedule';
 
 // CONSTANTS & HELPERS
 
@@ -139,7 +140,12 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
         if (!ev || !d) return map;
         const paired = orphans.find(l => l.date.split('T')[0] === ev.date.split('T')[0] && l.schoolId === ev.schoolId &&
             l.slotId === ev.slotId && (l.subject || '').startsWith('Avaliação:'));
-        if (paired) map.set(paired.id, { ...d, logId: paired.id });
+        if (!paired) return map;
+        // Contraturno ou atividade fixa: a avaliação não fica numa aula da turma, então o registro
+        // automático "Avaliação: X" sai do diário (registro escrito pelo Cadu vira aula extra)
+        const isAuto = (paired.subject || '').trim() === `Avaliação: ${ev.title}` && !(paired.homework || '').trim();
+        if (isAuto && (d.type === 'EXTRA' || d.toActivity)) map.set(paired.id, { logId: paired.id, type: 'DELETE' });
+        else map.set(paired.id, { ...d, logId: paired.id, toActivity: undefined });
         return map;
     };
 
@@ -240,11 +246,12 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
     };
 
 
-    /** "Outra aula neste dia": todos os horários de aula da escola na data, com o que há na grade nova */
-    const daySlotsFor = (log: LessonLog | SchoolEvent) => {
+    /** "Outra aula neste dia": todos os horários de aula da escola na data, com o que há na grade (a nova, a partir da mudança) */
+    const daySlotsFor = (log: LessonLog | SchoolEvent, dateStr = log.date.split('T')[0]) => {
         const school = schools.find(s => s.id === log.schoolId);
-        const dow = new Date(log.date.split('T')[0] + 'T00:00:00').getDay();
-        const dayEntries = newSchedules.filter(s => s.schoolId === log.schoolId && Number(s.dayOfWeek) === dow);
+        const dow = new Date(dateStr + 'T00:00:00').getDay();
+        const grid = dateStr >= activeFrom ? newSchedules : getSchedulesForDate(appData, dateStr);
+        const dayEntries = grid.filter(s => s.schoolId === log.schoolId && Number(s.dayOfWeek) === dow);
         const shifts = (school?.shifts || []).filter(sh => dayEntries.some(e => e.shiftId === sh.id));
         return (shifts.length ? shifts : school?.shifts || []).flatMap(sh => {
             const classSlots = sh.slots.filter(sl => sl.type === 'class').sort((a, b) => a.startTime.localeCompare(b.startTime));
@@ -258,11 +265,14 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
         });
     };
 
-    const handleDaySlot = (log: LessonLog | SchoolEvent, slotId: string) => {
-        const found = daySlotsFor(log).find(d => d.slot.id === slotId);
+    /** Horário escolhido na data original ou na data escolhida ("Escolher outra data...") */
+    const handleDaySlot = (log: LessonLog | SchoolEvent, slotId: string, customDate?: string) => {
+        const dateStr = customDate || log.date.split('T')[0];
+        const found = daySlotsFor(log, dateStr).find(d => d.slot.id === slotId);
         if (!found) return;
-        // Aula da própria turma: movimento normal
-        if (found.entry && found.entry.classId !== 'window' && isSameClass(found.entry.classId, log.classId, log.schoolId, schools)) {
+        const ownClass = !!found.entry && found.entry.classId !== 'window' && isSameClass(found.entry.classId, log.classId, log.schoolId, schools);
+        // Aula da própria turma no mesmo dia: movimento normal
+        if (ownClass && !customDate) {
             handleDecisionChange(log.id, 'MOVE', found.entry);
             return;
         }
@@ -270,11 +280,21 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
         newDecisions.set(log.id, {
             logId: log.id,
             type: 'MOVE',
-            targetDate: log.date.split('T')[0],
+            targetDate: dateStr,
             targetSlotId: slotId,
             targetTime: { startTime: found.slot.startTime, endTime: found.slot.endTime },
-            daySlot: true
+            targetSlot: ownClass ? found.entry : undefined,
+            daySlot: !ownClass,
+            toActivity: found.entry?.classId === 'window' && !!found.entry.activityLabel,
+            isCustomDate: !!customDate
         });
+        setDecisions(withPairedLog(newDecisions, log.id));
+    };
+
+    /** Contraturno na data escolhida: avaliação sem horário de aula */
+    const handleOffSchedule = (log: LessonLog | SchoolEvent, customDate: string) => {
+        const newDecisions = new Map(decisions);
+        newDecisions.set(log.id, { logId: log.id, type: 'EXTRA', targetDate: customDate, isCustomDate: true });
         setDecisions(withPairedLog(newDecisions, log.id));
     };
 
@@ -403,20 +423,40 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                                                     ))}
                                                 </optgroup>
                                                 <optgroup label="Outras ações">
-                                                    <option value="EXTRA">{isEvent ? 'Manter na data, sem aula' : 'Manter como aula extra (mesma data e horário)'}</option>
+                                                    <option value="EXTRA">{isEvent ? 'Contraturno (mesma data, outro funcionário aplica)' : 'Manter como aula extra (mesma data e horário)'}</option>
                                                     <option value="CUSTOM">Escolher outra data...</option>
                                                     <option value="DELETE">{isAssessment ? 'Excluir a avaliação' : isEvent ? 'Excluir o evento' : 'Excluir o registro'}</option>
                                                 </optgroup>
                                             </select>
 
                                             {decision?.isCustomDate && (
-                                                <div className="animate-in slide-in-from-top-2">
+                                                <div className="animate-in slide-in-from-top-2 flex flex-col gap-2">
                                                     <input
                                                         type="date"
                                                         value={decision.targetDate ? decision.targetDate.split('T')[0] : ''} // Ensure format YYYY-MM-DD
                                                         onChange={(e) => handleDecisionChange(log.id, 'EXTRA', undefined, true, e.target.value)}
                                                         className="w-full bg-white dark:bg-slate-800 border border-violet-200 dark:border-violet-900 rounded-lg text-sm px-3 py-2 font-bold text-violet-700 dark:text-violet-300 outline-none focus:ring-2 ring-violet-500"
                                                     />
+                                                    {/* Na data escolhida: em qual aula (ou no contraturno) */}
+                                                    {decision.targetDate && (
+                                                        <select
+                                                            value={decision.type === 'MOVE' && decision.targetSlotId ? `DAY:${decision.targetSlotId}` : 'OFF'}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                const d = decision.targetDate!.split('T')[0];
+                                                                if (val === 'OFF') handleOffSchedule(log, d);
+                                                                else handleDaySlot(log, val.slice(4), d);
+                                                            }}
+                                                            className="w-full bg-white dark:bg-slate-800 border border-violet-200 dark:border-violet-900 rounded-lg text-sm px-3 py-2 font-medium outline-none focus:ring-2 ring-violet-500"
+                                                        >
+                                                            <optgroup label="Aula nesse dia">
+                                                                {daySlotsFor(log, decision.targetDate.split('T')[0]).map(d => (
+                                                                    <option key={d.slot.id} value={`DAY:${d.slot.id}`}>{d.number}ª aula, {d.slot.startTime} · {d.what}</option>
+                                                                ))}
+                                                            </optgroup>
+                                                            <option value="OFF">{isEvent ? 'Contraturno (outro funcionário aplica)' : 'Aula extra (sem horário da grade)'}</option>
+                                                        </select>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -431,9 +471,9 @@ export const MigrationWizard: React.FC<MigrationWizardProps> = ({
                                             {decision?.type === 'EXTRA' && (
                                                 <span className="text-amber-600 flex items-center gap-1">
                                                     <CalendarPlus size={10} />
-                                                    {decision.targetDate && decision.targetDate !== log.date
-                                                        ? `Ficará como Extra em ${new Date(decision.targetDate + 'T00:00:00').toLocaleDateString()}`
-                                                        : (isEvent ? 'Fica na mesma data, sem aula' : 'Fica como aula extra (mesma data)')
+                                                    {decision.targetDate && decision.targetDate !== log.date.split('T')[0]
+                                                        ? `${isEvent ? 'Contraturno' : 'Ficará como Extra'} em ${new Date(decision.targetDate + 'T00:00:00').toLocaleDateString()}`
+                                                        : (isEvent ? 'Fica na mesma data, no contraturno' : 'Fica como aula extra (mesma data)')
                                                     }
                                                 </span>
                                             )}

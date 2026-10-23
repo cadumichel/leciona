@@ -4,6 +4,7 @@ import { getCurrentTimeInMinutes, parseTimeToMinutes, isHoliday, getHolidayName,
 import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName } from '../utils/classRefs';
 import { getLessonDisplayItems, isLessonBlocked, deriveStatsFromLessons } from '../utils/lessonStats';
+import { findPreviousLesson } from '../utils/retrospective';
 import { buildTodayTimeline, buildWeeklyGrid, todayLessonStatus, TodayLessonStatus, TodayLesson } from '../utils/dashboardWeb';
 import {
   Clock,
@@ -329,22 +330,6 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     return [...schoolSchedules, ...privateSchedules].sort((a, b) => parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime));
   }, [data.schedules, data.students, data.settings.isPrivateTeacher, today, todayDateStr, data]);
 
-  const getSlotStartTime = useMemo(() => (schoolId: string, slotId: string) => {
-    const school = data.schools.find(s => s.id === schoolId);
-    if (!school) {
-      const student = data.students.find(st => st.id === schoolId);
-      if (student) {
-        const schedule = student.schedules.find(s => s.id === slotId);
-        return schedule ? parseTimeToMinutes(schedule.startTime) : 0;
-      }
-      return 0;
-    }
-    for (const shift of school.shifts) {
-      const slot = shift.slots.find(s => s.id === slotId);
-      if (slot) return parseTimeToMinutes(slot.startTime);
-    }
-    return 0;
-  }, [data.schools, data.students]);
 
   const activityInfo = useMemo(() => {
     const activeIndex = sortedTodaySchedules.findIndex(item => {
@@ -360,36 +345,19 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     const next = sortedTodaySchedules[activeIndex + 1] || null;
     const isLast = activeIndex === sortedTodaySchedules.length - 1;
 
-    const classId = current.type === 'school' ? current.schedule.classId : current.student?.name;
-    const instId = current.type === 'school' ? current.school?.id : current.student?.id;
-
-    const retrospective = data.logs
-      .filter(l => {
-        if (l.classId !== classId) return false;
-        if (l.schoolId !== instId && l.studentId !== instId) return false;
-
-        const logDatePart = l.date.split('T')[0];
-
-        if (logDatePart > todayDateStr) return false;
-        if (logDatePart < todayDateStr) return true;
-
-        if (logDatePart === todayDateStr) {
-          const logSlotStart = getSlotStartTime(l.schoolId || l.studentId || '', l.slotId);
-          return logSlotStart < currentStartMin;
-        }
-        return false;
-      })
-      .sort((a, b) => {
-        const dateA = a.date.split('T')[0];
-        const dateB = b.date.split('T')[0];
-        if (dateA !== dateB) return dateB.localeCompare(dateA);
-        const timeA = getSlotStartTime(a.schoolId || a.studentId || '', a.slotId);
-        const timeB = getSlotStartTime(b.schoolId || b.studentId || '', b.slotId);
-        return timeB - timeA;
-      })[0];
+    // Aula anterior da turma pela grade, mesma regra da Retrospectiva do Diário (utils/retrospective.ts)
+    const isWindow = current.type === 'school' && current.schedule.classId === 'window';
+    const retrospective = isWindow ? null : findPreviousLesson(data, {
+      institutionId: current.type === 'school' ? current.school!.id : current.student.id,
+      classId: current.type === 'school' ? current.schedule.classId : current.student.name,
+      date: todayDateStr,
+      slotId: current.type === 'school' ? current.schedule.slotId : current.schedule.id,
+      startTime: current.startTime,
+      isPrivate: current.type !== 'school'
+    });
 
     return { current, next, isLast, retrospective };
-  }, [sortedTodaySchedules, currentTime, data.logs, todayDateStr, getSlotStartTime]);
+  }, [sortedTodaySchedules, currentTime, data, todayDateStr]);
 
   const nextGlobalActivity = useMemo(() => {
     if (activityInfo) return null;
@@ -701,11 +669,15 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                       <History size={10} className="md:w-3 md:h-3" />
                       <span className="text-[7px] md:text-[8px] font-black uppercase tracking-tight">Aula Anterior</span>
                     </div>
-                    {activityInfo.retrospective ? (
+                    {activityInfo.retrospective && !activityInfo.retrospective.hasContent ? (
+                      <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase">Sem conteúdo cadastrado ({getDayMonth(activityInfo.retrospective.date)})</p>
+                    ) : activityInfo.retrospective ? (
                       <div className="space-y-1">
-                        <p className="text-[9px] md:text-[10px] font-bold text-slate-600 dark:text-slate-300 italic line-clamp-2">
-                          <span className="text-slate-400 not-italic">Conteúdo: </span>"{activityInfo.retrospective.subject}"
-                        </p>
+                        {activityInfo.retrospective.subject && (
+                          <p className="text-[9px] md:text-[10px] font-bold text-slate-600 dark:text-slate-300 italic line-clamp-2">
+                            <span className="text-slate-400 not-italic">Conteúdo ({getDayMonth(activityInfo.retrospective.date)}): </span>"{activityInfo.retrospective.subject}"
+                          </p>
+                        )}
                         {activityInfo.retrospective.homework && (
                           <p className="text-[9px] md:text-[10px] font-bold text-blue-600 dark:text-blue-400 italic line-clamp-1">
                             <span className="text-slate-400 not-italic">Tarefa: </span>{activityInfo.retrospective.homework}

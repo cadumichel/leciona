@@ -75,8 +75,9 @@ objetivo.
 - **Retrospectiva do Diário** (janela de registro da aula): `utils/retrospective.ts`. Mostra a aula
   imediatamente anterior da turma pela grade (sem feriados, recessos e aulas removidas; aulas extras
   contam), mesmo sem conteúdo ("Sem conteúdo cadastrado"). Nunca pular para o último registro.
-- **Aulas que faltam no período**: `utils/remainingLessons.ts`. Linha abaixo da retrospectiva no
-  Diário ("Faltam N aulas da turma até o fim do trimestre · próxima avaliação…") e ferramenta
+- **Aulas que faltam no período**: `utils/remainingLessons.ts`. Linha "Cronograma" abaixo da retrospectiva
+  no Diário ("Faltam N aulas até o fim do 3º TRI (data). Próx. Avaliação: …"; visível por padrão,
+  olho em `settings.hideCronograma`) e ferramenta
   `aulas_restantes` do conector. Mesma regra de aulas do Diário (sem feriados/recessos).
 - **Notas** (`components/GradesManagement.tsx` + `utils/grades.ts`):
   - Média aritmética e ponderada contam cada nota proporcionalmente à nota máxima (3 de 3 = 10);

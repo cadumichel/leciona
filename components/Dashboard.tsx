@@ -683,7 +683,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
                     <h4 className="text-2xl md:text-4xl font-black text-slate-900 dark:text-white uppercase leading-none tracking-tighter mb-3 md:mb-4 truncate">
                       {activityInfo.current.type === 'school'
-                        ? (activityInfo.current.schedule.classId === 'window' ? 'Janela / Livre' : activityInfo.current.schedule.classId)
+                        ? (activityInfo.current.schedule.classId === 'window' ? (activityInfo.current.schedule.activityLabel || 'Janela / Livre') : activityInfo.current.schedule.classId)
                         : activityInfo.current.student.name}
                     </h4>
 
@@ -736,7 +736,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
                         <div className="text-left min-w-0 flex-1 overflow-hidden">
                           <p className="text-[9px] md:text-[10px] font-black uppercase text-primary truncate block w-full">
                             {nextGlobalActivity.type === 'school'
-                              ? (nextGlobalActivity.schedule.classId === 'window' ? 'Janela' : nextGlobalActivity.schedule.classId)
+                              ? (nextGlobalActivity.schedule.classId === 'window' ? (nextGlobalActivity.schedule.activityLabel || 'Janela') : nextGlobalActivity.schedule.classId)
                               : nextGlobalActivity.student.name}
                           </p>
                         </div>

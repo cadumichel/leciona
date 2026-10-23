@@ -71,4 +71,15 @@ describe('aulas que faltam até o fim do período', () => {
     const outra = countRemainingLessons(doc, { schoolId: 'C', classId: 'c163', date: '2026-10-14' })!;
     expect(outra.dates).toEqual(['2026-10-20', '2026-10-27']);
   });
+
+  it('atividade fixa não conta; aula de uma turma no horário dela conta para a turma', () => {
+    const doc = base();
+    doc.scheduleVersions[0].schedules.push({ id: 'e5', dayOfWeek: 1, schoolId: 'C', shiftId: 'cv', slotId: 's1', classId: 'window', activityLabel: 'Aplicação de provas' });
+    const antes = countRemainingLessons(doc, { schoolId: 'C', classId: 'c163', date: '2026-10-14' })!;
+    doc.logs.push({ id: 'X', date: '2026-10-26T00:00:00.000Z', schoolId: 'C', classId: 'c163', slotId: 's1', startTime: '13:30', endTime: '14:15',
+      subject: '', homework: '', notes: '', type: 'extra', status: 'active' });
+    const depois = countRemainingLessons(doc, { schoolId: 'C', classId: 'c163', date: '2026-10-14' })!;
+    expect(depois.count).toBe(antes.count + 1);
+    expect(depois.dates).toContain('2026-10-26');
+  });
 });

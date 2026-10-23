@@ -408,6 +408,30 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     slotId: string;
   }>({ date: '', schoolId: '', classId: '', shiftId: '', slotId: '' });
 
+  // Horário de janela/atividade fixa: aula de uma turma só nesta data (aula extra no próprio horário da grade)
+  const [slotClassId, setSlotClassId] = useState('');
+  const handleTeachClassInSlot = () => {
+    if (!activeLesson || activeLesson.type !== 'school' || !slotClassId) return;
+    const newLog: LessonLog = {
+      id: crypto.randomUUID(),
+      date: toSafeISO(activeLesson.date),
+      schoolId: activeLesson.institution.id,
+      classId: slotClassId,
+      slotId: activeLesson.slot.id,
+      startTime: activeLesson.slot.startTime,
+      endTime: activeLesson.slot.endTime,
+      subject: '',
+      homework: '',
+      notes: '',
+      type: 'extra',
+      status: 'active'
+    };
+    onUpdateData({ logs: [...data.logs, newLog] });
+    setSlotClassId('');
+    setActiveLesson(null);
+    showSuccess('Aula criada! Toque no card da turma para registrar o conteúdo.');
+  };
+
   const handleCreateRegularSkeleton = () => {
     const { date, schoolId, classId, shiftId, slotId } = createRegularForm;
     if (!date || !schoolId || !classId || !shiftId || !slotId) return;
@@ -1611,7 +1635,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           let isFree = false;
 
           if (schedule.classId === 'window') {
-            displayLabel = 'Janela';
+            displayLabel = schedule.activityLabel || 'Janela';
             isWindow = true;
           } else {
             displayLabel = schedule.classId;
@@ -1771,6 +1795,12 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       if (matchedShiftId === 'extra') {
         effectiveSlotId = log.id;
       }
+      // Aula de uma turma num horário de janela/atividade fixa: abre pelo próprio registro (continua aula extra)
+      const inGridSlot = log.type === 'extra' && !!matchedSlot && matchedSlot.id === log.slotId;
+      if (inGridSlot) {
+        effectiveShiftId = 'extra';
+        effectiveSlotId = log.id;
+      }
 
       const startMin = parseTimeToMinutes(slotInfo.startTime);
       const endMin = parseTimeToMinutes(slotInfo.endTime);
@@ -1802,7 +1832,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
         slot: slotInfo,
         log,
         label: log.type === 'substitution' ? `Subst: ${log.substitutionSubject}` :
-          log.type === 'regular' ? displayName :
+          log.type === 'regular' || inGridSlot ? displayName :
             `Extra: ${log.subject}`,
         isWindow: false,
         isFree: false,
@@ -2202,8 +2232,36 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           {activeLesson.schedule.classId === 'window' ? (
             <div className="bg-slate-50 dark:bg-slate-800/50 p-8 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 text-center">
               <Palmtree className="mx-auto text-slate-300 mb-3" size={32} />
-              <h3 className="text-sm font-black uppercase text-slate-500 mb-1">Horário de Janela</h3>
-              <p className="text-xs text-slate-400 max-w-xs mx-auto mb-6">Este horário está marcado como livre na sua grade. Você pode excluí-lo desta visualização se desejar.</p>
+              <h3 className="text-sm font-black uppercase text-slate-500 mb-1">{activeLesson.schedule.activityLabel || 'Horário de Janela'}</h3>
+              <p className="text-xs text-slate-400 max-w-xs mx-auto mb-6">
+                {activeLesson.schedule.activityLabel !== undefined
+                  ? 'Atividade fixa da sua grade, sem turma: não entra no planejamento nem nas aulas que faltam.'
+                  : 'Este horário está marcado como livre na sua grade. Você pode excluí-lo desta visualização se desejar.'}
+              </p>
+
+              {activeLesson.type === 'school' && (
+                <div className="max-w-xs mx-auto mb-6 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-left">
+                  <label className="block text-[9px] font-black text-slate-500 uppercase mb-1.5">Dar aula para uma turma neste dia</label>
+                  <div className="flex gap-2">
+                    <select value={slotClassId} onChange={e => setSlotClassId(e.target.value)} className="flex-1 min-w-0 bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-2 py-2 text-xs font-bold dark:text-white outline-none">
+                      <option value="">Escolha a turma…</option>
+                      {((activeLesson.institution as School).classes || [])
+                        .filter(c => typeof c === 'string' || !c.deleted)
+                        .map(c => ({ id: typeof c === 'string' ? c : c.id, name: typeof c === 'string' ? c : c.name }))
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <button
+                      onClick={handleTeachClassInSlot}
+                      disabled={!slotClassId}
+                      className="px-3 py-2 rounded-lg bg-primary text-white text-[10px] font-black uppercase disabled:opacity-40"
+                    >
+                      Criar aula
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-slate-400 mt-1.5">Vale só para {formatDateBR(activeLesson.date)}; a grade não muda.</p>
+                </div>
+              )}
 
               <button
                 onClick={() => setShowDeleteOptionsModal(true)}
@@ -3078,7 +3136,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                               {
                                 item.slot.type === 'break' ? '' :
                                   item.isFree ? 'Livre' :
-                                    item.isWindow ? 'Janela' :
+                                    item.isWindow ? (item.schedule?.activityLabel !== undefined ? 'Fixa' : 'Janela') :
                                       item.log ? (isFutureDate ? 'Planejado' : 'OK') :
                                         (isFutureDate || (selectedDate === getYYYYMMDD(new Date()) && currentTime < (item as any).startTimeMin)) ? 'Agendada' :
                                           (selectedDate === getYYYYMMDD(new Date()) && currentTime >= (item as any).startTimeMin && currentTime < (item as any).endTimeMin) ? 'Em aula' :

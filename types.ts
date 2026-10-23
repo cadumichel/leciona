@@ -106,6 +106,8 @@ export interface ScheduleEntry {
   shiftId: string;
   slotId: string;
   classId: string;
+  /** Atividade fixa sem turma (ex.: "Aplicação de provas"): só com classId 'window' */
+  activityLabel?: string;
 }
 
 export interface ScheduleVersion {

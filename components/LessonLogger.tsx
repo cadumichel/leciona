@@ -214,6 +214,10 @@ const formatWeekRange = (weekStartStr: string): string => {
 };
 
 /** Registro com algo escrito (aula criada vazia ainda não está registrada) */
+/** "3º Trimestre" → "3º TRI" (linha do cronograma) */
+const shortTermName = (name: string) =>
+  name.replace(/trimestre/i, 'TRI').replace(/bimestre/i, 'BIM').replace(/semestre/i, 'SEM');
+
 const hasLogText = (log?: LessonLog | null) =>
   !!log && !!(log.subject || log.homework || log.notes || (log.attendance && log.attendance.length > 0));
 
@@ -2177,41 +2181,42 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           </div>
         )}
 
-        {remainingInfo && activeLesson && data.settings.hideRemainingLessons && (
+        {remainingInfo && activeLesson && data.settings.hideCronograma && (
           <div className="-mt-4 md:-mt-6 lg:mt-0 mb-6 md:mb-8 lg:mb-3 px-1">
             <button
               type="button"
-              onClick={() => onUpdateData({ settings: { ...data.settings, hideRemainingLessons: false } })}
+              onClick={() => onUpdateData({ settings: { ...data.settings, hideCronograma: false } })}
               className="flex items-center gap-1.5 text-[9px] md:text-[10px] font-bold text-slate-400 hover:text-primary transition-colors"
-              title="Mostrar quantas aulas faltam"
+              title="Mostrar cronograma"
             >
               <CalendarRange size={12} className="shrink-0" />
               <Eye size={12} className="shrink-0" />
-              <span>Aulas que faltam</span>
+              <span>Cronograma</span>
             </button>
           </div>
         )}
 
-        {remainingInfo && activeLesson && !data.settings.hideRemainingLessons && (
+        {remainingInfo && activeLesson && !data.settings.hideCronograma && (
           <div className="-mt-4 md:-mt-6 lg:mt-0 mb-6 md:mb-8 lg:mb-3 px-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] md:text-[10px] font-bold text-slate-500 dark:text-slate-400">
             <CalendarRange size={12} className="text-primary shrink-0" />
             <span>
               {remainingInfo.count === 0
-                ? `Última aula da ${getClassName(data, activeLesson.institution.id, activeLesson.schedule.classId)} no ${remainingInfo.term.name}`
-                : `${remainingInfo.count === 1 ? 'Falta 1 aula' : `Faltam ${remainingInfo.count} aulas`} da ${getClassName(data, activeLesson.institution.id, activeLesson.schedule.classId)} até o fim do ${remainingInfo.term.name} (${formatDateBR(remainingInfo.term.end)})`}
+                ? `Última aula do ${shortTermName(remainingInfo.term.name)} (${formatDateBR(remainingInfo.term.end)})`
+                : `${remainingInfo.count === 1 ? 'Falta 1 aula' : `Faltam ${remainingInfo.count} aulas`} até o fim do ${shortTermName(remainingInfo.term.name)} (${formatDateBR(remainingInfo.term.end)})`}
+              {remainingInfo.nextAssessment && '.'}
             </span>
             {remainingInfo.nextAssessment && (
               <span className="text-slate-400">
-                · próxima avaliação: {remainingInfo.nextAssessment.title} em {formatDateBR(remainingInfo.nextAssessment.date).slice(0, 5)}
+                Próx. Avaliação: {remainingInfo.nextAssessment.title} em {formatDateBR(remainingInfo.nextAssessment.date).slice(0, 5)}
                 {remainingInfo.nextAssessment.lessonsBefore > 0 && `, daqui a ${remainingInfo.nextAssessment.lessonsBefore} ${remainingInfo.nextAssessment.lessonsBefore === 1 ? 'aula' : 'aulas'}`}
               </span>
             )}
             <button
               type="button"
-              onClick={() => onUpdateData({ settings: { ...data.settings, hideRemainingLessons: true } })}
+              onClick={() => onUpdateData({ settings: { ...data.settings, hideCronograma: true } })}
               className="p-0.5 text-slate-400 hover:text-primary transition-colors"
-              title="Ocultar quantas aulas faltam"
-              aria-label="Ocultar quantas aulas faltam"
+              title="Ocultar cronograma"
+              aria-label="Ocultar cronograma"
             >
               <EyeOff size={12} />
             </button>

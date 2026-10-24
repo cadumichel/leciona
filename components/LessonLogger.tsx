@@ -43,7 +43,7 @@ import { DAYS_OF_WEEK_NAMES } from '../constants';
 import { parseTimeToMinutes, getCurrentTimeInMinutes, getHolidayName, isHoliday, getDayOfWeekFromDate, toSafeISO, formatDateBR } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName } from '../utils/classRefs';
-import { getLessonDisplayItems, deriveStatsFromLessons, LessonDisplayItem, isLessonBlocked as isLessonBlockedIn, getLessonBlockReason } from '../utils/lessonStats';
+import { getLessonDisplayItems, deriveStatsFromLessons, LessonDisplayItem, isLessonBlocked as isLessonBlockedIn, getLessonBlockReason, getNoLessonReason } from '../utils/lessonStats';
 import { sanitizeText, LIMITS } from '../utils/validation';
 import { findPreviousLesson } from '../utils/retrospective';
 import { DisconnectedNotice } from './ConnectionWarnings';
@@ -1604,7 +1604,6 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
     // Get versioned schedules for the selected date
     const dailySchedules = getSchedulesForDate(data, selectedDate);
-    const holidayName = getHolidayName(dObj);
 
     data.schools.filter(s => !s.deleted).forEach(school => {
       // Proteção: garantir que shifts existe
@@ -1656,7 +1655,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           const startMin = parseTimeToMinutes(slot.startTime);
           const endMin = parseTimeToMinutes(slot.endTime);
           const isActive = isToday && currentTime >= startMin && currentTime < endMin;
-          const blockedReason = isWindow ? null : (holidayName || getBlockReason(selectedDate, school.id, shift.id, schedule.classId));
+          const blockedReason = isWindow ? null : getNoLessonReason(data, selectedDate, school.id, shift.id, schedule.classId, log);
 
           if (!groupedShifts[shift.name]) groupedShifts[shift.name] = [];
           groupedShifts[shift.name].push({
@@ -2000,7 +1999,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     }
 
     return { totalPastPlanned, totalGeneralPlanned, loggedPast, loggedFuture };
-  }, [data.scheduleVersions, data.schools, data.logs, data.calendars, filterInstId, filterClassId, filterPeriodIdx]);
+  }, [data.scheduleVersions, data.schools, data.logs, data.calendars, data.events, filterInstId, filterClassId, filterPeriodIdx]);
 
   // Determine if current active lesson is blocked by recess/event
   const blockReason = useMemo(() => {
@@ -3102,7 +3101,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                           }
                         }}
                         className={`w-full flex items-center gap-1.5 md:gap-2 lg:gap-2.5 p-1.5 md:p-2 lg:py-1.5 rounded-lg md:rounded-xl lg:rounded-lg border-2 transition-all text-left group relative ${(item as any).isExtra && item.log?.type !== 'regular' ? 'ring-2 ring-indigo-400 dark:ring-indigo-600 ring-offset-1' : ''
-                          } ${item.slot.type === 'break' ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-900/30' : item.isFree ? 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 opacity-60 grayscale' : item.isActive ? 'bg-primary/5 border-primary shadow-md z-10' : item.isWindow ? 'bg-slate-200 dark:bg-slate-800/80 border-slate-300 dark:border-slate-600 shadow-sm' : item.log ? (isFutureDate ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800 border-dashed' : 'bg-white dark:bg-slate-900 border-green-100 dark:border-green-900/20') : 'bg-white dark:bg-slate-900 border-slate-50 dark:border-slate-800 hover:border-blue-100'}`}
+                          } ${item.slot.type === 'break' ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-900/30' : item.isFree ? 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 opacity-60 grayscale' : item.isActive ? 'bg-primary/5 border-primary shadow-md z-10' : item.isWindow ? 'bg-slate-200 dark:bg-slate-800/80 border-slate-300 dark:border-slate-600 shadow-sm' : item.blockedReason ? 'bg-slate-50 dark:bg-slate-900/60 border-slate-100 dark:border-slate-800' : item.log ? (isFutureDate ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800 border-dashed' : 'bg-white dark:bg-slate-900 border-green-100 dark:border-green-900/20') : 'bg-white dark:bg-slate-900 border-slate-50 dark:border-slate-800 hover:border-blue-100'}`}
                       >
                         {/* Badge para aulas extras (Exceto Regular) */}
                         {(item as any).isExtra && item.log?.type !== 'regular' && (
@@ -3123,7 +3122,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                             <span className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase shrink-0">{item.slot.startTime}</span>
                           </div>
 
-                          {isFutureDate && item.log && (
+                          {isFutureDate && item.log && !item.blockedReason && (
                             <div
                               className={`${isBulkEditMode ? '' : 'lg:hidden '}mt-1.5 mb-1 px-1 py-0.5 rounded-lg bg-purple-100 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 overflow-visible max-w-full min-w-0`}
                               onClick={(e) => isBulkEditMode && e.stopPropagation()}
@@ -3152,14 +3151,15 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                                 </>
                               )}
                             </div>
-                            {isFutureDate && item.log && !isBulkEditMode && (
+                            {isFutureDate && item.log && !item.blockedReason && !isBulkEditMode && (
                               <span className="hidden lg:block flex-1 min-w-0 mx-2 truncate text-[10px] font-bold italic text-purple-700 dark:text-purple-300" title={item.log.subject}>
                                 {item.log.subject || 'Planejado'}
                               </span>
                             )}
-                            {!item.log && item.blockedReason && item.slot.type !== 'break' ? (
-                              <span className="shrink-0 max-w-[110px] truncate text-[10px] font-black uppercase text-pink-600 dark:text-pink-300 bg-pink-100 dark:bg-pink-900/30 px-1.5 py-0.5 rounded" title={item.blockedReason}>
-                                {item.blockedReason}
+                            {item.blockedReason && item.slot.type !== 'break' ? (
+                              <span className="shrink-0 max-w-[130px] lg:max-w-[180px] flex items-center gap-1 text-[10px] font-black uppercase text-pink-600 dark:text-pink-300 bg-pink-50 dark:bg-pink-900/20 px-1.5 py-0.5 rounded" title={`Sem aula: ${item.blockedReason}`}>
+                                <Palmtree size={10} className="shrink-0" />
+                                <span className="truncate">Sem aula · {item.blockedReason}</span>
                               </span>
                             ) : (
                             <div className={`flex items-center gap-1 shrink-0 text-[10px] font-black uppercase ${item.slot.type === 'break' ? 'hidden' : item.isFree ? 'text-slate-500' : item.isWindow ? 'text-slate-500' : hasLogText(item.log) ? (isFutureDate ? 'text-purple-500' : 'text-green-500') : (isFutureDate || (selectedDate === getYYYYMMDD(new Date()) && currentTime < (item as any).endTimeMin)) ? 'text-slate-400' : 'text-blue-500'}`}>

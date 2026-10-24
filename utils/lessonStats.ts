@@ -1,6 +1,6 @@
 
 import { AppData, LessonLog, ScheduleEntry, TimeSlot, School, DayOfWeek, Student } from '../types';
-import { isHoliday, parseTimeToMinutes, checkTimeOverlap } from '../utils';
+import { isHoliday, getHolidayName, getSafeDate, parseTimeToMinutes, checkTimeOverlap } from '../utils';
 import { getSchedulesForDate } from './schedule';
 import { isSameClassRef } from './classRefs';
 
@@ -64,6 +64,23 @@ export const getLessonBlockReason = (data: AppData, dateStr: string, schoolId: s
         if (event.classId && classId && isSameClassRef(data, schoolId, event.classId, classId)) return event.title;
     }
     return null;
+};
+
+/** Registro que o app cria sozinho ao cadastrar um evento que suspende aula (AgendaManagement / conector). */
+export const isAutoEventLog = (log?: LessonLog | null): boolean =>
+    !!log && (log.subject || '').startsWith('Evento: ') && log.notes === 'Aula substituída por evento escolar.' &&
+    !log.homework && !(log.attendance && log.attendance.length > 0);
+
+/**
+ * Motivo do selo "Sem aula" no cartão do Diário: feriado, recesso ou evento que suspende aula, quando o professor
+ * não escreveu nada nessa aula (registro vazio ou o automático "Evento: X" também contam como sem registro).
+ * Nesses casos a aula não é Pendente nem Agendada.
+ */
+export const getNoLessonReason = (data: AppData, dateStr: string, schoolId: string, shiftId?: string, classId?: string, log?: LessonLog | null): string | null => {
+    const reason = getHolidayName(getSafeDate(dateStr)) || getLessonBlockReason(data, dateStr, schoolId, shiftId, classId);
+    if (!reason) return null;
+    const written = !!log && !!(log.subject || log.homework || log.notes || (log.attendance && log.attendance.length > 0));
+    return written && !isAutoEventLog(log) ? null : reason;
 };
 
 export const getLessonDisplayItems = (data: AppData, filters: LessonFilters): LessonDisplayItem[] => {

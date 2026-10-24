@@ -284,7 +284,7 @@ export interface AppSettings {
   // Controles de Exibição de Alertas
   hideUnregisteredClassesOnDiary?: boolean;
   hideUnregisteredClassesOnDashboard?: boolean;
-  /** Esconde no Diário a linha do cronograma "Faltam N aulas…" (botão de olho na própria linha) */
+  /** Esconde no Diário a linha do cronograma "Faltam N aulas…" (olho na própria linha ou Ajustes → Geral → Aparência) */
   hideCronograma?: boolean;
   termsAccepted?: boolean;
 }

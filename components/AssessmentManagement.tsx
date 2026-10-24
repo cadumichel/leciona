@@ -17,6 +17,7 @@ import {
   KIND_LABELS, buildRecovery, checkAssessmentDate, linkedAssessments, nextLessonDate, parentCandidates,
   recoveryPolicyOf, secondCallModeOf, suggestRecovery, termRecoveryContent
 } from '../utils/recovery';
+import SortOrderButton, { byDate, useSortOrder } from './SortOrderButton';
 
 interface AssessmentManagementProps {
   data: AppData;
@@ -108,6 +109,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   const [filterTermIdx, setFilterTermIdx] = useState('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'scheduled' | 'done'>('scheduled');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, toggleSortOrder] = useSortOrder('avaliacoes', 'asc');
 
   // ── Layout/Grouping State ────────────────────────────────────────────────
   const [cardsPerRow, setCardsPerRow] = useState(4);
@@ -507,8 +509,8 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       );
     }
 
-    return list.sort((a, b) => a.date.localeCompare(b.date));
-  }, [assessmentEvents, filterSchoolId, filterClassId, filterTermIdx, filterStatus, searchQuery, data.schools, data.calendars, data.grades, today]);
+    return list.sort(byDate(sortOrder));
+  }, [sortOrder, assessmentEvents, filterSchoolId, filterClassId, filterTermIdx, filterStatus, searchQuery, data.schools, data.calendars, data.grades, today]);
 
   // Group by month (and optionally by Mon–Fri week inside each month)
   type WeekGroup = { weekKey: string; label: string; events: SchoolEvent[] };
@@ -519,6 +521,9 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     // Track sequential week number across the whole list
     const weekSeq = new Map<string, number>();
     let weekCounter = 0;
+    // Semana 1, 2… sempre na ordem do calendário, mesmo com os mais recentes primeiro
+    [...new Set(filteredEvents.map(e => getMondayOfWeek(e.date.split('T')[0])))].sort()
+      .forEach(k => weekSeq.set(k, ++weekCounter));
 
     filteredEvents.forEach(e => {
       const weekKey = getMondayOfWeek(e.date.split('T')[0]);
@@ -721,6 +726,8 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
               </button>
             ))}
           </div>
+
+          <SortOrderButton order={sortOrder} onToggle={toggleSortOrder} />
 
           {/* Busca: ocupa o resto da linha (no celular, linha própria) */}
           <div className="relative flex-1 min-w-[180px] max-sm:basis-full">

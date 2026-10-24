@@ -19,6 +19,7 @@ import {
 import { getDayOfWeekFromDate, getShortWeekDay, getDayMonth, toSafeISO, todayLocal } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName, isSameClassRef } from '../utils/classRefs';
+import Toggle from './Toggle';
 import SortOrderButton, { byDate, useSortOrder } from './SortOrderButton';
 
 interface AgendaManagementProps {
@@ -354,12 +355,12 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
     <div className="space-y-4 md:space-y-6 lg:space-y-3 pb-20">
 
       {/* ── Header (no computador, faixa compacta) ── */}
-      <div className="bg-white dark:bg-slate-900 p-4 md:p-6 lg:px-4 lg:py-2.5 rounded-2xl lg:rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-white dark:bg-slate-900 px-4 py-3 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
-            <Calendar className="text-orange-500 w-5 h-5 lg:w-4 lg:h-4" /> Agenda Escolar
+          <h3 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
+            <Calendar className="text-orange-500 w-4 h-4" /> Agenda Escolar
           </h3>
-          <p className="text-[9px] text-slate-500 font-black uppercase tracking-tight mt-0.5">
+          <p className="text-[10px] text-slate-500 font-black uppercase tracking-tight mt-0.5">
             {filteredEvents.length} evento{filteredEvents.length !== 1 ? 's' : ''}{' '}
             {filterSchoolId !== 'all' || filterTermIdx !== 'all' || filterType !== 'all' || filterStatus !== 'all' || searchQuery
               ? 'encontrado' + (filteredEvents.length !== 1 ? 's' : '')
@@ -368,14 +369,14 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
         </div>
         <button
           onClick={() => setIsAddingEvent(true)}
-          className="bg-orange-500 text-white px-5 py-2.5 lg:px-4 lg:py-2 rounded-lg lg:rounded-md font-black uppercase text-[9px] tracking-tight shadow-lg lg:shadow-md shadow-orange-100 hover:brightness-110 transition-all flex items-center gap-2 self-start sm:self-auto shrink-0"
+          className="bg-orange-500 text-white px-4 py-2.5 rounded-lg font-black uppercase text-[11px] tracking-tight shadow-sm hover:brightness-110 transition-all flex items-center gap-1.5 shrink-0"
         >
-          <Plus size={15} /> Novo Evento
+          <Plus size={14} /> Novo Evento
         </button>
       </div>
 
       {/* ── Filter Toolbar ── */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl lg:rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm p-3 md:p-4 lg:p-2.5 space-y-3 lg:space-y-2">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm p-3 space-y-2">
 
         {/* Search row (no computador, a busca fica na linha de baixo) */}
         <div className="relative lg:hidden">
@@ -398,7 +399,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
         <div className="flex gap-2 flex-wrap">
           <div className="flex items-center gap-1 shrink-0">
             <SlidersHorizontal size={12} className="text-slate-400" />
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight">Filtros:</span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">Filtros:</span>
           </div>
 
           {/* School filter */}
@@ -443,13 +444,13 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
 
           {/* Cards per row */}
           <div className="flex items-center gap-1.5">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight shrink-0">Cards/linha:</span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight shrink-0">Cards/linha:</span>
             <div className="flex gap-1">
               {[1, 2, 3, 4, 5, 6].map(n => (
                 <button
                   key={n}
                   onClick={() => setCardsPerRow(n)}
-                  className={`w-6 h-6 rounded text-[9px] font-black transition-all ${cardsPerRow === n
+                  className={`w-6 h-6 rounded text-[10px] font-black transition-all ${cardsPerRow === n
                     ? 'bg-orange-500 text-white shadow-sm'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
                     }`}
@@ -465,7 +466,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
           {/* Week grouping toggle */}
           <button
             onClick={() => setGroupByWeek(v => !v)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all ${groupByWeek
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all ${groupByWeek
               ? 'bg-orange-500 text-white'
               : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
               }`}
@@ -482,7 +483,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
               <button
                 key={val}
                 onClick={() => setFilterStatus(val)}
-                className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-tight transition-all ${filterStatus === val
+                className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-tight transition-all ${filterStatus === val
                   ? val === 'done'
                     ? 'bg-amber-500 text-white shadow-sm'
                     : val === 'upcoming'
@@ -519,7 +520,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
 
       {/* ── Grouped Event List ── */}
       {grouped.length === 0 ? (
-        <div className="py-16 bg-white dark:bg-slate-900 rounded-2xl lg:rounded-lg border-2 border-dashed border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center gap-4 text-center">
+        <div className="py-16 bg-white dark:bg-slate-900 rounded-xl border-2 border-dashed border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center gap-4 text-center">
           <CalendarDays size={40} className="text-slate-300 dark:text-slate-700" />
           <div>
             <p className="text-slate-500 font-black uppercase text-[10px] tracking-tight">
@@ -530,7 +531,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
             {(searchQuery || filterSchoolId !== 'all' || filterTermIdx !== 'all' || filterType !== 'all' || filterStatus !== 'all') && (
               <button
                 onClick={() => { setSearchQuery(''); setFilterSchoolId('all'); setFilterTermIdx('all'); setFilterType('all'); setFilterStatus('all'); }}
-                className="mt-3 text-[9px] font-black text-orange-500 uppercase hover:underline"
+                className="mt-3 text-[10px] font-black text-orange-500 uppercase hover:underline"
               >
                 Limpar filtros
               </button>
@@ -553,7 +554,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
                 {/* Week sub-header (when groupByWeek is on) */}
                 {groupByWeek && (
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-wider">{week.label}</span>
+                    <span className="text-[10px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-wider">{week.label}</span>
                     <div className="flex-1 h-px bg-slate-50 dark:bg-slate-800/50" />
                   </div>
                 )}
@@ -585,7 +586,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
                           className="w-10 h-10 rounded-lg flex flex-col items-center justify-center shrink-0"
                           style={{ backgroundColor: `${eventColor}20`, color: eventColor }}
                         >
-                          <span className="text-[7px] font-black uppercase leading-none mb-0.5">{getShortWeekDay(event.date)}</span>
+                          <span className="text-[10px] font-black uppercase leading-none mb-0.5">{getShortWeekDay(event.date)}</span>
                           <span className="text-[10px] font-black leading-none">{getDayMonth(event.date)}</span>
                         </div>
 
@@ -593,24 +594,24 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
                         <div className="flex-1 overflow-hidden">
                           <h4 className="font-black text-slate-800 dark:text-white uppercase text-[10px] truncate mb-1">{event.title}</h4>
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[8px] text-slate-400 font-bold uppercase">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase">
                               {EVENT_TYPE_LABELS[event.type] || event.type}
                             </span>
                             {filterSchoolId === 'all' && school && (
-                              <span className="text-[7px] font-black bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded-md uppercase truncate max-w-[100px]">
+                              <span className="text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded-md uppercase truncate max-w-[100px]">
                                 {school.name}
                               </span>
                             )}
-                            <span className="text-[7px] font-black bg-orange-50 dark:bg-orange-900/30 text-orange-600 px-1.5 py-0.5 rounded-md uppercase">
+                            <span className="text-[10px] font-black bg-orange-50 dark:bg-orange-900/30 text-orange-600 px-1.5 py-0.5 rounded-md uppercase">
                               {getEventScope(event, school)}
                             </span>
                             {event.blocksClasses && (
-                              <span className="text-[7px] font-black bg-red-100 dark:bg-red-900/30 text-red-600 px-1.5 py-0.5 rounded-md uppercase">
+                              <span className="text-[10px] font-black bg-red-100 dark:bg-red-900/30 text-red-600 px-1.5 py-0.5 rounded-md uppercase">
                                 Cancela Aulas
                               </span>
                             )}
                             {/* Status badge */}
-                            <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-md uppercase border ${isPast
+                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md uppercase border ${isPast
                                 ? 'bg-amber-50 text-amber-600 border-amber-200'
                                 : 'bg-blue-50 text-blue-600 border-blue-200'
                               }`}>
@@ -618,22 +619,22 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
                             </span>
                           </div>
                           {event.description ? (
-                            <p className="text-[8px] text-slate-400 mt-1 line-clamp-2">{event.description}</p>
+                            <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">{event.description}</p>
                           ) : null}
                         </div>
 
                         {/* Delete button */}
                         {deletingEventId === event.id ? (
                           <div className="flex flex-col items-end gap-1 shrink-0">
-                            <span className="text-[8px] font-bold text-slate-600 uppercase">Confirmar?</span>
+                            <span className="text-[10px] font-bold text-slate-600 uppercase">Confirmar?</span>
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => { handleDeleteEvent(event); setDeletingEventId(null); }}
-                                className="bg-red-500 text-white px-1.5 py-0.5 rounded text-[9px] font-bold"
+                                className="bg-red-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold"
                               >Sim</button>
                               <button
                                 onClick={() => setDeletingEventId(null)}
-                                className="bg-slate-300 text-slate-700 px-1.5 py-0.5 rounded text-[9px] font-bold"
+                                className="bg-slate-300 text-slate-700 px-1.5 py-0.5 rounded text-[10px] font-bold"
                               >Não</button>
                             </div>
                           </div>
@@ -655,29 +656,29 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
       {/* ── Add Event Modal ── */}
       {isAddingEvent && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl md:rounded-2xl p-6 md:p-8 w-full max-w-xl shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6 md:mb-8">
-              <h3 className="text-lg md:text-xl font-black uppercase text-slate-800 dark:text-white">Novo Evento Escolar</h3>
-              <button onClick={() => setIsAddingEvent(false)} className="text-slate-300 hover:text-slate-600"><X /></button>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 md:p-6 w-full max-w-lg shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center gap-2 mb-5">
+              <h3 className="text-lg font-black uppercase text-slate-800 dark:text-white truncate">Novo Evento Escolar</h3>
+              <button onClick={() => setIsAddingEvent(false)} className="shrink-0 text-slate-400 hover:text-slate-600 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 p-1.5 rounded-full transition-colors"><X size={16} /></button>
             </div>
-            <div className="space-y-4 md:space-y-6">
+            <div className="space-y-4">
 
               <div>
-                <label className="block text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Instituição</label>
-                <select value={eventForm.schoolId} onChange={e => setEventForm({ ...eventForm, schoolId: e.target.value, shiftId: '', classId: '' })} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg md:rounded-xl px-4 md:px-5 py-3 font-bold dark:text-white outline-none focus:ring-2 focus:ring-primary text-sm">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Instituição</label>
+                <select value={eventForm.schoolId} onChange={e => setEventForm({ ...eventForm, schoolId: e.target.value, shiftId: '', classId: '' })} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white outline-none focus:ring-2 focus:ring-primary text-sm">
                   {data.schools.filter(s => !s.deleted).sort((a, b) => a.name.localeCompare(b.name)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="block text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Título do Evento</label>
-                <input type="text" value={eventForm.title} onChange={e => setEventForm({ ...eventForm, title: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg md:rounded-xl px-4 md:px-5 py-3 font-bold dark:text-white text-sm" placeholder="Ex: Conselho de Classe" />
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Título do Evento</label>
+                <input type="text" value={eventForm.title} onChange={e => setEventForm({ ...eventForm, title: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm" placeholder="Ex: Conselho de Classe" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Tipo</label>
-                  <select value={eventForm.type} onChange={e => setEventForm({ ...eventForm, type: e.target.value as any })} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg md:rounded-xl px-4 md:px-5 py-3 font-bold dark:text-white text-sm">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Tipo</label>
+                  <select value={eventForm.type} onChange={e => setEventForm({ ...eventForm, type: e.target.value as any })} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm">
                     <option value="meeting">Reunião</option>
                     <option value="festivity">Evento</option>
                     <option value="trip">Passeio</option>
@@ -686,28 +687,28 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Data</label>
-                  <input type="date" value={eventForm.date} onChange={e => setEventForm({ ...eventForm, date: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg md:rounded-xl px-4 md:px-5 py-3 font-bold dark:text-white text-sm" />
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Data</label>
+                  <input type="date" value={eventForm.date} onChange={e => setEventForm({ ...eventForm, date: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm" />
                 </div>
               </div>
 
-              <div className="bg-orange-50 dark:bg-orange-900/10 p-4 md:p-5 rounded-xl border border-orange-100 dark:border-orange-900/30">
-                <label className="flex items-center gap-4 cursor-pointer mb-4">
+              <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-lg">
+                <label className="flex items-center gap-3 cursor-pointer">
                   <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/40 text-orange-600 flex items-center justify-center shrink-0"><AlertTriangle size={20} /></div>
-                  <div className="flex-1"><span className="text-[9px] md:text-[10px] font-black uppercase block mb-0.5 dark:text-orange-400">Cancelar Aulas</span><p className="text-[8px] md:text-[9px] font-bold text-orange-600 dark:text-orange-500 uppercase">Impedir registros de aula.</p></div>
-                  <input type="checkbox" checked={eventForm.blocksClasses} onChange={e => setEventForm({ ...eventForm, blocksClasses: e.target.checked })} className="w-6 h-6 rounded-lg text-orange-500" />
+                  <div className="flex-1"><span className="text-[10px] font-black uppercase block mb-0.5 dark:text-orange-400">Cancelar Aulas</span><p className="text-[10px] font-bold text-orange-600 dark:text-orange-500 uppercase">Impedir registros de aula.</p></div>
+                  <Toggle checked={eventForm.blocksClasses} onChange={e => setEventForm({ ...eventForm, blocksClasses: e.target.checked })} />
                 </label>
 
                 {eventForm.blocksClasses && (
-                  <div className="space-y-4 animate-in slide-in-from-top-2">
+                  <div className="space-y-4 mt-4 animate-in slide-in-from-top-2">
                     {conflictWarning && (
                       <div className="bg-white dark:bg-slate-900/80 p-3 rounded-lg border-l-4 border-red-500 flex items-start gap-3 shadow-sm">
                         <Info size={16} className="text-red-500 mt-0.5 shrink-0" />
-                        <p className="text-[9px] md:text-[10px] font-bold text-red-600 dark:text-red-400 uppercase leading-relaxed">{conflictWarning}</p>
+                        <p className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase leading-relaxed">{conflictWarning}</p>
                       </div>
                     )}
                     <div>
-                      <label className="block text-[7px] md:text-[8px] font-black text-orange-700 dark:text-orange-300 uppercase mb-2 ml-1">Abrangência do Cancelamento</label>
+                      <label className="block text-[10px] font-black text-orange-700 dark:text-orange-300 uppercase mb-2 ml-1">Abrangência do Cancelamento</label>
                       <div className="grid grid-cols-3 gap-2">
                         {([
                           { id: 'all', label: 'Dia Todo', icon: CalendarDays },
@@ -717,14 +718,14 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
                           <button key={scope.id} type="button" onClick={() => setEventForm({ ...eventForm, cancelScope: scope.id as any })}
                             className={`flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all ${eventForm.cancelScope === scope.id ? 'bg-white dark:bg-slate-800 border-orange-500 text-orange-600 shadow-sm' : 'bg-orange-100/30 dark:bg-orange-900/20 border-transparent text-orange-400'}`}>
                             <scope.icon size={14} className="mb-1" />
-                            <span className="text-[7px] md:text-[8px] font-black uppercase">{scope.label}</span>
+                            <span className="text-[10px] font-black uppercase">{scope.label}</span>
                           </button>
                         ))}
                       </div>
                     </div>
                     {eventForm.cancelScope === 'shift' && (
                       <div className="animate-in fade-in zoom-in-95">
-                        <label className="block text-[7px] md:text-[8px] font-black text-orange-700 dark:text-orange-300 uppercase mb-1 ml-1">Selecione o Turno</label>
+                        <label className="block text-[10px] font-black text-orange-700 dark:text-orange-300 uppercase mb-1 ml-1">Selecione o Turno</label>
                         <select value={eventForm.shiftId} onChange={e => setEventForm({ ...eventForm, shiftId: e.target.value })} className="w-full bg-white dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs font-bold text-orange-600 dark:text-orange-400">
                           <option value="">Escolha...</option>
                           {formSchool?.shifts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -733,7 +734,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
                     )}
                     {eventForm.cancelScope === 'class' && (
                       <div className="animate-in fade-in zoom-in-95">
-                        <label className="block text-[7px] md:text-[8px] font-black text-orange-700 dark:text-orange-300 uppercase mb-1 ml-1">Selecione a Turma</label>
+                        <label className="block text-[10px] font-black text-orange-700 dark:text-orange-300 uppercase mb-1 ml-1">Selecione a Turma</label>
                         <select value={eventForm.classId} onChange={e => setEventForm({ ...eventForm, classId: e.target.value })} className="w-full bg-white dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs font-bold text-orange-600 dark:text-orange-400">
                           <option value="">Escolha...</option>
                           {formSchool?.classes.map(c => <option key={typeof c === 'string' ? c : c.id} value={typeof c === 'string' ? c : c.id}>{typeof c === 'string' ? c : c.name}</option>)}
@@ -745,14 +746,14 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
               </div>
 
               <div>
-                <label className="block text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Descrição (Opcional)</label>
-                <textarea value={eventForm.description} onChange={e => setEventForm({ ...eventForm, description: e.target.value })} rows={3} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg md:rounded-xl px-5 py-3 font-bold dark:text-white text-sm" placeholder="Detalhes extras..." />
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Descrição (Opcional)</label>
+                <textarea value={eventForm.description} onChange={e => setEventForm({ ...eventForm, description: e.target.value })} rows={3} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm" placeholder="Detalhes extras..." />
               </div>
             </div>
 
-            <div className="mt-8 mb-4 flex gap-4">
-              <button onClick={() => setIsAddingEvent(false)} className="flex-1 py-4 font-black text-slate-400 uppercase text-[9px] md:text-[10px]">Cancelar</button>
-              <button onClick={handleSaveEvent} className="flex-1 py-4 bg-orange-500 text-white rounded-lg md:rounded-xl font-black uppercase text-[9px] md:text-[10px] shadow-xl shadow-orange-100">Salvar Evento</button>
+            <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex gap-3">
+              <button onClick={() => setIsAddingEvent(false)} className="flex-1 py-3 rounded-lg border border-slate-200 dark:border-slate-700 font-black text-slate-500 dark:text-slate-300 uppercase text-[11px] hover:bg-slate-50 dark:hover:bg-slate-800">Cancelar</button>
+              <button onClick={handleSaveEvent} className="flex-1 py-3 bg-orange-500 text-white rounded-lg font-black uppercase text-[11px] shadow-sm hover:brightness-110">Salvar Evento</button>
             </div>
           </div>
         </div>

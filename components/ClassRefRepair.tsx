@@ -158,11 +158,11 @@ const ClassRefRepair: React.FC<ClassRefRepairProps> = ({ data, onUpdateData }) =
   };
 
   return (
-    <section className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
-      <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-1">
+    <section className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+      <h3 className="text-[13px] font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-1">
         <Wrench className="text-primary" size={18} /> Turmas não encontradas
       </h3>
-      <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
+      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
         Registros que apontam para uma turma que não existe mais no cadastro (por exemplo, turma excluída e criada de novo).
         Eles apareciam como código nas planilhas. Escolha a turma correta para cada grupo.
       </p>
@@ -188,7 +188,7 @@ const ClassRefRepair: React.FC<ClassRefRepairProps> = ({ data, onUpdateData }) =
                     {school?.name || 'Escola'} — {looksLikeClassCode(g.ref) ? `código ${g.ref.slice(0, 8)}…` : `"${g.ref}"`}
                   </span>
                   {g.firstDate && (
-                    <span className="text-[9px] font-bold text-slate-500">
+                    <span className="text-[10px] font-bold text-slate-500">
                       {formatDateBR(g.firstDate)}{g.lastDate && g.lastDate !== g.firstDate ? ` a ${formatDateBR(g.lastDate)}` : ''}
                     </span>
                   )}

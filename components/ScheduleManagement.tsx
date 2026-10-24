@@ -392,8 +392,8 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
 
   /** Semana inteira: uma tabela por turno, com os dias nas colunas e os horários nas linhas */
   const renderWeekGrid = (school: School, shifts: Shift[]) => shifts.map(shift => (
-    <div key={shift.id} className="bg-white dark:bg-slate-900 p-3 md:p-5 lg:p-3 rounded-xl md:rounded-2xl lg:rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 animate-in fade-in duration-300">
-      <h3 className="font-black text-slate-800 dark:text-slate-100 mb-3 lg:mb-2 flex items-center gap-2 uppercase tracking-tight text-xs">
+    <div key={shift.id} className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 animate-in fade-in duration-300">
+      <h3 className="text-[13px] font-black text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2 uppercase tracking-tight">
         <LayoutGrid className="text-primary" size={18} /> Turno: {shift.name}
       </h3>
       <div className="overflow-x-auto -mx-1 px-1">
@@ -411,16 +411,16 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
           <tbody>
             {(shift.slots || []).map(slot => slot.type === 'break' ? (
               <tr key={slot.id}>
-                <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 text-[9px] font-bold text-slate-400 whitespace-nowrap">{slot.startTime} - {slot.endTime}</td>
-                <td colSpan={weekDays.length} className="text-center font-black text-slate-400 text-[8px] md:text-[9px] uppercase tracking-tight py-0.5 bg-slate-50 dark:bg-slate-800/50 rounded-md">
+                <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 text-[10px] font-bold text-slate-400 whitespace-nowrap">{slot.startTime} - {slot.endTime}</td>
+                <td colSpan={weekDays.length} className="text-center font-black text-slate-400 text-[10px] uppercase tracking-tight py-0.5 bg-slate-50 dark:bg-slate-800/50 rounded-md">
                   Intervalo
                 </td>
               </tr>
             ) : (
               <tr key={slot.id}>
                 <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 align-middle whitespace-nowrap pr-1">
-                  <p className="text-[8px] md:text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight">{slot.label}</p>
-                  <p className="text-[9px] md:text-[10px] font-bold text-slate-600 dark:text-slate-400">{slot.startTime} - {slot.endTime}</p>
+                  <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight">{slot.label}</p>
+                  <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 whitespace-nowrap">{slot.startTime} - {slot.endTime}</p>
                 </td>
                 {weekDays.map(day => {
                   const entry = editedSchedules.find(s =>
@@ -430,7 +430,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                     return (
                       <td key={day} className="align-top">
                         <div
-                          className={`px-2 py-1 rounded-lg border text-[8px] font-bold uppercase leading-tight ${studentConflict ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800 text-amber-700' : 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-800'}`}
+                          className={`px-2 py-1 rounded-lg border text-[10px] font-bold uppercase leading-tight ${studentConflict ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800 text-amber-700' : 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-800'}`}
                           style={otherSchoolConflict && !studentConflict ? { color: otherSchoolConflict.schoolColor } : undefined}
                           title="Horário ocupado"
                         >
@@ -479,19 +479,19 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
   if (!data) return null;
 
   return (
-    <div className="space-y-6 lg:space-y-3">
+    <div className="space-y-4">
 
       {/* --- BOX DE VERSÕES --- */}
-      <div className="bg-slate-50 dark:bg-slate-800/50 p-4 lg:px-4 lg:py-2.5 rounded-xl lg:rounded-lg border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h3 className="text-xs font-black uppercase text-slate-500 tracking-tight mb-1 flex items-center gap-2">
-            <Layers size={14} /> Versão da Grade
+          <h3 className="text-[13px] font-black uppercase text-slate-800 dark:text-white tracking-tight mb-2 flex items-center gap-2">
+            <Layers className="text-primary" size={18} /> Versão da Grade
           </h3>
           <div className="relative">
             <select
               value={selectedVersionId}
               onChange={(e) => setSelectedVersionId(e.target.value)}
-              className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl py-2 pl-3 pr-8 font-bold text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 ring-primary/20 min-w-[200px]"
+              className="appearance-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg py-2.5 pl-3 pr-8 font-bold text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 ring-primary/20 min-w-[200px]"
             >
               {sortedVersions.map(v => (
                 <option key={v.id} value={v.id}>
@@ -531,7 +531,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                   setSelectedVersionId(remaining[0]?.id || '');
                 }
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/30 rounded-xl text-red-600 dark:text-red-400 font-black uppercase text-[10px] hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors shadow-sm"
+              className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/30 rounded-lg text-red-600 dark:text-red-400 font-black uppercase tracking-tight text-[11px] hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors shadow-sm"
             >
               <Trash2 size={14} /> Excluir
             </button>
@@ -539,7 +539,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
 
           <button
             onClick={() => setIsVersionModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-primary font-black uppercase text-[10px] hover:bg-primary/5 transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-primary font-black uppercase tracking-tight text-[11px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm"
           >
             <Plus size={14} /> Nova Versão
           </button>
@@ -552,13 +552,13 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                   else setEditedSchedules(data.schedules || []);
                   setHasChanges(false);
                 }}
-                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-xl font-bold text-xs hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg font-black uppercase tracking-tight text-[11px] hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
               >
                 Descartar
               </button>
               <button
                 onClick={handleSaveVersion}
-                className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold text-xs hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2"
+                className="px-4 py-2.5 bg-primary text-white rounded-lg font-black uppercase tracking-tight text-[11px] hover:brightness-110 shadow-sm transition-all flex items-center gap-2"
               >
                 <Save size={14} /> Salvar Alterações
               </button>
@@ -568,7 +568,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
       </div>
 
       {hasChanges && currentVersion && currentVersion.activeFrom < todayLocal() && (
-        <div className="flex flex-col md:flex-row md:items-center gap-3 p-4 lg:px-4 lg:py-3 rounded-xl lg:rounded-lg border border-amber-300 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-900/20 animate-in fade-in duration-300">
+        <div className="flex flex-col md:flex-row md:items-center gap-3 p-4 rounded-xl border border-amber-300 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-900/20 animate-in fade-in duration-300">
           <AlertCircle size={20} className="text-amber-500 shrink-0 hidden md:block" />
           <div className="flex-1 text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
             <p className="font-black uppercase tracking-tight text-[11px] mb-0.5">Atenção: a edição vale desde {formatDateBR(currentVersion.activeFrom)}</p>
@@ -579,7 +579,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
           </div>
           <button
             onClick={() => setIsVersionModalOpen(true)}
-            className="shrink-0 flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700/50 rounded-xl text-amber-700 dark:text-amber-300 font-black uppercase text-[10px] hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors shadow-sm"
+            className="shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700/50 rounded-lg text-amber-700 dark:text-amber-300 font-black uppercase tracking-tight text-[11px] hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors shadow-sm"
           >
             <Plus size={14} /> Nova Versão
           </button>
@@ -589,7 +589,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
       {isVersionModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl w-full max-w-sm animate-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-black text-slate-800 dark:text-white mb-1">Nova Versão da Grade</h3>
+            <h3 className="text-lg font-black text-slate-800 dark:text-white tracking-tight mb-1">Nova Versão da Grade</h3>
             <p className={`text-xs text-slate-500 ${hasChanges ? 'mb-2' : 'mb-6'}`}>A partir de quando esta nova grade será válida?</p>
             {hasChanges && (
               <p className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg px-3 py-2 mb-6">
@@ -602,19 +602,19 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
               type="date"
               value={newVersionDate}
               onChange={(e) => setNewVersionDate(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 font-bold text-slate-700 dark:text-white outline-none focus:ring-2 ring-primary mb-6"
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-sm font-bold text-slate-700 dark:text-white outline-none focus:ring-2 ring-primary mb-6"
             />
 
             <div className="flex gap-3">
               <button
                 onClick={() => setIsVersionModalOpen(false)}
-                className="flex-1 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="flex-1 py-2.5 rounded-lg font-black uppercase tracking-tight text-[11px] text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleCreateVersion}
-                className="flex-1 py-3 rounded-xl font-bold bg-primary text-white shadow-lg shadow-primary/30 hover:brightness-110 transition-all"
+                className="flex-1 py-2.5 rounded-lg font-black uppercase tracking-tight text-[11px] bg-primary text-white shadow-sm hover:brightness-110 transition-all"
               >
                 Criar Versão
               </button>
@@ -642,7 +642,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
 
 
       <div
-        className="flex flex-col md:flex-row md:items-center gap-4 bg-white dark:bg-slate-900 p-4 lg:py-2.5 rounded-xl lg:rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm transition-colors relative overflow-hidden"
+        className="flex flex-col md:flex-row md:items-center gap-4 bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors relative overflow-hidden"
         // ... (rest of component, replacing data.schedules with currentVersion.schedules)
         style={{
           backgroundColor: activeColor ? activeColor + '15' : undefined,
@@ -655,7 +655,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
           <div className="flex justify-between items-center mb-1">
             <label className="block text-[10px] font-black text-slate-500 uppercase">Selecione Instituição/Aluno</label>
             <div className="flex items-center gap-2">
-              <label htmlFor="weekendToggle" className="text-[9px] font-bold text-slate-400 cursor-pointer select-none">Mostrar Sábado/Domingo</label>
+              <label htmlFor="weekendToggle" className="text-[10px] font-bold text-slate-400 cursor-pointer select-none">Mostrar Sábado/Domingo</label>
               <div
                 onClick={() => setShowWeekends(!showWeekends)}
                 className={`w-8 h-4 rounded-full p-0.5 cursor-pointer transition-colors ${showWeekends ? 'bg-blue-500' : 'bg-slate-200'}`}
@@ -667,7 +667,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
           <select
             value={selectedInstitutionId}
             onChange={e => setSelectedInstitutionId(e.target.value)}
-            className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl font-bold text-slate-700 dark:text-slate-200 py-2 px-3 outline-none"
+            className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg font-bold text-sm text-slate-700 dark:text-slate-200 py-2.5 px-3 outline-none"
           >
             <optgroup label="Escolas">
               {(data.schools || []).filter(s => !s.deleted).sort((a, b) => a.name.localeCompare(b.name)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -679,7 +679,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
             )}
           </select>
         </div>
-        <div className="flex w-full md:w-auto overflow-x-auto md:overflow-visible gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl no-scrollbar">
+        <div className="flex w-full md:w-auto overflow-x-auto md:overflow-visible gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg no-scrollbar">
           {([1, 2, 3, 4, 5, 6, 0] as DayOfWeek[])
             .filter(d => showWeekends || (d !== 6 && d !== 0))
             .map(dayNum => {
@@ -687,7 +687,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                 <button
                   key={dayNum}
                   onClick={() => { setSelectedDay(dayNum); setWeekView(false); }}
-                  className={`flex-1 md:flex-none py-2 px-1 md:px-4 rounded-lg text-[10px] md:text-xs font-black uppercase transition-all whitespace-nowrap text-center ${!showWeek && selectedDay === dayNum
+                  className={`flex-1 md:flex-none py-2 px-1 md:px-4 rounded-md text-[10px] md:text-xs font-black uppercase transition-all whitespace-nowrap text-center ${!showWeek && selectedDay === dayNum
                     ? 'bg-white dark:bg-slate-700 text-primary shadow-sm scale-100 md:scale-105'
                     : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
                     }`}
@@ -700,7 +700,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
             <button
               onClick={() => setWeekView(true)}
               title="Ver e editar todos os dias da semana de uma vez"
-              className={`flex-1 md:flex-none flex items-center justify-center gap-1 py-2 px-2 md:px-4 rounded-lg text-[10px] md:text-xs font-black uppercase transition-all whitespace-nowrap ${showWeek
+              className={`flex-1 md:flex-none flex items-center justify-center gap-1 py-2 px-2 md:px-4 rounded-md text-[10px] md:text-xs font-black uppercase transition-all whitespace-nowrap ${showWeek
                 ? 'bg-white dark:bg-slate-700 text-primary shadow-sm scale-100 md:scale-105'
                 : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
                 }`}
@@ -717,9 +717,9 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
           <p className="text-slate-500 font-medium">Cadastre escolas ou alunos para gerenciar horários.</p>
         </div>
       ) : (
-        <div className="space-y-8 lg:space-y-3">
+        <div className="space-y-4">
           {activeInstitution.type === 'student' && institutionShifts[0]?.slots?.length === 0 && (
-            <div className="bg-amber-50 dark:bg-amber-900/10 p-10 text-center rounded-2xl border border-amber-100 dark:border-amber-900/30">
+            <div className="bg-amber-50 dark:bg-amber-900/10 p-10 text-center rounded-xl border border-amber-100 dark:border-amber-900/30">
               <Clock className="mx-auto text-amber-400 mb-3" size={32} />
               <p className="text-amber-800 dark:text-amber-200 font-black uppercase text-xs">Sem aulas cadastradas para {DAYS_OF_WEEK_NAMES[selectedDay]}</p>
               <p className="text-amber-600 dark:text-amber-400 text-[10px] mt-1">Cadastre horários no menu "Alunos" para visualizá-los aqui.</p>
@@ -745,12 +745,12 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
             if (showWeek && activeInstitution.type === 'school') return renderWeekGrid(activeInstitution.data, sortedShifts);
 
             return sortedShifts.map(shift => (
-              <div key={shift.id} className="bg-white dark:bg-slate-900 p-3 md:p-5 lg:p-3 rounded-xl md:rounded-2xl lg:rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 animate-in fade-in duration-300">
-                <h3 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-4 md:mb-5 lg:mb-2 flex items-center gap-2 uppercase tracking-tight text-xs">
+              <div key={shift.id} className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 animate-in fade-in duration-300">
+                <h3 className="text-[13px] font-black text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2 uppercase tracking-tight">
                   {activeInstitution.type === 'school' ? <LayoutGrid className="text-primary" size={18} /> : <User className="text-primary" size={18} />}
                   {activeInstitution.type === 'school' ? `Turno: ${shift.name}` : `Horários de ${activeInstitution.data.name}`}
                 </h3>
-                <div className="grid gap-1 md:gap-2 lg:gap-1"> {/* Extrema compactação em mobile: gap-1 */}
+                <div className="grid gap-1.5"> {/* Extrema compactação em mobile: gap-1 */}
                   {(shift.slots || []).map(slot => {
                     const currentSchedule = editedSchedules.find(s =>
                       Number(s.dayOfWeek) === Number(selectedDay) &&
@@ -765,7 +765,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
 
                     return (
                       <div key={slot.id}
-                        className={`relative flex items-center gap-2 p-1.5 md:p-2 lg:py-1 rounded-r-xl lg:rounded-r-md border-y border-r transition-all ${ // Compact padding p-1.5 mobile
+                        className={`relative flex items-center gap-2 p-1.5 md:p-2 lg:py-1 rounded-r-lg border-y border-r transition-all ${ // Compact padding p-1.5 mobile
                           slot.type === 'break'
                             ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 opacity-60 ml-1'
                             : hasConflict
@@ -776,25 +776,25 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                           borderLeft: `4px solid ${studentConflict ? studentConflict.studentColor : otherSchoolConflict ? otherSchoolConflict.schoolColor : (activeInstitution.type === 'school' && !hasConflict) ? activeInstitution.data.color : 'transparent'}`
                         }}
                       >
-                        <div className="w-16 md:w-20 lg:w-36 shrink-0 lg:flex lg:items-baseline lg:gap-2"> {/* Width ainda menor no mobile; no computador, numa linha só */}
-                          <p className="text-[8px] md:text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight mb-0.5 lg:mb-0">{slot.label}</p>
-                          <p className="text-[9px] md:text-[10px] font-bold text-slate-600 dark:text-slate-400">{slot.startTime} - {slot.endTime}</p>
+                        <div className="w-[84px] md:w-24 lg:w-36 shrink-0 lg:flex lg:items-baseline lg:gap-2"> {/* Width ainda menor no mobile; no computador, numa linha só */}
+                          <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight mb-0.5 lg:mb-0">{slot.label}</p>
+                          <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 whitespace-nowrap">{slot.startTime} - {slot.endTime}</p>
                         </div>
 
                         {studentConflict ? (
                           <div className="flex-1 flex items-center gap-3 px-3 py-1.5 bg-white dark:bg-slate-900 rounded-lg border border-amber-100">
                             <ShieldAlert className="text-amber-500" size={14} />
                             <div>
-                              <p className="text-[9px] font-black text-amber-800 dark:text-amber-200 uppercase">Horário Ocupado</p>
-                              <p className="text-[8px] text-amber-600 font-bold uppercase">Aula Particular: {studentConflict.studentName}</p>
+                              <p className="text-[10px] font-black text-amber-800 dark:text-amber-200 uppercase">Horário Ocupado</p>
+                              <p className="text-[10px] text-amber-600 font-bold uppercase">Aula Particular: {studentConflict.studentName}</p>
                             </div>
                           </div>
                         ) : otherSchoolConflict ? (
                           <div className="flex-1 flex items-center gap-3 px-3 py-1.5 bg-white dark:bg-slate-900 rounded-lg border border-indigo-100">
                             <ShieldAlert className="text-indigo-500" size={14} />
                             <div>
-                              <p className="text-[9px] font-black text-indigo-800 dark:text-indigo-200 uppercase">Horário Ocupado</p>
-                              <p className="text-[8px] font-bold uppercase" style={{ color: otherSchoolConflict.schoolColor }}>
+                              <p className="text-[10px] font-black text-indigo-800 dark:text-indigo-200 uppercase">Horário Ocupado</p>
+                              <p className="text-[10px] font-bold uppercase" style={{ color: otherSchoolConflict.schoolColor }}>
                                 {otherSchoolConflict.schoolName} • {otherSchoolConflict.className !== 'window' ? otherSchoolConflict.className : 'Janela'}
                               </p>
                             </div>
@@ -828,7 +828,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                           )}
                           </div>
                         ) : (
-                          <div className="flex-1 text-center font-black text-slate-500 text-[8px] md:text-[9px] uppercase tracking-tight py-1">
+                          <div className="flex-1 text-center font-black text-slate-500 text-[10px] uppercase tracking-tight py-1">
                             Intervalo
                           </div>
                         )}

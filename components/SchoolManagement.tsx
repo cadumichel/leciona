@@ -550,35 +550,38 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <p className="text-slate-500">Cadastre ou edite suas escolas e horários padrão.</p>
+      <div className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h3 className="text-[13px] font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-1"><SchoolIcon className="text-primary" size={18} /> Escolas</h3>
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Cadastre ou edite suas escolas e horários padrão.</p>
+        </div>
         <button
           onClick={openAddModal}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-lg shadow-blue-100 font-bold text-xs"
+          className="shrink-0 flex items-center justify-center gap-2 bg-primary text-white px-4 py-2.5 rounded-lg hover:brightness-110 transition shadow-sm font-black uppercase tracking-tight text-[11px]"
         >
-          <Plus size={16} /> Nova Escola
+          <Plus size={14} /> Nova Escola
         </button>
       </div>
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-y-auto animate-in zoom-in-95 duration-200">
-            <div className="sticky top-0 bg-white px-4 md:px-8 py-4 md:py-6 border-b border-slate-100 flex justify-between items-center z-10">
-              <h3 className="text-lg md:text-xl font-bold text-slate-800">
+            <div className="sticky top-0 bg-white px-5 md:px-6 py-4 border-b border-slate-100 flex justify-between items-center z-10">
+              <h3 className="text-lg font-black text-slate-800 tracking-tight">
                 {editingSchoolId ? 'Editar Escola' : 'Cadastro de Escola'}
               </h3>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2"><X /></button>
             </div>
 
-            <div className="p-4 md:p-6 space-y-6">
+            <div className="p-4 md:p-6 space-y-4">
               {/* ========== BOX 1: IDENTIDADE DA ESCOLA ========== */}
-              <div className="bg-white border border-slate-200 rounded-xl p-5 md:p-6 shadow-sm">
+              <div className="bg-slate-50 rounded-lg p-4 md:p-5">
                 {/* Cabeçalho do Box */}
-                <div className="flex items-center gap-2 mb-5 pb-3 border-b border-slate-100">
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-200">
+                  <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center">
                     <SchoolIcon className="text-blue-600" size={20} />
                   </div>
-                  <h4 className="text-base font-black text-slate-800 uppercase tracking-tight">Dados Institucionais</h4>
+                  <h4 className="text-[13px] font-black text-slate-800 uppercase tracking-tight">Dados Institucionais</h4>
                 </div>
 
                 {/* Conteúdo: Grid com Nome + Cor | Turmas */}
@@ -586,17 +589,17 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                   {/* Coluna Esquerda: Nome e Cor */}
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">Nome da Escola</label>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1 ml-1">Nome da Escola</label>
                       <input
                         type="text"
                         value={newSchool.name}
                         onChange={e => setNewSchool({ ...newSchool, name: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
                         placeholder="Ex: Colégio Estadual X"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">Cor de Identificação</label>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1 ml-1">Cor de Identificação</label>
                       <div className="flex flex-wrap gap-1.5 items-center">
                         {COLORS.map(c => (
                           <button
@@ -622,11 +625,11 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
 
                     {/* Recuperação e 2ª chamada (utils/recovery.ts) */}
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">Recuperação</label>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1 ml-1">Recuperação</label>
                       <select
                         value={newSchool.recoveryPolicy || 'none'}
                         onChange={e => setNewSchool({ ...newSchool, recoveryPolicy: e.target.value as School['recoveryPolicy'] })}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm bg-white"
+                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg outline-none text-sm bg-white"
                       >
                         <option value="none">Nenhuma automática</option>
                         <option value="parallel">Paralela: uma REC para cada prova</option>
@@ -646,11 +649,11 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                       )}
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">2ª chamada</label>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1 ml-1">2ª chamada</label>
                       <select
                         value={newSchool.secondCallMode || 'in_class'}
                         onChange={e => setNewSchool({ ...newSchool, secondCallMode: e.target.value as School['secondCallMode'] })}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm bg-white"
+                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg outline-none text-sm bg-white"
                       >
                         <option value="in_class">Numa aula minha</option>
                         <option value="off_schedule">No contraturno (fora das minhas aulas)</option>
@@ -660,7 +663,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
 
                   {/* Coluna Direita: Turmas */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Turmas Atendidas</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1 ml-1">Turmas Atendidas</label>
                     <div className="flex gap-2 mb-2">
                       <input
                         type="text"
@@ -759,18 +762,18 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
               </div>
 
               {/* ========== BOX 2: CONFIGURAÇÃO DE TURNOS E HORÁRIOS ========== */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 md:p-6 shadow-sm">
+              <div className="bg-slate-50 rounded-lg p-4 md:p-5">
                 {/* Cabeçalho do Box */}
                 <div className="flex items-center gap-2 mb-5 pb-3 border-b border-slate-200">
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center">
                     <Clock className="text-blue-600" size={20} />
                   </div>
-                  <h4 className="text-base font-black text-slate-800 uppercase tracking-tight">Configuração de Turnos e Horários</h4>
+                  <h4 className="text-[13px] font-black text-slate-800 uppercase tracking-tight">Configuração de Turnos e Horários</h4>
                 </div>
 
                 {/* Assistente de Criação */}
                 <div className="space-y-4">
-                  <div className="bg-blue-50/50 p-3 md:p-3.5 rounded-xl border border-blue-100 mb-4">
+                  <div className="bg-blue-50/50 p-3 md:p-4 rounded-lg border border-blue-100 mb-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Wand2 size={14} className="text-blue-600" />
                       <h4 className="font-black text-blue-800 uppercase text-[10px] tracking-tight">Assistente de Criação de Turnos</h4>
@@ -780,7 +783,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                     <div className="flex flex-col md:flex-row gap-4 md:gap-8 items-end justify-between">
                       <div className="flex gap-4 md:gap-6 w-full md:w-auto">
                         <div className="flex-1 md:flex-none min-w-[100px] md:min-w-[120px]">
-                          <label className="block text-[8px] md:text-[9px] font-black text-blue-600 uppercase tracking-tight mb-1.5">Duração da aula (min)</label>
+                          <label className="block text-[10px] font-black text-blue-600 uppercase tracking-tight mb-1.5">Duração da aula (min)</label>
                           <input
                             type="number"
                             value={defaultLessonDuration}
@@ -789,7 +792,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                           />
                         </div>
                         <div className="flex-1 md:flex-none min-w-[100px] md:min-w-[120px]">
-                          <label className="block text-[8px] md:text-[9px] font-black text-blue-600 uppercase tracking-tight mb-1.5">Intervalo após:</label>
+                          <label className="block text-[10px] font-black text-blue-600 uppercase tracking-tight mb-1.5">Intervalo após:</label>
                           <select
                             value={breakAfterLesson}
                             onChange={e => setBreakAfterLesson(parseInt(e.target.value))}
@@ -802,11 +805,11 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
 
 
                       <div className="w-full md:w-auto">
-                        <label className="block text-[8px] md:text-[9px] font-black text-blue-600 uppercase tracking-tight mb-1.5 text-left">Adicionar turno:</label>
+                        <label className="block text-[10px] font-black text-blue-600 uppercase tracking-tight mb-1.5 text-left">Adicionar turno:</label>
                         <div className="flex gap-1 md:gap-2 flex-wrap md:justify-start justify-end">
-                          <button onClick={() => createStandardShift('matutino')} className="bg-white border border-blue-200 text-blue-600 px-3 md:px-5 py-2.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase hover:bg-blue-600 hover:text-white transition-all whitespace-nowrap shadow-sm flex-1 md:flex-none">Matutino</button>
-                          <button onClick={() => createStandardShift('vespertino')} className="bg-white border border-blue-200 text-blue-600 px-3 md:px-5 py-2.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase hover:bg-blue-600 hover:text-white transition-all whitespace-nowrap shadow-sm flex-1 md:flex-none">Vespertino</button>
-                          <button onClick={() => createStandardShift('noturno')} className="bg-white border border-blue-200 text-blue-600 px-3 md:px-5 py-2.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase hover:bg-blue-600 hover:text-white transition-all whitespace-nowrap shadow-sm flex-1 md:flex-none">Noturno</button>
+                          <button onClick={() => createStandardShift('matutino')} className="bg-white border border-blue-200 text-blue-600 px-3 md:px-5 py-2.5 rounded-lg text-[10px] font-black uppercase hover:bg-blue-600 hover:text-white transition-all whitespace-nowrap shadow-sm flex-1 md:flex-none">Matutino</button>
+                          <button onClick={() => createStandardShift('vespertino')} className="bg-white border border-blue-200 text-blue-600 px-3 md:px-5 py-2.5 rounded-lg text-[10px] font-black uppercase hover:bg-blue-600 hover:text-white transition-all whitespace-nowrap shadow-sm flex-1 md:flex-none">Vespertino</button>
+                          <button onClick={() => createStandardShift('noturno')} className="bg-white border border-blue-200 text-blue-600 px-3 md:px-5 py-2.5 rounded-lg text-[10px] font-black uppercase hover:bg-blue-600 hover:text-white transition-all whitespace-nowrap shadow-sm flex-1 md:flex-none">Noturno</button>
                         </div>
                       </div>
                     </div>
@@ -836,7 +839,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                       value={tempShiftName}
                       onChange={e => setTempShiftName(e.target.value)}
                       placeholder="Turno Personalizado..."
-                      className="px-2 md:px-3 py-2 text-[9px] md:text-sm tracking-tight border border-slate-200 rounded-lg outline-none w-36 md:w-48 focus:ring-2 focus:ring-blue-400"
+                      className="px-3 py-2 text-xs md:text-sm tracking-tight border border-slate-200 rounded-lg outline-none w-36 md:w-48 focus:ring-2 focus:ring-blue-400"
                     />
                     <button onClick={addShift} className="bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-slate-700 transition">
                       <span className="md:hidden text-sm">+</span>
@@ -865,12 +868,12 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                   return (
                     <div className="space-y-3">
                       {sortedShifts.map(shift => (
-                        <div key={shift.id} className="bg-white p-2 md:p-3 rounded-xl border border-slate-200 relative group/shift shadow-sm">
+                        <div key={shift.id} className="bg-white p-3 rounded-lg border border-slate-200 relative group/shift shadow-sm">
                           <div className="flex justify-between items-center mb-2 md:mb-3 pb-1.5 border-b border-slate-200/60">
                             <span className="font-black text-slate-800 text-xs uppercase tracking-tight pl-2">{shift.name}</span>
                             <div className="flex gap-1 md:gap-1.5">
-                              <button onClick={() => addSlot(shift.id, 'class')} className="text-[9px] md:text-[9px] font-bold text-blue-600 bg-blue-100 px-2 md:px-2.5 py-0.5 rounded-lg hover:bg-blue-200 transition-colors">+ Aula</button>
-                              <button onClick={() => addSlot(shift.id, 'break')} className="text-[9px] md:text-[9px] font-bold text-amber-600 bg-amber-100 px-2 md:px-2.5 py-0.5 rounded-lg hover:bg-amber-200 transition-colors">+ Interv.</button>
+                              <button onClick={() => addSlot(shift.id, 'class')} className="text-[10px] font-bold text-blue-600 bg-blue-100 px-2 md:px-2.5 py-0.5 rounded-lg hover:bg-blue-200 transition-colors">+ Aula</button>
+                              <button onClick={() => addSlot(shift.id, 'break')} className="text-[10px] font-bold text-amber-600 bg-amber-100 px-2 md:px-2.5 py-0.5 rounded-lg hover:bg-amber-200 transition-colors">+ Interv.</button>
                               <button onClick={() => removeShift(shift.id)} className="text-red-300 hover:text-red-500 p-0.5 transition-colors"><Trash2 size={14} /></button>
                             </div>
                           </div>
@@ -887,7 +890,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                                   )}
                                 </div>
 
-                                <div className={`px-1.5 md:px-2 py-0.5 rounded-md text-[8px] md:text-[9px] font-black uppercase tracking-tight min-w-[50px] md:min-w-[55px] text-center ${slot.type === 'class' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
+                                <div className={`px-1.5 md:px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-tight min-w-[50px] md:min-w-[55px] text-center ${slot.type === 'class' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
                                   {slot.type === 'class' ? 'Aula' : 'Interv.'}
                                 </div>
 
@@ -899,7 +902,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                                   placeholder="Nome"
                                 />
 
-                                <div className="flex items-center gap-0.5 md:gap-1 text-[9px] md:text-[10px] font-bold text-slate-500 bg-white px-1 md:px-1.5 py-0.5 md:py-1 rounded-lg border border-slate-100">
+                                <div className="flex items-center gap-0.5 md:gap-1 text-[10px] font-bold text-slate-500 bg-white px-1 md:px-1.5 py-0.5 md:py-1 rounded-lg border border-slate-100">
                                   <input
                                     type="time"
                                     value={slot.startTime}
@@ -924,7 +927,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                                         onChange={(e) => updateBreakDuration(shift.id, slot.id, e.target.value)}
                                         defaultValue={parseTimeToMinutes(slot.endTime) - parseTimeToMinutes(slot.startTime)}
                                       />
-                                      <span className="text-[8px] md:text-[9px] font-black uppercase">m</span>
+                                      <span className="text-[10px] font-black uppercase">m</span>
                                     </div>
                                   )}
                                 </div>
@@ -940,9 +943,9 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
               </div>
             </div>
 
-            <div className="sticky bottom-0 bg-white px-4 md:px-8 pt-4 pb-12 md:py-6 border-t border-slate-100 flex justify-end gap-3 md:gap-4 z-10 safe-area-bottom">
-              <button onClick={() => setIsModalOpen(false)} className="px-4 md:px-6 py-3 text-slate-500 hover:bg-slate-50 rounded-2xl transition font-bold uppercase tracking-widest text-xs">Cancelar</button>
-              <button onClick={handleSaveSchool} className="px-6 md:px-10 py-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 shadow-xl shadow-blue-100 transition font-bold uppercase tracking-widest text-xs">Salvar Alterações</button>
+            <div className="sticky bottom-0 bg-white px-5 md:px-6 pt-4 pb-12 md:py-4 border-t border-slate-100 flex justify-end gap-3 md:gap-4 z-10 safe-area-bottom">
+              <button onClick={() => setIsModalOpen(false)} className="px-4 md:px-6 py-2.5 text-slate-500 hover:bg-slate-50 rounded-lg transition font-black uppercase tracking-tight text-[11px]">Cancelar</button>
+              <button onClick={handleSaveSchool} className="px-6 py-2.5 bg-primary text-white rounded-lg hover:brightness-110 shadow-sm transition font-black uppercase tracking-tight text-[11px]">Salvar Alterações</button>
             </div>
           </div>
         </div>
@@ -952,7 +955,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
           <div
             key={school.id}
             onClick={() => openEditModal(school)}
-            className="group rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-xl hover:border-slate-200 transition-all duration-300 cursor-pointer relative"
+            className="group rounded-xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-xl hover:border-slate-200 transition-all duration-300 cursor-pointer relative"
             style={{ backgroundColor: school.color + '15' }}
           >
             <div className="h-1.5" style={{ backgroundColor: school.color }} />
@@ -962,14 +965,14 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                 <div className="flex gap-1">
                   <button
                     onClick={(e) => { e.stopPropagation(); openEditModal(school); }}
-                    className="p-2 text-slate-500 hover:bg-white/50 rounded-xl transition-all"
+                    className="p-2 text-slate-500 hover:bg-white/50 rounded-lg transition-all"
                   >
                     <Edit3 size={18} />
                   </button>
                   {deletingSchoolId === school.id ? (
                     <div className="flex flex-col items-end gap-1">
-                      <span className="text-[9px] font-bold text-slate-600 uppercase">Confirmar exclusão?</span>
-                      <p className="text-[8px] text-amber-600 max-w-[200px] text-right mb-1">
+                      <span className="text-[10px] font-bold text-slate-600 uppercase">Confirmar exclusão?</span>
+                      <p className="text-[10px] text-amber-600 max-w-[200px] text-right mb-1">
                         ⚠️ Isso também removerá todas as avaliações, horários, diários e listas de alunos vinculados a esta escola.
                       </p>
                       <div className="flex items-center gap-1">
@@ -1068,7 +1071,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                         e.stopPropagation();
                         setDeletingSchoolId(school.id);
                       }}
-                      className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                      className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                     >
                       <Trash2 size={18} />
                     </button>
@@ -1078,7 +1081,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Turmas</span>
-                  <span className="font-black text-slate-700 bg-white/60 px-3 py-1 rounded-xl text-xs shadow-sm">{school.classes?.length || 0}</span>
+                  <span className="font-black text-slate-700 bg-white/60 px-3 py-1 rounded-lg text-xs shadow-sm">{school.classes?.length || 0}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Turnos Ativos</span>
@@ -1090,7 +1093,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                 </div>
               </div>
             </div>
-            <div className="px-6 py-3 bg-white/40 border-t border-slate-100/50 text-[9px] text-slate-500 font-bold uppercase tracking-widest flex justify-between items-center">
+            <div className="px-6 py-3 bg-white/40 border-t border-slate-100/50 text-[10px] text-slate-500 font-bold uppercase tracking-widest flex justify-between items-center">
               <span>Configuração Completa</span>
               <ArrowRight size={12} className="opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
             </div>

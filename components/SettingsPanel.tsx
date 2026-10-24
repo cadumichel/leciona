@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import Toggle from './Toggle';
 import { APP_VERSION } from '../version';
 import { AppData, AcademicCalendar, Term, Recess, ClassRecord, ClassStudent } from '../types';
 import {
@@ -1110,7 +1111,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                <React.Fragment key={tab.id}>
                   <button
                      onClick={() => setActiveSubTab(tab.id as any)}
-                     className={`flex-1 md:flex-none flex items-center justify-center gap-1.5 md:gap-2 px-1.5 md:px-5 py-2 rounded-lg lg:rounded-md text-[9px] md:text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeSubTab === tab.id ? 'bg-primary text-white shadow-lg lg:shadow-md' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                     className={`flex-1 md:flex-none flex items-center justify-center gap-1.5 md:gap-2 px-1.5 md:px-5 py-2 rounded-lg lg:rounded-md text-[10px] font-black uppercase transition-all whitespace-nowrap ${activeSubTab === tab.id ? 'bg-primary text-white shadow-lg lg:shadow-md' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                         }`}
                   >
                      <tab.icon size={14} className="md:w-4 md:h-4" /> <span className="truncate">{tab.label}</span>
@@ -1123,10 +1124,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          </div>
 
          {activeSubTab === 'general' && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
                {/* PERFIL */}
-               <section className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
-                  <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-4"><User className="text-primary" size={18} /> Perfil Docente</h3>
+               <section className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+                  <h3 className="text-[13px] font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-3"><User className="text-primary" size={18} /> Perfil Docente</h3>
                   <div className="space-y-4">
                      <div className="grid md:grid-cols-3 gap-4">
                         <label className="block">
@@ -1134,7 +1135,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                            <select
                               value={data.profile.title || 'Prof.'}
                               onChange={e => onUpdateData({ profile: { ...data.profile, title: e.target.value } })}
-                              className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-3 text-xs font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer"
+                              className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 text-sm font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer"
                            >
                               <option value="Prof.">Prof.</option>
                               <option value="Profª.">Profª.</option>
@@ -1146,7 +1147,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                               type="text"
                               value={data.profile.name}
                               onChange={e => onUpdateData({ profile: { ...data.profile, name: e.target.value } })}
-                              className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-3 text-xs font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+                              className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 text-sm font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
                               placeholder="Seu nome"
                            />
                         </label>
@@ -1172,70 +1173,64 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
                      <TermsOfUseModal isOpen={showTermsModal} onClose={() => setShowTermsModal(false)} />
 
-                     <label className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${data.settings.isPrivateTeacher ? 'bg-primary/5 border-primary/20' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-100 dark:border-slate-800'}`}>
-                        <div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-lg flex items-center justify-center ${data.settings.isPrivateTeacher ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-400'}`}><Briefcase size={16} /></div><div><span className="text-xs font-black uppercase tracking-tight dark:text-white">Professor Particular</span><p className="text-[9px] text-slate-400 font-bold uppercase">Ativa a gestão de alunos individuais.</p></div></div>
-                        <input type="checkbox" checked={data.settings.isPrivateTeacher} onChange={e => onUpdateData({ settings: { ...data.settings, isPrivateTeacher: e.target.checked } })} className="w-6 h-6 rounded-lg text-primary" />
+                     <label className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer bg-slate-50 dark:bg-slate-800/40 ${data.settings.isPrivateTeacher ? 'border-slate-200 dark:border-slate-600' : 'border-transparent'}`}>
+                        <div className="flex items-center gap-2"><div className={`w-7 h-7 rounded-lg flex items-center justify-center ${data.settings.isPrivateTeacher ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-400'}`}><Briefcase size={16} /></div><div><span className="text-xs font-black uppercase tracking-tight dark:text-white">Professor Particular</span><p className="text-xs text-slate-400 font-medium">Ativa a gestão de alunos individuais.</p></div></div>
+                        <Toggle checked={data.settings.isPrivateTeacher} onChange={e => onUpdateData({ settings: { ...data.settings, isPrivateTeacher: e.target.checked } })} />
                      </label>
                   </div>
                </section>
 
                {/* MODOS AVANÇADOS - Oculto no Onboarding */}
                {!isOnboarding && (
-                  <section className="bg-gradient-to-br from-slate-50 to-indigo-50/50 dark:from-slate-900 dark:to-indigo-900/20 p-4 rounded-xl shadow-sm border border-indigo-100 dark:border-indigo-900/30 transition-colors">
-                     <h3 className="text-sm font-black text-indigo-900 dark:text-indigo-100 uppercase tracking-tight flex items-center gap-2 mb-3"><LayoutList className="text-indigo-500" size={18} /> Modos Avançados</h3>
+                  <section className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+                     <h3 className="text-[13px] font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-3"><LayoutList className="text-primary" size={18} /> Modos Avançados</h3>
                      <div className="bg-white/60 dark:bg-black/20 p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/20 mb-4 flex items-start gap-2">
                         <AlertTriangle className="text-indigo-500 shrink-0 mt-0.5" size={14} />
-                        <p className="text-[9px] text-indigo-800 dark:text-indigo-200 leading-relaxed">
+                        <p className="text-xs text-indigo-800 dark:text-indigo-200 leading-relaxed">
                            A seleção destes modos torna necessário o cadastro dos nomes dos estudantes na nova aba "Turmas". <br /> Você poderá importar sua lista de chamadas para o Leciona com um simples copia e cola.
                         </p>
                      </div>
 
                      <div className="space-y-2">
-                        <label className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer bg-white dark:bg-slate-800 ${data.settings.advancedModes?.attendance ? 'border-indigo-300 dark:border-indigo-500 shadow-sm' : 'border-transparent'}`}>
+                        <label className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer bg-slate-50 dark:bg-slate-800/40 ${data.settings.advancedModes?.attendance ? 'border-slate-200 dark:border-slate-600' : 'border-transparent'}`}>
                            <div className="flex items-center gap-2">
-                              <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 rounded-lg"><ClipboardCheck size={16} /></div>
+                              <div className="p-1.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200 rounded-lg"><ClipboardCheck size={16} /></div>
                               <div>
                                  <span className="text-xs font-black uppercase dark:text-white block mb-0.5">Modo Chamada</span>
-                                 <p className="text-[9px] text-slate-400 font-medium normal-case dark:text-slate-500">Permite o registro de chamadas diárias.</p>
+                                 <p className="text-xs text-slate-400 font-medium normal-case dark:text-slate-500">Permite o registro de chamadas diárias.</p>
                               </div>
                            </div>
-                           <input
-                              type="checkbox"
+                           <Toggle
                               checked={data.settings.advancedModes?.attendance || false}
                               onChange={e => onUpdateData({ settings: { ...data.settings, advancedModes: { ...data.settings.advancedModes!, attendance: e.target.checked } } })}
-                              className="w-5 h-5 rounded text-indigo-600"
                            />
                         </label>
 
-                        <label className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer bg-white dark:bg-slate-800 ${data.settings.advancedModes?.individualOccurrence ? 'border-indigo-300 dark:border-indigo-500 shadow-sm' : 'border-transparent'}`}>
+                        <label className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer bg-slate-50 dark:bg-slate-800/40 ${data.settings.advancedModes?.individualOccurrence ? 'border-slate-200 dark:border-slate-600' : 'border-transparent'}`}>
                            <div className="flex items-center gap-2">
-                              <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 rounded-lg"><Users size={16} /></div>
+                              <div className="p-1.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200 rounded-lg"><Users size={16} /></div>
                               <div>
                                  <span className="text-xs font-black uppercase dark:text-white block mb-0.5">Modo Seletor de Ocorrência</span>
-                                 <p className="text-[9px] text-slate-400 font-medium normal-case dark:text-slate-500">Exibe o nome dos estudantes da turma para seleção ao adicionar ocorrência.</p>
+                                 <p className="text-xs text-slate-400 font-medium normal-case dark:text-slate-500">Exibe o nome dos estudantes da turma para seleção ao adicionar ocorrência.</p>
                               </div>
                            </div>
-                           <input
-                              type="checkbox"
+                           <Toggle
                               checked={data.settings.advancedModes?.individualOccurrence || false}
                               onChange={e => onUpdateData({ settings: { ...data.settings, advancedModes: { ...data.settings.advancedModes!, individualOccurrence: e.target.checked } } })}
-                              className="w-5 h-5 rounded text-indigo-600"
                            />
                         </label>
 
-                        <label className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer bg-white dark:bg-slate-800 ${data.settings.advancedModes?.grades ? 'border-indigo-300 dark:border-indigo-500 shadow-sm' : 'border-transparent'}`}>
+                        <label className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer bg-slate-50 dark:bg-slate-800/40 ${data.settings.advancedModes?.grades ? 'border-slate-200 dark:border-slate-600' : 'border-transparent'}`}>
                            <div className="flex items-center gap-2">
-                              <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 rounded-lg"><GraduationCap size={16} /></div>
+                              <div className="p-1.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200 rounded-lg"><GraduationCap size={16} /></div>
                               <div>
                                  <span className="text-xs font-black uppercase dark:text-white block mb-0.5">Modo Notas</span>
-                                 <p className="text-[9px] text-slate-400 font-medium normal-case dark:text-slate-500">Cria registro de notas e cálculo de médias.</p>
+                                 <p className="text-xs text-slate-400 font-medium normal-case dark:text-slate-500">Cria registro de notas e cálculo de médias.</p>
                               </div>
                            </div>
-                           <input
-                              type="checkbox"
+                           <Toggle
                               checked={data.settings.advancedModes?.grades || false}
                               onChange={e => onUpdateData({ settings: { ...data.settings, advancedModes: { ...data.settings.advancedModes!, grades: e.target.checked } } })}
-                              className="w-5 h-5 rounded text-indigo-600"
                            />
                         </label>
                      </div>
@@ -1244,37 +1239,37 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
                {/* ALERTAS - Oculto no Onboarding */}
                {!isOnboarding && (
-                  <section className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
+                  <section className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
                      <div className="mb-4">
-                        <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-1"><AlertTriangle className="text-amber-500" size={18} /> Alertas de Registro</h3>
-                        <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 leading-relaxed max-w-lg">Crie alertas para aulas sem conteúdo registrado.</p>
+                        <h3 className="text-[13px] font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-1"><AlertTriangle className="text-amber-500" size={18} /> Alertas de Registro</h3>
+                        <p className="text-xs font-medium text-slate-400 dark:text-slate-500 leading-relaxed max-w-lg">Crie alertas para aulas sem conteúdo registrado.</p>
                      </div>
 
-                     <div className="mb-6 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                     <div className="mb-4 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800 overflow-hidden">
                         <div className="p-4">
                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-3 ml-1">Estilo de Notificação</label>
                            <div className="flex gap-2 mb-4">
                               <button
                                  onClick={() => onUpdateData({ settings: { ...data.settings, alertType: 'notification' } })}
-                                 className={`flex-1 py-2 px-3 rounded-lg text-[9px] font-black uppercase transition-all flex items-center justify-center gap-1.5 ${data.settings.alertType !== 'popup' ? 'bg-amber-500 text-white shadow-lg shadow-amber-200' : 'bg-white dark:bg-slate-700 text-slate-400 hover:bg-slate-50'}`}
+                                 className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1.5 ${data.settings.alertType !== 'popup' ? 'bg-amber-500 text-white shadow-lg shadow-amber-200' : 'bg-white dark:bg-slate-700 text-slate-400 hover:bg-slate-50'}`}
                               >
                                  <Bell size={12} /> Sistema / Push
                               </button>
                               <button
                                  onClick={() => onUpdateData({ settings: { ...data.settings, alertType: 'popup' } })}
-                                 className={`flex-1 py-2 px-3 rounded-lg text-[9px] font-black uppercase transition-all flex items-center justify-center gap-1.5 ${data.settings.alertType === 'popup' ? 'bg-amber-500 text-white shadow-lg shadow-amber-200' : 'bg-white dark:bg-slate-700 text-slate-400 hover:bg-slate-50'}`}
+                                 className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1.5 ${data.settings.alertType === 'popup' ? 'bg-amber-500 text-white shadow-lg shadow-amber-200' : 'bg-white dark:bg-slate-700 text-slate-400 hover:bg-slate-50'}`}
                               >
                                  <MessageSquare size={12} /> Popup no App
                               </button>
                            </div>
 
                            {data.settings.alertType !== 'popup' && typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted' && (
-                              <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                              <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-[10px] font-bold text-amber-700 dark:text-amber-300">
                                  {Notification.permission === 'denied'
                                     ? 'As notificações estão bloqueadas neste aparelho. Enquanto isso, os avisos aparecem na tela do app. Para receber notificações, libere-as nas configurações do navegador.'
                                     : 'Este aparelho ainda não permitiu notificações. Enquanto isso, os avisos aparecem na tela do app.'}
                                  {Notification.permission === 'default' && (
-                                    <button onClick={() => Notification.requestPermission()} className="block mt-2 underline font-black uppercase text-[9px]">Permitir notificações</button>
+                                    <button onClick={() => Notification.requestPermission()} className="block mt-2 underline font-black uppercase text-[10px]">Permitir notificações</button>
                                  )}
                               </div>
                            )}
@@ -1289,7 +1284,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                     <button
                                        key={opt.id}
                                        onClick={() => onUpdateData({ settings: { ...data.settings, alertNotificationStyle: opt.id as any } })}
-                                       className={`flex-1 py-2 px-3 rounded-xl text-[9px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 ${(data.settings.alertNotificationStyle || 'sound') === opt.id ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800' : 'bg-white dark:bg-slate-800 text-slate-400 border border-transparent'}`}
+                                       className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 ${(data.settings.alertNotificationStyle || 'sound') === opt.id ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800' : 'bg-white dark:bg-slate-800 text-slate-400 border border-transparent'}`}
                                     >
                                        <opt.icon size={12} /> {opt.label}
                                     </button>
@@ -1313,46 +1308,42 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                      </div>
 
                      <div className="grid sm:grid-cols-2 gap-4">
-                        <label className={`flex flex-col gap-2 p-5 rounded-3xl border transition-all cursor-pointer ${data.settings.alertAfterLesson ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/20' : 'bg-slate-50 dark:bg-slate-800/40 opacity-60'}`}>
-                           <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase dark:text-white">Ao final da aula vigente</span><input type="checkbox" checked={data.settings.alertAfterLesson} onChange={e => onUpdateData({ settings: { ...data.settings, alertAfterLesson: e.target.checked } })} className="w-5 h-5 rounded text-amber-500" /></div>
-                           <div className="flex items-center gap-2 mt-2"><span className="text-[9px] font-black text-slate-400">Avisar</span><select value={data.settings.alertBeforeMinutes} onChange={e => onUpdateData({ settings: { ...data.settings, alertBeforeMinutes: parseInt(e.target.value) } })} className="bg-white dark:bg-slate-700 border-none text-[10px] font-black text-amber-600 px-2 py-1 rounded-lg outline-none"><option value="0">Na hora</option><option value="5">5 min antes</option><option value="10">10 min antes</option></select></div>
+                        <label className={`flex flex-col gap-2 p-4 rounded-lg border transition-all cursor-pointer ${data.settings.alertAfterLesson ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/20' : 'bg-slate-50 dark:bg-slate-800/40 opacity-60'}`}>
+                           <div className="flex justify-between items-center"><span className="text-xs font-black uppercase dark:text-white">Ao final da aula vigente</span><Toggle checked={data.settings.alertAfterLesson} onChange={e => onUpdateData({ settings: { ...data.settings, alertAfterLesson: e.target.checked } })} /></div>
+                           <div className="flex items-center gap-2 mt-2"><span className="text-[10px] font-black text-slate-400">Avisar</span><select value={data.settings.alertBeforeMinutes} onChange={e => onUpdateData({ settings: { ...data.settings, alertBeforeMinutes: parseInt(e.target.value) } })} className="bg-white dark:bg-slate-700 border-none text-[10px] font-black text-amber-600 px-2 py-1 rounded-lg outline-none"><option value="0">Na hora</option><option value="5">5 min antes</option><option value="10">10 min antes</option></select></div>
                         </label>
-                        <label className={`flex flex-col gap-2 p-5 rounded-3xl border transition-all cursor-pointer ${data.settings.alertAfterShift ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/20' : 'bg-slate-50 dark:bg-slate-800/40 opacity-60'}`}>
-                           <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase dark:text-white">Resumo do Turno</span><input type="checkbox" checked={data.settings.alertAfterShift} onChange={e => onUpdateData({ settings: { ...data.settings, alertAfterShift: e.target.checked } })} className="w-5 h-5 rounded text-amber-500" /></div>
-                           <div className="flex items-center gap-2 mt-2"><span className="text-[9px] font-black text-slate-400">Avisar</span><select value={data.settings.alertAfterShiftDelay || 0} onChange={e => onUpdateData({ settings: { ...data.settings, alertAfterShiftDelay: parseInt(e.target.value) } })} className="bg-white dark:bg-slate-700 border-none text-[10px] font-black text-amber-600 px-2 py-1 rounded-lg outline-none"><option value="0">Ao terminar</option><option value="1">1 min depois</option><option value="5">5 min depois</option><option value="10">10 min depois</option></select></div>
+                        <label className={`flex flex-col gap-2 p-4 rounded-lg border transition-all cursor-pointer ${data.settings.alertAfterShift ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/20' : 'bg-slate-50 dark:bg-slate-800/40 opacity-60'}`}>
+                           <div className="flex justify-between items-center"><span className="text-xs font-black uppercase dark:text-white">Resumo do Turno</span><Toggle checked={data.settings.alertAfterShift} onChange={e => onUpdateData({ settings: { ...data.settings, alertAfterShift: e.target.checked } })} /></div>
+                           <div className="flex items-center gap-2 mt-2"><span className="text-[10px] font-black text-slate-400">Avisar</span><select value={data.settings.alertAfterShiftDelay || 0} onChange={e => onUpdateData({ settings: { ...data.settings, alertAfterShiftDelay: parseInt(e.target.value) } })} className="bg-white dark:bg-slate-700 border-none text-[10px] font-black text-amber-600 px-2 py-1 rounded-lg outline-none"><option value="0">Ao terminar</option><option value="1">1 min depois</option><option value="5">5 min depois</option><option value="10">10 min depois</option></select></div>
                         </label>
                      </div>
 
                      <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 grid sm:grid-cols-2 gap-4">
-                        <label className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer bg-white dark:bg-slate-800 ${data.settings.hideUnregisteredClassesOnDashboard ? 'border-indigo-300 dark:border-indigo-500 shadow-sm' : 'border-transparent'}`}>
+                        <label className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer bg-slate-50 dark:bg-slate-800/40 ${data.settings.hideUnregisteredClassesOnDashboard ? 'border-slate-200 dark:border-slate-600' : 'border-transparent'}`}>
                            <div className="flex items-center gap-2">
-                              <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 rounded-lg"><LayoutGrid size={14} /></div>
+                              <div className="p-1.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200 rounded-lg"><LayoutGrid size={16} /></div>
                               <div className="flex-1">
-                                 <span className="text-[10px] font-black uppercase dark:text-white block mb-0.5">Ocultar no Início</span>
-                                 <p className="text-[8px] text-slate-400 font-medium normal-case">Esconde aviso de pendência no Dashboard.</p>
+                                 <span className="text-xs font-black uppercase dark:text-white block mb-0.5">Ocultar no Início</span>
+                                 <p className="text-xs text-slate-400 font-medium normal-case">Esconde aviso de pendência no Dashboard.</p>
                               </div>
                            </div>
-                           <input
-                              type="checkbox"
+                           <Toggle
                               checked={data.settings.hideUnregisteredClassesOnDashboard || false}
                               onChange={e => onUpdateData({ settings: { ...data.settings, hideUnregisteredClassesOnDashboard: e.target.checked } })}
-                              className="w-4 h-4 rounded text-indigo-600"
                            />
                         </label>
 
-                        <label className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer bg-white dark:bg-slate-800 ${data.settings.hideUnregisteredClassesOnDiary ? 'border-indigo-300 dark:border-indigo-500 shadow-sm' : 'border-transparent'}`}>
+                        <label className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer bg-slate-50 dark:bg-slate-800/40 ${data.settings.hideUnregisteredClassesOnDiary ? 'border-slate-200 dark:border-slate-600' : 'border-transparent'}`}>
                            <div className="flex items-center gap-2">
-                              <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 rounded-lg"><BookOpen size={14} /></div>
+                              <div className="p-1.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200 rounded-lg"><BookOpen size={16} /></div>
                               <div className="flex-1">
-                                 <span className="text-[10px] font-black uppercase dark:text-white block mb-0.5">Ocultar no Diário</span>
-                                 <p className="text-[8px] text-slate-400 font-medium normal-case">Esconde aviso de pendência na lista do Diário.</p>
+                                 <span className="text-xs font-black uppercase dark:text-white block mb-0.5">Ocultar no Diário</span>
+                                 <p className="text-xs text-slate-400 font-medium normal-case">Esconde aviso de pendência na lista do Diário.</p>
                               </div>
                            </div>
-                           <input
-                              type="checkbox"
+                           <Toggle
                               checked={data.settings.hideUnregisteredClassesOnDiary || false}
                               onChange={e => onUpdateData({ settings: { ...data.settings, hideUnregisteredClassesOnDiary: e.target.checked } })}
-                              className="w-4 h-4 rounded text-indigo-600"
                            />
                         </label>
                      </div>
@@ -1363,40 +1354,34 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                {/* APARÊNCIA (AGORA AQUI EMBAIXO) - Oculto no Onboarding */}
                {
                   !isOnboarding && (
-                     <section className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
-                        <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-4"><Palette className="text-primary" size={18} /> Aparência</h3>
+                     <section className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+                        <h3 className="text-[13px] font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-3"><Palette className="text-primary" size={18} /> Aparência</h3>
 
-                        <div className="space-y-6">
-                           <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800">
-                              <div className="flex items-center gap-3">
-                                 <div className="p-2 bg-slate-200 dark:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-200">
-                                    {data.settings.darkMode ? <Moon size={18} /> : <Sun size={18} />}
+                        <div className="space-y-3">
+                           <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800">
+                              <div className="flex items-center gap-2">
+                                 <div className="p-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-200">
+                                    {data.settings.darkMode ? <Moon size={16} /> : <Sun size={16} />}
                                  </div>
                                  <div>
                                     <span className="text-xs font-black uppercase dark:text-white block mb-0.5">Modo Escuro</span>
-                                    <p className="text-[9px] text-slate-400 font-medium normal-case dark:text-slate-500">Altera o visual para ambientes com pouca luz.</p>
+                                    <p className="text-xs text-slate-400 font-medium normal-case dark:text-slate-500">Altera o visual para ambientes com pouca luz.</p>
                                  </div>
                               </div>
-                              <label className="relative inline-flex items-center cursor-pointer">
-                                 <input type="checkbox" checked={data.settings.darkMode} onChange={e => onUpdateData({ settings: { ...data.settings, darkMode: e.target.checked } })} className="sr-only peer" />
-                                 <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                              </label>
+                              <Toggle checked={data.settings.darkMode} onChange={e => onUpdateData({ settings: { ...data.settings, darkMode: e.target.checked } })} />
                            </div>
 
-                           <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800">
-                              <div className="flex items-center gap-3">
-                                 <div className="p-2 bg-slate-200 dark:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-200">
-                                    <Quote size={18} />
+                           <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-transparent">
+                              <div className="flex items-center gap-2">
+                                 <div className="p-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-200">
+                                    <Quote size={16} />
                                  </div>
                                  <div>
                                     <span className="text-xs font-black uppercase dark:text-white block mb-0.5">Pensamento do Dia</span>
-                                    <p className="text-[9px] text-slate-400 font-medium normal-case dark:text-slate-500">Exibe uma frase inspiradora no topo do Dashboard.</p>
+                                    <p className="text-xs text-slate-400 font-medium normal-case dark:text-slate-500">Exibe uma frase inspiradora no topo do Dashboard.</p>
                                  </div>
                               </div>
-                              <label className="relative inline-flex items-center cursor-pointer">
-                                 <input type="checkbox" checked={data.settings.showDailyQuote} onChange={e => onUpdateData({ settings: { ...data.settings, showDailyQuote: e.target.checked } })} className="sr-only peer" />
-                                 <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                              </label>
+                              <Toggle checked={data.settings.showDailyQuote} onChange={e => onUpdateData({ settings: { ...data.settings, showDailyQuote: e.target.checked } })} />
                            </div>
 
 
@@ -1419,8 +1404,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                   )
                }
 
-               <section className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
-                  <div className="flex justify-between items-start mb-4"><h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2"><ShieldCheck className="text-primary" size={18} /> Conta Leciona (Backup)</h3><div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight ${user ? 'bg-green-50 text-green-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>{user ? 'Online' : 'Offline'}</div></div>
+               <section className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+                  <div className="flex justify-between items-start mb-4"><h3 className="text-[13px] font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2"><ShieldCheck className="text-primary" size={18} /> Conta Leciona (Backup)</h3><div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tight ${user ? 'bg-green-50 text-green-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>{user ? 'Online' : 'Offline'}</div></div>
 
                   {isOnboarding && (
                      <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-100 dark:border-amber-900/30 mb-6 flex items-start gap-3">
@@ -1446,17 +1431,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                               setTimeout(() => {
                                  if (onLogin) onLogin(true);
                               }, 500);
-                           }} className="p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg font-black uppercase text-[10px] tracking-tight hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all flex items-center justify-center gap-2">
+                           }} className="py-2.5 px-4 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg font-black uppercase text-[10px] tracking-tight hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all flex items-center justify-center gap-2">
                               <RefreshCw size={16} /> Trocar Conta
                            </button>
-                           <button onClick={onLogout} className="p-4 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg font-black uppercase text-[10px] tracking-tight hover:text-red-500 transition-all flex items-center justify-center gap-2">
+                           <button onClick={onLogout} className="py-2.5 px-4 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg font-black uppercase text-[10px] tracking-tight hover:text-red-500 transition-all flex items-center justify-center gap-2">
                               <LogOut size={16} /> Sair
                            </button>
                         </div>
                      </div>
                   ) : (
                      <>
-                        <button onClick={onLogin} className="w-full flex items-center justify-center gap-4 py-6 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-800 rounded-xl font-black uppercase text-xs tracking-tight hover:border-primary transition-all dark:text-white">
+                        <button onClick={onLogin} className="w-full flex items-center justify-center gap-2 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-black uppercase text-xs tracking-tight hover:border-primary transition-all dark:text-white">
                            <LogIn size={18} /> Conectar com Google
                         </button>
 
@@ -1473,7 +1458,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                     <p className="text-[10px] font-bold text-red-800 dark:text-red-200 leading-relaxed">
                                        ⚠️ <strong className="uppercase">Atenção:</strong> Sem a conexão com Google, seus dados ficam salvos apenas neste navegador e <strong>podem ser perdidos a qualquer momento</strong> (limpeza de cache, formatação, troca de dispositivo, etc.).
                                     </p>
-                                    <p className="text-[9px] font-bold text-red-700 dark:text-red-300 mt-2">
+                                    <p className="text-[10px] font-bold text-red-700 dark:text-red-300 mt-2">
                                        ✓ Confirmo que estou ciente do risco e aceito prosseguir sem backup automático na nuvem.
                                     </p>
                                  </div>
@@ -1486,57 +1471,57 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
                {
                   !isOnboarding && (
-                     <section className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
-                        <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-4"><Download className="text-primary" size={18} /> Exportar Dados</h3>
+                     <section className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+                        <h3 className="text-[13px] font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-3"><Download className="text-primary" size={18} /> Exportar Dados</h3>
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
-                           <select value={filterInstId} onChange={e => { setFilterInstId(e.target.value); setFilterClassId('all'); setFilterPeriodIdx('all'); }} className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none appearance-none cursor-pointer dark:text-white"><option value="all">Todas Instituições</option>{availableInstitutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</select>
-                           <select value={filterClassId} onChange={e => setFilterClassId(e.target.value)} className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none appearance-none cursor-pointer dark:text-white"><option value="all">Todas as Turmas</option>{availableClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-                           <select value={filterPeriodIdx} onChange={e => setFilterPeriodIdx(e.target.value)} disabled={filterInstId === 'all'} className="bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none appearance-none cursor-pointer dark:text-white disabled:opacity-50">
+                           <select value={filterInstId} onChange={e => { setFilterInstId(e.target.value); setFilterClassId('all'); setFilterPeriodIdx('all'); }} className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 text-xs font-bold outline-none appearance-none cursor-pointer dark:text-white"><option value="all">Todas Instituições</option>{availableInstitutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</select>
+                           <select value={filterClassId} onChange={e => setFilterClassId(e.target.value)} className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 text-xs font-bold outline-none appearance-none cursor-pointer dark:text-white"><option value="all">Todas as Turmas</option>{availableClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                           <select value={filterPeriodIdx} onChange={e => setFilterPeriodIdx(e.target.value)} disabled={filterInstId === 'all'} className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 text-xs font-bold outline-none appearance-none cursor-pointer dark:text-white disabled:opacity-50">
                               <option value="all">Todo o Período</option>
                               {periodOptions.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                            </select>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                            <button onClick={() => handleExport('logs')} className="flex flex-col items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-primary transition-all group">
                               <BookOpen className="text-primary group-hover:scale-110" size={20} />
-                              <span className="text-[9px] font-black uppercase text-slate-600 dark:text-slate-400">Diários (CSV)</span>
+                              <span className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-400">Diários (CSV)</span>
                            </button>
 
                            <button onClick={() => handleExport('assessments')} className="flex flex-col items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-primary transition-all group">
                               <FileCheck className="text-primary group-hover:scale-110" size={20} />
-                              <span className="text-[9px] font-black uppercase text-slate-600 dark:text-slate-400">Avaliações (CSV)</span>
+                              <span className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-400">Avaliações (CSV)</span>
                            </button>
 
                            <button onClick={() => handleExport('occurrences')} className="flex flex-col items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-primary transition-all group">
                               <AlertCircle className="text-primary group-hover:scale-110" size={20} />
-                              <span className="text-[9px] font-black uppercase text-slate-600 dark:text-slate-400">Ocorrências (CSV)</span>
+                              <span className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-400">Ocorrências (CSV)</span>
                            </button>
 
                            {data.settings.advancedModes?.attendance && (
                               <button onClick={() => handleExport('attendance')} className="flex flex-col items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-primary transition-all group">
                                  <ClipboardCheck className="text-primary group-hover:scale-110" size={20} />
-                                 <span className="text-[9px] font-black uppercase text-slate-600 dark:text-slate-400">Chamada (CSV)</span>
+                                 <span className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-400">Chamada (CSV)</span>
                               </button>
                            )}
 
                            {data.settings.advancedModes?.grades && (
                               <button onClick={() => handleExport('grades')} className="flex flex-col items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-primary transition-all group">
                                  <GraduationCap className="text-primary group-hover:scale-110" size={20} />
-                                 <span className="text-[9px] font-black uppercase text-slate-600 dark:text-slate-400">Notas (CSV)</span>
+                                 <span className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-400">Notas (CSV)</span>
                               </button>
                            )}
 
                            <button onClick={() => handleExport('calendar')} className="flex flex-col items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-primary transition-all group">
                               <CalendarIcon className="text-primary group-hover:scale-110" size={20} />
-                              <span className="text-[9px] font-black uppercase text-slate-600 dark:text-slate-400">Agenda (ICS)</span>
+                              <span className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-400">Agenda (ICS)</span>
                            </button>
 
                            {data.settings.isPrivateTeacher && (
                               <button onClick={() => handleExport('privateLessons')} className="flex flex-col items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800 hover:border-primary transition-all group">
                                  <Users className="text-primary group-hover:scale-110" size={20} />
-                                 <span className="text-[9px] font-black uppercase text-slate-600 dark:text-slate-400">Aulas Particulares (CSV)</span>
+                                 <span className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-400">Aulas Particulares (CSV)</span>
                               </button>
                            )}
                         </div>
@@ -1545,48 +1530,48 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                }
                {
                   !isOnboarding && (
-                     <section className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors mb-8">
-                        <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-6">
+                     <section className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+                        <h3 className="text-[13px] font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-3">
                            <Database className="text-primary" size={18} /> Gerenciamento de Dados
                         </h3>
 
-                        <div className="grid md:grid-cols-2 gap-6">
+                        <div className="grid md:grid-cols-2 gap-3">
 
                            {/* CARD DE BACKUP */}
-                           <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between group hover:border-primary/30 transition-all">
+                           <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-transparent flex flex-col justify-between group hover:border-primary/30 transition-all">
                               <div>
-                                 <div className="w-12 h-12 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-4 text-emerald-600 dark:text-emerald-400">
-                                    <FileDown size={24} />
+                                 <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-3 text-emerald-600 dark:text-emerald-400">
+                                    <FileDown size={20} />
                                  </div>
-                                 <h4 className="text-sm font-black text-slate-700 dark:text-white mb-2">Fazer Backup Completo</h4>
-                                 <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium mb-6">
+                                 <h4 className="text-xs font-black uppercase tracking-tight text-slate-700 dark:text-white mb-2">Fazer Backup Completo</h4>
+                                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium mb-4">
                                     Salve uma cópia segura de todos os seus dados (escolas, turmas, diários, notas e configurações) em seu dispositivo. Recomendamos fazer isso regularmente.
                                  </p>
                               </div>
                               <button
                                  onClick={handleBackup}
-                                 className="w-full py-3 bg-white dark:bg-slate-800 border-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 rounded-lg font-black uppercase text-[10px] tracking-tight hover:bg-emerald-500 hover:text-white transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 dark:shadow-none"
+                                 className="w-full py-2.5 bg-white dark:bg-slate-800 border border-emerald-500 text-emerald-600 dark:text-emerald-400 rounded-lg font-black uppercase text-[10px] tracking-tight hover:bg-emerald-500 hover:text-white transition-all flex items-center justify-center gap-2"
                               >
                                  <FileDown size={14} /> Baixar Arquivo (.json)
                               </button>
                            </div>
 
                            {/* CARD DE RESTORE */}
-                           <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between group hover:border-amber-500/30 transition-all">
+                           <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-transparent flex flex-col justify-between group hover:border-amber-500/30 transition-all">
                               <div>
-                                 <div className="w-12 h-12 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4 text-amber-600 dark:text-amber-400">
-                                    <FileUp size={24} />
+                                 <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-3 text-amber-600 dark:text-amber-400">
+                                    <FileUp size={20} />
                                  </div>
-                                 <h4 className="text-sm font-black text-slate-700 dark:text-white mb-2 flex items-center gap-2">
-                                    Restaurar Dados <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[8px] uppercase tracking-tight">Atenção</span>
+                                 <h4 className="text-xs font-black uppercase tracking-tight text-slate-700 dark:text-white mb-2 flex items-center gap-2">
+                                    Restaurar Dados <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] uppercase tracking-tight">Atenção</span>
                                  </h4>
-                                 <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium mb-6">
+                                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium mb-4">
                                     Recupere seus dados a partir de um arquivo de backup (.json).
                                     <strong className="block mt-1 text-amber-600 dark:text-amber-500">Isso substituirá todos os dados atuais do aplicativo.</strong>
                                  </p>
                               </div>
 
-                              <label className="w-full py-3 bg-white dark:bg-slate-800 border-2 border-amber-500 text-amber-600 dark:text-amber-400 rounded-lg font-black uppercase text-[10px] tracking-tight hover:bg-amber-500 hover:text-white transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-100 dark:shadow-none cursor-pointer">
+                              <label className="w-full py-2.5 bg-white dark:bg-slate-800 border border-amber-500 text-amber-600 dark:text-amber-400 rounded-lg font-black uppercase text-[10px] tracking-tight hover:bg-amber-500 hover:text-white transition-all flex items-center justify-center gap-2 cursor-pointer">
                                  <FileUp size={14} /> Selecionar Arquivo
                                  <input
                                     type="file"
@@ -1604,13 +1589,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
                {/* VIRADA DO ANO LETIVO */}
                {!isOnboarding && onStartNewYear && (
-                  <section className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+                  <section className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
-                           <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
+                           <h3 className="text-[13px] font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
                               <Archive className="text-primary" size={18} /> Ano letivo {(data as SyncedData)._schoolYear || Math.max(...data.calendars.map(c => Number(c.year) || 0), new Date().getFullYear())}
                            </h3>
-                           <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
+                           <p className="text-xs font-medium text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
                               Ao terminar o ano, arquive os registros (backup e planilhas) e comece o próximo mantendo escolas, turnos, turmas e a grade como rascunho.
                            </p>
                         </div>
@@ -1634,8 +1619,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
                {
                   !isOnboarding && (
-                     <section className="bg-red-50 dark:bg-red-900/10 p-4 rounded-xl shadow-sm border border-red-100 dark:border-red-900/30">
-                        <h3 className="text-sm font-black text-red-700 dark:text-red-400 uppercase tracking-tight flex items-center gap-2 mb-4">
+                     <section className="bg-red-50 dark:bg-red-900/10 p-4 md:p-5 rounded-xl shadow-sm border border-red-100 dark:border-red-900/30">
+                        <h3 className="text-[13px] font-black text-red-700 dark:text-red-400 uppercase tracking-tight flex items-center gap-2 mb-3">
                            <AlertTriangle className="text-red-500" size={18} /> Zona de Perigo
                         </h3>
 
@@ -1678,7 +1663,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                        alert(`Limpeza concluída! ${orphans.length} registros inválidos foram removidos.`);
                                     }
                                  }}
-                                 className="w-full py-3 bg-white dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 text-red-600 dark:text-red-300 rounded-lg font-black uppercase text-xs tracking-tight hover:bg-red-50 dark:hover:bg-red-900/40 transition-all flex items-center justify-center gap-2"
+                                 className="w-full py-2.5 bg-white dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-300 rounded-lg font-black uppercase text-xs tracking-tight hover:bg-red-50 dark:hover:bg-red-900/40 transition-all flex items-center justify-center gap-2"
                               >
                                  <ShieldCheck size={16} /> Sanear Banco de Dados ({data.logs.length} registros)
                               </button>
@@ -1690,7 +1675,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                               </p>
                               <button
                                  onClick={handleHardReset}
-                                 className="w-full py-4 bg-red-600 text-white rounded-lg font-black uppercase text-xs tracking-tight hover:bg-red-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-200 dark:shadow-none"
+                                 className="w-full py-2.5 bg-red-600 text-white rounded-lg font-black uppercase text-xs tracking-tight hover:bg-red-700 transition-all flex items-center justify-center gap-2"
                               >
                                  <Trash2 size={18} /> Excluir Todos os Dados (Reset)
                               </button>
@@ -1726,7 +1711,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                <div className="animate-in fade-in slide-in-from-right-4 relative z-[60]">
                   {/* Caixa de Seleção Harmonizada */}
                   <div
-                     className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 md:p-3.5 rounded-xl flex flex-col md:flex-row items-center gap-3 md:gap-4 shadow-sm relative overflow-hidden transition-all"
+                     className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 md:p-5 rounded-xl flex flex-col md:flex-row items-center gap-3 md:gap-4 shadow-sm relative overflow-hidden transition-all"
                      style={{
                         backgroundColor: activeSchoolColorForCal ? activeSchoolColorForCal + '15' : undefined,
                         borderColor: activeSchoolColorForCal ? activeSchoolColorForCal : undefined,
@@ -1749,7 +1734,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                            <Settings size={18} />
                         </div>
                         <div className="flex-1">
-                           <label className="block text-[8px] font-black text-slate-400 uppercase tracking-tight mb-0.5">Editando Ano Letivo de:</label>
+                           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-0.5">Editando Ano Letivo de:</label>
                            <div className="relative">
                               <select
                                  value={activeSchoolIdForCal}
@@ -1765,45 +1750,45 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                   </div>
 
                   <div
-                     className="bg-white dark:bg-slate-900 rounded-xl p-3 md:p-5 shadow-sm border border-slate-100 dark:border-slate-800 space-y-3 md:space-y-4 mt-3 md:mt-4 transition-colors"
+                     className="bg-white dark:bg-slate-900 rounded-xl p-4 md:p-5 shadow-sm border border-slate-100 dark:border-slate-800 space-y-4 mt-4"
                   >
                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
-                        <div><label className="block text-[8px] md:text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1">Ano</label><input type="number" value={calForm.year} onChange={e => setCalForm({ ...calForm, year: parseInt(e.target.value) })} className="w-full bg-slate-50 dark:bg-slate-800 rounded-lg px-2 py-1.5 md:px-3 md:py-2 font-bold text-xs md:text-sm dark:text-white" /></div>
-                        <div><label className="block text-[8px] md:text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1">Início das Aulas</label><input type="date" value={calForm.start} onChange={e => setCalForm({ ...calForm, start: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-800 rounded-lg px-2 py-1.5 md:px-3 md:py-2 font-bold text-xs md:text-sm dark:text-white" /></div>
-                        <div><label className="block text-[8px] md:text-[9px] font-black text-slate-400 uppercase mb-0.5 ml-1">Término do Ano</label><input type="date" value={calForm.end} onChange={e => setCalForm({ ...calForm, end: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-800 rounded-lg px-2 py-1.5 md:px-3 md:py-2 font-bold text-xs md:text-sm dark:text-white" /></div>
+                        <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1 ml-1">Ano</label><input type="number" value={calForm.year} onChange={e => setCalForm({ ...calForm, year: parseInt(e.target.value) })} className="w-full bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2.5 font-bold text-sm dark:text-white" /></div>
+                        <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1 ml-1">Início das Aulas</label><input type="date" value={calForm.start} onChange={e => setCalForm({ ...calForm, start: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2.5 font-bold text-sm dark:text-white" /></div>
+                        <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1 ml-1">Término do Ano</label><input type="date" value={calForm.end} onChange={e => setCalForm({ ...calForm, end: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2.5 font-bold text-sm dark:text-white" /></div>
                      </div>
 
-                     <div className="bg-slate-50 dark:bg-slate-800/50 p-2 md:p-4 rounded-xl">
-                        <label className="block text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-tight mb-1 md:mb-2 ml-1">Divisão Letiva</label>
-                        <div className="grid grid-cols-3 gap-1 md:gap-1.5 p-1 bg-white dark:bg-slate-700 rounded-lg">
+                     <div className="bg-slate-50 dark:bg-slate-800/50 p-3 md:p-4 rounded-lg">
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-2 ml-1">Divisão Letiva</label>
+                        <div className="grid grid-cols-3 gap-1 p-1 bg-white dark:bg-slate-700 rounded-lg">
                            <button
                               onClick={() => setCalForm({ ...calForm, division: 'trimestres' })}
-                              className={`py-1.5 md:py-2 rounded-lg font-black uppercase text-[8px] md:text-[9px] transition-all ${calForm.division === 'trimestres' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-blue-500'}`}
+                              className={`py-2 rounded-md font-black uppercase text-[10px] transition-all ${calForm.division === 'trimestres' ? 'bg-primary text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                            >
                               Trimestres
                            </button>
                            <button
                               onClick={() => setCalForm({ ...calForm, division: 'bimestres' })}
-                              className={`py-1.5 md:py-2 rounded-lg font-black uppercase text-[8px] md:text-[9px] transition-all ${calForm.division === 'bimestres' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-blue-500'}`}
+                              className={`py-2 rounded-md font-black uppercase text-[10px] transition-all ${calForm.division === 'bimestres' ? 'bg-primary text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                            >
                               Bimestres
                            </button>
                            <button
                               onClick={() => setCalForm({ ...calForm, division: 'personalizado' })}
-                              className={`py-1.5 md:py-2 rounded-lg font-black uppercase text-[8px] md:text-[9px] transition-all ${calForm.division === 'personalizado' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-blue-500'}`}
+                              className={`py-2 rounded-md font-black uppercase text-[10px] transition-all ${calForm.division === 'personalizado' ? 'bg-primary text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                            >
                               Personalizado
                            </button>
                         </div>
                      </div>
 
-                     <div className="grid gap-1.5 md:gap-2">
+                     <div className="grid gap-2">
                         {calForm.terms?.map((term, idx) => (
-                           <div key={idx} className="flex flex-col md:flex-row items-center gap-1.5 md:gap-2 bg-slate-50 dark:bg-slate-800 p-1.5 md:p-3 rounded-2xl">
-                              <input type="text" value={term.name} onChange={e => { const newTerms = [...calForm.terms!]; newTerms[idx].name = e.target.value; setCalForm({ ...calForm, terms: newTerms }); }} className="w-full md:w-32 bg-white dark:bg-slate-700 rounded-lg px-3 py-1.5 font-black text-[9px] uppercase text-blue-600" />
+                           <div key={idx} className="flex flex-col md:flex-row items-center gap-2 bg-slate-50 dark:bg-slate-800 p-3 rounded-lg">
+                              <input type="text" value={term.name} onChange={e => { const newTerms = [...calForm.terms!]; newTerms[idx].name = e.target.value; setCalForm({ ...calForm, terms: newTerms }); }} className="w-full md:w-36 bg-white dark:bg-slate-700 rounded-lg px-3 py-2.5 font-black text-xs uppercase text-primary" />
                               <div className="flex gap-1.5 w-full">
-                                 <input type="date" value={term.start} onChange={e => { const nt = [...calForm.terms!]; nt[idx].start = e.target.value; setCalForm({ ...calForm, terms: nt }); }} className="flex-1 bg-white dark:bg-slate-700 rounded-lg px-2 py-1 md:py-1.5 text-[10px] font-bold" />
-                                 <input type="date" value={term.end} onChange={e => { const nt = [...calForm.terms!]; nt[idx].end = e.target.value; setCalForm({ ...calForm, terms: nt }); }} className="flex-1 bg-white dark:bg-slate-700 rounded-lg px-2 py-1 md:py-1.5 text-[10px] font-bold" />
+                                 <input type="date" value={term.start} onChange={e => { const nt = [...calForm.terms!]; nt[idx].start = e.target.value; setCalForm({ ...calForm, terms: nt }); }} className="flex-1 bg-white dark:bg-slate-700 rounded-lg px-3 py-2.5 text-sm font-bold dark:text-white" />
+                                 <input type="date" value={term.end} onChange={e => { const nt = [...calForm.terms!]; nt[idx].end = e.target.value; setCalForm({ ...calForm, terms: nt }); }} className="flex-1 bg-white dark:bg-slate-700 rounded-lg px-3 py-2.5 text-sm font-bold dark:text-white" />
                               </div>
                               {calForm.division === 'personalizado' && (
                                  <button onClick={() => removeTerm(idx)} className="p-1.5 text-slate-300 hover:text-red-500 transition-colors">
@@ -1814,36 +1799,36 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                         ))}
 
                         {calForm.division === 'personalizado' && (
-                           <button onClick={addTerm} className="flex items-center justify-center gap-2 w-full py-2.5 md:py-3 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all font-black uppercase text-[9px]">
+                           <button onClick={addTerm} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all font-black uppercase text-[10px]">
                               <Plus size={12} /> Adicionar Período
                            </button>
                         )}
                      </div>
 
-                     <div className="bg-pink-50 dark:bg-pink-900/10 p-2 md:p-4 rounded-xl border border-pink-100">
-                        <h4 className="text-[9px] md:text-[10px] font-black text-pink-600 uppercase mb-1.5 md:mb-3 flex items-center gap-2"><Palmtree size={14} /> Recesso de Julho</h4>
-                        <div className="grid grid-cols-2 gap-2 md:gap-4">
-                           <div><label className="block text-[8px] font-black uppercase mb-0.5 ml-1">Início</label><input type="date" value={calForm.midYearBreak?.start} onChange={e => setCalForm({ ...calForm, midYearBreak: { ...calForm.midYearBreak!, start: e.target.value } })} className="w-full bg-white dark:bg-slate-800 rounded-lg px-2 py-1.5 text-[10px] font-bold dark:text-white" /></div>
-                           <div><label className="block text-[8px] font-black uppercase mb-0.5 ml-1">Fim</label><input type="date" value={calForm.midYearBreak?.end} onChange={e => setCalForm({ ...calForm, midYearBreak: { ...calForm.midYearBreak!, end: e.target.value } })} className="w-full bg-white dark:bg-slate-800 rounded-lg px-2 py-1.5 text-[10px] font-bold dark:text-white" /></div>
+                     <div className="bg-pink-50 dark:bg-pink-900/10 p-3 md:p-4 rounded-lg border border-pink-100 dark:border-pink-900/30">
+                        <h4 className="text-xs font-black text-pink-600 uppercase tracking-tight mb-3 flex items-center gap-2"><Palmtree size={14} /> Recesso de Julho</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                           <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1 ml-1">Início</label><input type="date" value={calForm.midYearBreak?.start} onChange={e => setCalForm({ ...calForm, midYearBreak: { ...calForm.midYearBreak!, start: e.target.value } })} className="w-full bg-white dark:bg-slate-800 rounded-lg px-3 py-2.5 text-sm font-bold dark:text-white" /></div>
+                           <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1 ml-1">Fim</label><input type="date" value={calForm.midYearBreak?.end} onChange={e => setCalForm({ ...calForm, midYearBreak: { ...calForm.midYearBreak!, end: e.target.value } })} className="w-full bg-white dark:bg-slate-800 rounded-lg px-3 py-2.5 text-sm font-bold dark:text-white" /></div>
                         </div>
                      </div>
 
-                     <div className="bg-slate-50 dark:bg-slate-800 p-2 md:p-4 rounded-2xl">
-                        <div className="flex justify-between items-center mb-1.5 md:mb-3">
-                           <h4 className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase flex items-center gap-2">
+                     <div className="bg-slate-50 dark:bg-slate-800/50 p-3 md:p-4 rounded-lg">
+                        <div className="flex justify-between items-center gap-2 mb-3">
+                           <h4 className="text-xs font-black text-slate-500 uppercase tracking-tight flex items-center gap-2">
                               <CalendarRange size={14} /> Recessos
                            </h4>
 
                            <div className="flex bg-slate-200 dark:bg-slate-700 rounded-lg p-0.5">
                               <button
                                  onClick={() => setHolidayImportMode(false)}
-                                 className={`px-3 py-1 rounded-md text-[9px] font-black uppercase transition-all ${!holidayImportMode ? 'bg-white dark:bg-slate-600 text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                                 className={`px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all ${!holidayImportMode ? 'bg-white dark:bg-slate-600 text-primary shadow-sm' : 'text-slate-400'}`}
                               >
                                  Manual
                               </button>
                               <button
                                  onClick={() => setHolidayImportMode(true)}
-                                 className={`px-3 py-1 rounded-md text-[9px] font-black uppercase transition-all ${holidayImportMode ? 'bg-white dark:bg-slate-600 text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                                 className={`px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all ${holidayImportMode ? 'bg-white dark:bg-slate-600 text-primary shadow-sm' : 'text-slate-400'}`}
                               >
                                  Importar Lista
                               </button>
@@ -1854,15 +1839,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                            // MODO MANUAL (PRESERVADO)
                            <>
                               <div className="flex justify-end mb-2">
-                                 <button onClick={addExtraRecess} className="text-[9px] md:text-[9px] font-black text-blue-600 uppercase transition-colors hover:text-blue-700 flex items-center gap-1">
-                                    <Plus size={10} /> Add Dia
+                                 <button onClick={addExtraRecess} className="text-[10px] font-black text-primary uppercase transition-colors hover:text-blue-700 flex items-center gap-1">
+                                    <Plus size={12} /> Add Dia
                                  </button>
                               </div>
-                              <div className="space-y-1.5 md:space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                              <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
                                  {[...(calForm.extraRecesses || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(r => (
-                                    <div key={r.id} className="flex gap-1.5 md:gap-2 items-center animate-in fade-in slide-in-from-left-2">
-                                       <input type="text" placeholder="Nome" value={r.name} onChange={e => { const u = calForm.extraRecesses?.map(x => x.id === r.id ? { ...x, name: e.target.value } : x); setCalForm({ ...calForm, extraRecesses: u }); }} className="flex-1 bg-white dark:bg-slate-700 rounded-lg px-2 py-1 md:py-1.5 text-[10px] font-bold dark:text-white" />
-                                       <input type="date" value={r.date} onChange={e => { const u = calForm.extraRecesses?.map(x => x.id === r.id ? { ...x, date: e.target.value } : x); setCalForm({ ...calForm, extraRecesses: u }); }} className="bg-white dark:bg-slate-700 rounded-lg px-2 py-1 md:py-1.5 text-[10px] font-bold dark:text-white" />
+                                    <div key={r.id} className="flex gap-2 items-center animate-in fade-in slide-in-from-left-2">
+                                       <input type="text" placeholder="Nome" value={r.name} onChange={e => { const u = calForm.extraRecesses?.map(x => x.id === r.id ? { ...x, name: e.target.value } : x); setCalForm({ ...calForm, extraRecesses: u }); }} className="flex-1 bg-white dark:bg-slate-700 rounded-lg px-3 py-2 text-sm font-bold dark:text-white" />
+                                       <input type="date" value={r.date} onChange={e => { const u = calForm.extraRecesses?.map(x => x.id === r.id ? { ...x, date: e.target.value } : x); setCalForm({ ...calForm, extraRecesses: u }); }} className="bg-white dark:bg-slate-700 rounded-lg px-3 py-2 text-sm font-bold dark:text-white" />
                                        <button onClick={() => setCopyingRecess(r)} className="text-slate-300 hover:text-blue-500" title="Copiar para outra escola"><Copy size={14} /></button>
                                        <button onClick={() => setCalForm({ ...calForm, extraRecesses: calForm.extraRecesses?.filter(x => x.id !== r.id) })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button>
                                     </div>
@@ -1882,7 +1867,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                     <textarea
                                        value={holidayImportText}
                                        onChange={e => setHolidayImportText(e.target.value)}
-                                       className="w-full h-32 bg-white dark:bg-slate-700 rounded-xl p-3 text-[10px] font-medium border border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 outline-none resize-none dark:text-white"
+                                       className="w-full h-32 bg-white dark:bg-slate-700 rounded-lg p-3 text-sm font-medium border border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 outline-none resize-none dark:text-white"
                                        placeholder={`Cole aqui a lista de recessos de sua escola.\nÉ necessário que a lista seja composta pela DATA do recesso acompanhada do NOME DO RECESSO.\nA lista deve apresentar um recesso por linha.`}
                                     />
                                     <button
@@ -1896,7 +1881,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                               ) : (
                                  <div className="space-y-3">
                                     <div className="bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg border border-amber-100 dark:border-amber-800">
-                                       <p className="text-[9px] text-amber-800 dark:text-amber-200 font-bold text-center">
+                                       <p className="text-[10px] text-amber-800 dark:text-amber-200 font-bold text-center">
                                           Encontramos {parsedHolidays.length} datas. Confira abaixo:
                                        </p>
                                     </div>
@@ -1954,12 +1939,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
                      <button
                         onClick={handleSaveCalendar}
-                        className={`w-full h-12 rounded-lg font-black uppercase text-xs tracking-tight shadow-lg transition-all duration-300 ease-in-out flex items-center justify-center gap-2 mt-4 ${saveSuccess
-                           ? 'bg-green-600 text-white hover:bg-green-700 scale-105 shadow-green-200'
-                           : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        className={`w-full md:w-auto md:ml-auto md:px-6 py-2.5 rounded-lg font-black uppercase text-[11px] tracking-tight shadow-sm transition-all duration-300 ease-in-out flex items-center justify-center gap-2 ${saveSuccess
+                           ? 'bg-green-600 text-white hover:bg-green-700'
+                           : 'bg-primary text-white hover:brightness-110'
                            }`}
                      >
-                        {saveSuccess ? <CheckCircle2 size={18} /> : <FileCheck size={18} />}
+                        {saveSuccess ? <CheckCircle2 size={14} /> : <FileCheck size={14} />}
                         {saveSuccess ? 'Salvo!' : 'Salvar Alterações'}
                      </button>
                   </div>
@@ -2010,7 +1995,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                      {rosterSchoolId && rosterClassId && (
                         <div className="space-y-6 animate-in fade-in zoom-in-95">
                            {currentClassRecord?.createdAt && (
-                              <div className="flex gap-4 mb-4 text-[9px] font-bold uppercase text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg">
+                              <div className="flex gap-4 mb-4 text-[10px] font-bold uppercase text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg">
                                  <span className="flex items-center gap-1"><Clock size={10} /> Criada em: {new Date(currentClassRecord.createdAt).toLocaleDateString('pt-BR')}</span>
                                  {currentClassRecord.updatedAt && (
                                     <span className="flex items-center gap-1 text-primary"><RefreshCw size={10} /> Atualizada em: {new Date(currentClassRecord.updatedAt).toLocaleDateString('pt-BR')}</span>
@@ -2051,7 +2036,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                     {addStudentSuccess ? 'Adicionado!' : 'Adicionar'}
                                  </button>
                               </div>
-                              <div className="grid grid-cols-2 gap-2 px-1 mt-2 text-[9px] text-slate-400 font-medium leading-tight text-center">
+                              <div className="grid grid-cols-2 gap-2 px-1 mt-2 text-[10px] text-slate-400 font-medium leading-tight text-center">
                                  <p>✨ Limpa, formata e padroniza os nomes automaticamente.</p>
                                  <p>📋 Adiciona os nomes exatamente como digitados acima.</p>
                               </div>
@@ -2065,7 +2050,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                  {currentClassRecord && currentClassRecord.students.length > 0 && (
                                     <button
                                        onClick={handleDeleteAllClassStudents}
-                                       className="flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-black uppercase text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 hover:border-red-300 transition-all"
+                                       className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 hover:border-red-300 transition-all"
                                        title="Excluir toda a lista de alunos (Hard Delete)"
                                     >
                                        <Trash2 size={12} />
@@ -2081,7 +2066,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                           <span className="text-xs font-bold text-slate-700 dark:text-slate-200 ml-2">{student.name}</span>
                                           <button
                                              onClick={() => handleArchiveStudent(student.id)}
-                                             className="flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-black uppercase text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-red-50 hover:text-red-500 hover:border-red-200 dark:hover:bg-red-900/20 dark:hover:border-red-900/50 transition-all group/btn"
+                                             className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-red-50 hover:text-red-500 hover:border-red-200 dark:hover:bg-red-900/20 dark:hover:border-red-900/50 transition-all group/btn"
                                              title="Arquivar (Sair da Turma)"
                                           >
                                              <UserMinus size={12} className="group-hover/btn:scale-110 transition-transform" />
@@ -2101,7 +2086,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                               <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
                                  <button
                                     onClick={() => setShowArchived(!showArchived)}
-                                    className={`flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase hover:text-slate-600 transition-colors ${showArchived ? 'mb-3' : ''}`}
+                                    className={`flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase hover:text-slate-600 transition-colors ${showArchived ? 'mb-3' : ''}`}
                                  >
                                     <Archive size={12} /> {showArchived ? 'Ocultar' : 'Mostrar'} Arquivados ({archivedStudents.length})
                                     <ChevronDown size={12} className={`transition-transform ${showArchived ? 'rotate-180' : ''}`} />
@@ -2113,7 +2098,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                           <div key={student.id} className="flex items-center justify-between p-2 rounded-lg opacity-70 hover:opacity-100 transition-opacity">
                                              <div>
                                                 <span className="text-xs font-bold text-slate-500 dark:text-slate-400 line-through decoration-slate-300 ml-2">{student.name}</span>
-                                                {student.disabledAt && <span className="block text-[8px] text-slate-400 ml-2">Saiu em: {new Date(student.disabledAt).toLocaleDateString('pt-BR')}</span>}
+                                                {student.disabledAt && <span className="block text-[10px] text-slate-400 ml-2">Saiu em: {new Date(student.disabledAt).toLocaleDateString('pt-BR')}</span>}
                                              </div>
                                              <button
                                                 onClick={() => handleRestoreStudent(student.id)}
@@ -2243,7 +2228,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                              />
                                              {isHomonym && (
                                                 <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-                                                   <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded border border-amber-100 dark:border-amber-900/30">
+                                                   <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded border border-amber-100 dark:border-amber-900/30">
                                                       homônimo
                                                    </span>
                                                 </div>
@@ -2360,10 +2345,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
             <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight">
                Leciona v{APP_VERSION}
             </p>
-            <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-1">
                Criado para professores pelo professor Cadu Michel
             </p>
-            <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400">
+            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
                Contato: appleciona@gmail.com
             </p>
          </div>

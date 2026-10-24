@@ -609,30 +609,30 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     <div className="space-y-3 pb-20">
 
       {/* ── Header (faixa compacta: título, total e botão) ── */}
-      <div className="bg-white dark:bg-slate-900 px-4 py-2.5 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between gap-3">
+      <div className="bg-white dark:bg-slate-900 px-4 py-3 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
             <FileCheck className="text-blue-600 w-4 h-4" /> Avaliações
           </h3>
-          <p className="text-[9px] text-slate-500 font-black uppercase tracking-tight">
+          <p className="text-[10px] text-slate-500 font-black uppercase tracking-tight">
             {filteredEvents.length} avaliação{filteredEvents.length !== 1 ? 'ões' : ''} {filterSchoolId !== 'all' || filterClassId !== 'all' || filterTermIdx !== 'all' || searchQuery ? 'encontrada' + (filteredEvents.length !== 1 ? 's' : '') : 'no total'}
           </p>
         </div>
         <button
           onClick={openNewForm}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md font-black uppercase text-[9px] tracking-tight shadow-md shadow-blue-100 hover:brightness-110 transition-all flex items-center gap-1.5 shrink-0"
+          className="bg-blue-600 text-white px-4 py-2.5 rounded-lg font-black uppercase text-[11px] tracking-tight shadow-sm hover:brightness-110 transition-all flex items-center gap-1.5 shrink-0"
         >
           <Plus size={14} /> Nova Avaliação
         </button>
       </div>
 
       {/* ── Filter Toolbar ── */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm p-2.5 space-y-2">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm p-3 space-y-2">
         {/* Filter dropdowns row */}
         <div className="flex gap-2 flex-wrap">
           <div className="flex items-center gap-1 shrink-0">
             <SlidersHorizontal size={12} className="text-slate-400" />
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight">Filtros:</span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">Filtros:</span>
           </div>
 
           {/* School filter */}
@@ -673,13 +673,13 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
           {/* Cards per row */}
           <div className="flex items-center gap-1.5">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight shrink-0">Cards/linha:</span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight shrink-0">Cards/linha:</span>
             <div className="flex gap-1 overflow-x-auto custom-scrollbar">
               {[1, 2, 3, 4, 5, 6].map(n => (
                 <button
                   key={n}
                   onClick={() => setCardsPerRow(n)}
-                  className={`w-6 h-6 flex-shrink-0 flex items-center justify-center rounded text-[9px] font-black transition-all ${n > 3 ? 'max-sm:hidden ' : ''
+                  className={`w-6 h-6 flex-shrink-0 flex items-center justify-center rounded text-[10px] font-black transition-all ${n > 3 ? 'max-sm:hidden ' : ''
                     }${cardsPerRow === n
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
@@ -696,7 +696,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
           {/* Week grouping toggle */}
           <button
             onClick={() => setGroupByWeek(v => !v)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all ${groupByWeek
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all ${groupByWeek
               ? 'bg-blue-600 text-white'
               : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200'
               }`}
@@ -713,7 +713,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
               <button
                 key={val}
                 onClick={() => setFilterStatus(val)}
-                className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-tight transition-all ${filterStatus === val
+                className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-tight transition-all ${filterStatus === val
                   ? val === 'done'
                     ? 'bg-amber-500 text-white shadow-sm'
                     : val === 'scheduled'
@@ -758,7 +758,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                 ? 'Nenhuma avaliação encontrada'
                 : 'Nenhuma avaliação agendada'}
             </p>
-            <p className="text-slate-400 text-[9px] uppercase mt-1">
+            <p className="text-slate-400 text-[10px] uppercase mt-1">
               {searchQuery || filterSchoolId !== 'all' || filterClassId !== 'all' || filterTermIdx !== 'all' || filterStatus !== 'all'
                 ? 'Tente ajustar os filtros.'
                 : 'Clique em "Nova Avaliação" para começar.'}
@@ -816,7 +816,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                       className="rounded-md flex flex-col items-center justify-center shrink-0 data-[compact=true]:px-1.5 data-[compact=true]:py-1 px-2.5 py-1.5 data-[compact=true]:min-w-[40px] min-w-[48px]"
                       style={{ backgroundColor: color }}
                     >
-                      <span className="data-[compact=true]:text-[6px] text-[8px] font-black text-white/80 uppercase tracking-widest leading-none">{dayAbbr}</span>
+                      <span className="data-[compact=true]:text-[10px] text-[10px] font-black text-white/80 uppercase tracking-widest leading-none">{dayAbbr}</span>
                       <span className="data-[compact=true]:text-[10px] text-[13px] font-black text-white leading-tight mt-0.5">{dayMonth}</span>
                     </div>
 
@@ -825,12 +825,12 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0">
                         <p className="text-[13px] font-black text-slate-700 dark:text-white leading-tight truncate max-w-full">{evtClassName} - {event.title}</p>
                         {event.kind && (
-                          <span className="text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300">
+                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded uppercase shrink-0 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300">
                             {KIND_LABELS[event.kind]}
                           </span>
                         )}
                         <span
-                          className="text-[7px] font-black px-1.5 py-0.5 rounded uppercase shrink-0"
+                          className="text-[10px] font-black px-1.5 py-0.5 rounded uppercase shrink-0"
                           style={{ backgroundColor: color + `22`, color }}
                         >
                           {event.type === `test` ? `Prova` : `Trabalho`}
@@ -846,10 +846,10 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                     {/* RIGHT: Slot label + shift name */}
                     <div className="shrink-0 text-right data-[compact=true]:hidden">
                       {shiftInfo.label && (
-                        <p className="text-[9px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-tight">{shiftInfo.label}</p>
+                        <p className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-tight">{shiftInfo.label}</p>
                       )}
                       {shiftInfo.shiftName && (
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tight mt-0.5">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-tight mt-0.5">
                           {shiftInfo.shiftName.toUpperCase().startsWith('MAT') ? 'MAT' :
                            shiftInfo.shiftName.toUpperCase().startsWith('VES') ? 'VESP' :
                            shiftInfo.shiftName.toUpperCase().startsWith('NOT') ? 'NOT' :
@@ -876,7 +876,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                             );
                             onUpdateData({ events: updatedEvents });
                          }}
-                         className={`text-[9px] font-bold uppercase tracking-tight outline-none border rounded-md px-2 py-1 cursor-pointer transition-colors max-md:appearance-none text-center min-w-[70px] ${
+                         className={`text-[10px] font-bold uppercase tracking-tight outline-none border rounded-md px-2 py-1 cursor-pointer transition-colors max-md:appearance-none text-center min-w-[70px] ${
                             event.prepared ? 'bg-emerald-500 border-emerald-600 text-white' :
                             event.scheduled ? 'bg-orange-500 border-orange-600 text-white' :
                             'bg-slate-100 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
@@ -888,7 +888,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                        </select>
                     </div>
 
-                    <span className="flex-1 min-w-0 text-[9px] font-black truncate" style={{ color }}>{school?.name}</span>
+                    <span className="flex-1 min-w-0 text-[10px] font-black truncate" style={{ color }}>{school?.name}</span>
 
                     <span title={status.label} className={`p-1 rounded-md border shrink-0 flex items-center justify-center cursor-help transition-colors ${status.color}`}>
                       {status.icon}
@@ -904,7 +904,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                 <div className="flex items-center gap-3 mb-3">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{group.label}</span>
                   <div className="flex-1 h-px bg-slate-100 dark:bg-slate-800" />
-                  <span className="text-[9px] font-black text-slate-300 uppercase">{totalInMonth} av.</span>
+                  <span className="text-[10px] font-black text-slate-300 uppercase">{totalInMonth} av.</span>
                 </div>
 
                 {groupByWeek ? (
@@ -914,9 +914,9 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                       <div key={week.weekKey}>
                         <div className="flex items-center gap-2 mb-2">
                           <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-wide">{week.label}</span>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide">{week.label}</span>
                           <div className="flex-1 h-px bg-slate-100 dark:bg-slate-700" />
-                          <span className="text-[8px] font-bold text-slate-300">{week.events.length} av.</span>
+                          <span className="text-[10px] font-bold text-slate-300">{week.events.length} av.</span>
                         </div>
                         <div className={`grid gap-2 ${cardsPerRow === 1 ? 'grid-cols-1' : cardsPerRow === 2 ? 'grid-cols-2' : cardsPerRow === 3 ? 'grid-cols-3' : cardsPerRow === 4 ? 'grid-cols-4' : cardsPerRow === 5 ? 'grid-cols-5' : 'grid-cols-6'} ${cardsPerRow >= 3 ? 'max-sm:grid-cols-2' : ''}`}>
                           {week.events.map(renderCard)}
@@ -940,9 +940,9 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       {
         isAdding && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 w-full max-w-lg shadow-2xl animate-in zoom-in-95 max-h-[95vh] flex flex-col">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 md:p-6 w-full max-w-lg shadow-2xl animate-in zoom-in-95 max-h-[90vh] flex flex-col">
               <div className="flex justify-between items-center mb-4 shrink-0 gap-2">
-                <h3 className="text-base font-black uppercase truncate">{newEvent.id ? 'Editar Avaliação' : 'Agendar Avaliação'}</h3>
+                <h3 className="text-lg font-black uppercase truncate">{newEvent.id ? 'Editar Avaliação' : 'Agendar Avaliação'}</h3>
                 <div className="flex items-center gap-2 shrink-0">
                   {newEvent.id && (
                     deletingEventId === newEvent.id ? (
@@ -966,14 +966,14 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                 <div className="space-y-3">
                   {/* Type */}
                   <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => setNewEvent({ ...newEvent, type: 'test' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'test' ? 'bg-red-50 border-red-500 text-red-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Prova</button>
-                    <button onClick={() => setNewEvent({ ...newEvent, type: 'work' })} className={`py-2.5 rounded-lg font-black uppercase text-[9px] tracking-tight border-2 transition-all ${newEvent.type === 'work' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Trabalho</button>
+                    <button onClick={() => setNewEvent({ ...newEvent, type: 'test' })} className={`py-2.5 rounded-lg font-black uppercase text-[10px] tracking-tight border-2 transition-all ${newEvent.type === 'test' ? 'bg-red-50 border-red-500 text-red-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Prova</button>
+                    <button onClick={() => setNewEvent({ ...newEvent, type: 'work' })} className={`py-2.5 rounded-lg font-black uppercase text-[10px] tracking-tight border-2 transition-all ${newEvent.type === 'work' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Trabalho</button>
                   </div>
 
                   {/* Recuperação / 2ª chamada */}
                   {newEvent.id ? (
                     formKind !== 'regular' && (
-                      <p className="text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg px-3 py-2">
+                      <p className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg px-3 py-2">
                         {KIND_LABELS[formKind]}{newEvent.parentId && ` — ligada a "${data.events.find(e => e.id === newEvent.parentId)?.title || 'avaliação apagada'}"`}
                       </p>
                     )
@@ -985,7 +985,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                             setFormKind(k); setDescTouched(false);
                             setNewEvent(prev => ({ ...prev, parentId: undefined, description: '', title: k === 'term_recovery' ? 'REC trimestral' : (k === 'regular' ? '' : prev.title) }));
                           }}
-                          className={`py-2 rounded-lg font-black uppercase text-[8px] tracking-tight border-2 transition-all ${formKind === k ? 'bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-slate-50 dark:bg-slate-800 border-transparent text-slate-400'}`}>
+                          className={`py-2 rounded-lg font-black uppercase text-[10px] tracking-tight border-2 transition-all ${formKind === k ? 'bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-slate-50 dark:bg-slate-800 border-transparent text-slate-400'}`}>
                           {label}
                         </button>
                       ))}
@@ -994,20 +994,20 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
 
                   {/* Title */}
                   <div>
-                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Assunto / Título</label>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Assunto / Título</label>
                     <input type="text" value={newEvent.title} onChange={e => setNewEvent(prev => ({ ...prev, title: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm" placeholder="Ex: Prova Mensal de História" />
                   </div>
 
                   {/* School + Class */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Escola</label>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Escola</label>
                       <select value={newEvent.schoolId} onChange={e => setNewEvent(prev => ({ ...prev, schoolId: e.target.value, classId: '', slotId: '' }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm">
                         {(data.schools || []).filter(s => !s.deleted).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Turma</label>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Turma</label>
                       <select value={newEvent.classId} onChange={e => handleClassChange(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm" disabled={!activeSchool}>
                         <option value="">Selecione...</option>
                         {(activeSchool?.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map(c => {
@@ -1021,27 +1021,27 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
 
                   {formKind === 'second_call' && !newEvent.id && (
                     <div>
-                      <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Avaliação original</label>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Avaliação original</label>
                       <select value={newEvent.parentId || ''} onChange={e => chooseSecondCallParent(e.target.value)} disabled={!newEvent.classId}
                         className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm disabled:opacity-50">
                         <option value="">{newEvent.classId ? (secondCallOptions.length ? 'Escolha a avaliação...' : 'Nenhuma avaliação dessa turma') : 'Selecione a turma'}</option>
                         {secondCallOptions.map(e => <option key={e.id} value={e.id}>{e.title} ({e.date.split('T')[0].split('-').reverse().slice(0, 2).join('/')})</option>)}
                       </select>
-                      <p className="text-[8px] text-slate-400 font-bold mt-1 ml-1">O título e o conteúdo vêm da avaliação original.</p>
+                      <p className="text-[10px] text-slate-400 font-bold mt-1 ml-1">O título e o conteúdo vêm da avaliação original.</p>
                     </div>
                   )}
 
                   {/* Date + Slot */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Data</label>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Data</label>
                       <input type="date" value={newEvent.date} onChange={e => handleDateChange(e.target.value)} className={`w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm ${isInvalidDate ? 'ring-2 ring-pink-500' : ''}`} />
-                      {dateWarning && <p className="text-[8px] text-pink-600 font-black uppercase mt-0.5 ml-1">{dateWarning}</p>}
+                      {dateWarning && <p className="text-[10px] text-pink-600 font-black uppercase mt-0.5 ml-1">{dateWarning}</p>}
                     </div>
                     <div>
-                      <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Horário (Slot)</label>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Horário (Slot)</label>
                       {secondCallOffSchedule ? (
-                        <p className="text-[9px] font-bold text-slate-500 bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2.5">Contraturno: fora das suas aulas (sem registro no diário)</p>
+                        <p className="text-[10px] font-bold text-slate-500 bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2.5">Contraturno: fora das suas aulas (sem registro no diário)</p>
                       ) : (
                       <select disabled={!newEvent.classId || isInvalidDate} value={newEvent.slotId} onChange={e => setNewEvent(prev => ({ ...prev, slotId: e.target.value }))} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white disabled:opacity-50 text-sm">
                         <option value="">{newEvent.classId ? 'Escolha o horário...' : 'Selecione a turma'}</option>
@@ -1075,12 +1075,12 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                         <>
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Data da REC</label>
+                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Data da REC</label>
                               <input type="date" value={recDate} onChange={e => { setRecDate(e.target.value); setRecSlotId(''); }}
                                 className={`w-full bg-white dark:bg-slate-800 border-none rounded-lg px-3 py-2 font-bold dark:text-white text-sm ${recCheck?.blocked ? 'ring-2 ring-pink-500' : ''}`} />
                             </div>
                             <div>
-                              <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Aula da REC</label>
+                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Aula da REC</label>
                               <select value={recSlotId} onChange={e => setRecSlotId(e.target.value)} disabled={!recCheck?.lessons.length}
                                 className="w-full bg-white dark:bg-slate-800 border-none rounded-lg px-3 py-2 font-bold dark:text-white text-sm disabled:opacity-50">
                                 <option value="">{recCheck?.lessons.length ? 'Escolha a aula...' : 'Sem aula nesse dia'}</option>
@@ -1089,7 +1089,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                             </div>
                           </div>
                           {recCheck && recCheck.warnings.length > 0 && (
-                            <ul className="text-[9px] font-bold text-amber-700 dark:text-amber-300 space-y-0.5 ml-1">
+                            <ul className="text-[10px] font-bold text-amber-700 dark:text-amber-300 space-y-0.5 ml-1">
                               {recCheck.warnings.map(w => <li key={w}>⚠️ {w}</li>)}
                             </ul>
                           )}
@@ -1097,12 +1097,12 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                             const next = nextLessonDate(data, activeSchool, newEvent.classId, recDate);
                             return next && next !== recDate ? (
                               <button type="button" onClick={() => { setRecDate(next); setRecSlotId(''); }}
-                                className="text-[9px] font-black uppercase text-indigo-600 underline ml-1">
+                                className="text-[10px] font-black uppercase text-indigo-600 underline ml-1">
                                 Usar a próxima aula da turma: {next.split('-').reverse().join('/')}
                               </button>
                             ) : null;
                           })()}
-                          {!recSlotId && <p className="text-[8px] font-bold text-slate-400 ml-1">Sem aula escolhida, a REC não é criada.</p>}
+                          {!recSlotId && <p className="text-[10px] font-bold text-slate-400 ml-1">Sem aula escolhida, a REC não é criada.</p>}
                         </>
                       )}
                     </div>
@@ -1110,7 +1110,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
 
                   {/* Description */}
                   <div>
-                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Descrição / Observações</label>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Descrição / Observações</label>
                     <textarea value={newEvent.description} onChange={e => { setDescTouched(true); setNewEvent(prev => ({ ...prev, description: e.target.value })); }} rows={2} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-2.5 font-bold dark:text-white text-sm resize-none" placeholder="Capítulos, observações..." />
                   </div>
                 </div>
@@ -1132,7 +1132,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                         });
                       }
                     }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all ${isCopyOpen
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all ${isCopyOpen
                       ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600'
                       : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-blue-500 hover:bg-blue-50'
                       }`}
@@ -1146,13 +1146,13 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                       {copySuccess && (
                         <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-3 py-2 rounded-lg">
                           <CheckCircle2 size={14} className="shrink-0 animate-in zoom-in-50" />
-                          <span className="text-[9px] font-black uppercase">Cópia criada com sucesso!</span>
+                          <span className="text-[10px] font-black uppercase">Cópia criada com sucesso!</span>
                         </div>
                       )}
 
                       {(data.schools || []).filter(s => !s.deleted).length > 1 && (
                         <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Escola de Destino</label>
+                          <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Escola de Destino</label>
                           <select
                             value={copyData.targetSchoolId}
                             onChange={e => setCopyData(prev => ({ ...prev, targetSchoolId: e.target.value, targetClassId: '', targetSlotId: '' }))}
@@ -1164,7 +1164,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                       )}
 
                       <div>
-                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual turma?</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual turma?</label>
                         <select
                           value={copyData.targetClassId}
                           onChange={e => setCopyData(prev => ({ ...prev, targetClassId: e.target.value, targetSlotId: '' }))}
@@ -1182,7 +1182,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                       </div>
 
                       <div>
-                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual dia?</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual dia?</label>
                         <input
                           type="date"
                           value={copyData.targetDate}
@@ -1192,7 +1192,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                       </div>
 
                       <div>
-                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-1">Horário (Slot)</label>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Horário (Slot)</label>
                         <select
                           value={copyData.targetSlotId}
                           onChange={e => setCopyData(prev => ({ ...prev, targetSlotId: e.target.value }))}
@@ -1217,7 +1217,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                       <button
                         onClick={handleCopyAssessment}
                         disabled={!copyData.targetSlotId || !newEvent.title}
-                        className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-black uppercase text-[9px] tracking-tight shadow-lg shadow-blue-100 hover:brightness-110 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
+                        className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-black uppercase text-[10px] tracking-tight shadow-lg shadow-blue-100 hover:brightness-110 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
                       >
                         <Copy size={12} /> Salvar Cópia
                       </button>
@@ -1235,16 +1235,16 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   </div>
                 )}
                 <div className="flex gap-3">
-                  <button onClick={() => { setIsAdding(false); setIsCopyOpen(false); }} className="flex-1 py-3 font-black text-slate-400 uppercase text-[9px]">Cancelar</button>
+                  <button onClick={() => { setIsAdding(false); setIsCopyOpen(false); }} className="flex-1 py-3 rounded-lg border border-slate-200 dark:border-slate-700 font-black text-slate-500 dark:text-slate-300 uppercase text-[11px] hover:bg-slate-50 dark:hover:bg-slate-800">Cancelar</button>
                   <button
                     onClick={handleSaveEvent}
                     disabled={!canSave}
-                    className={`flex-1 py-3 rounded-lg font-black uppercase text-[9px] tracking-tight transition-all duration-300 flex items-center justify-center gap-2
+                    className={`flex-1 py-3 rounded-lg font-black uppercase text-[11px] tracking-tight transition-all duration-300 flex items-center justify-center gap-2
                   ${saveSuccess
                         ? 'bg-green-500 text-white shadow-lg shadow-green-200 scale-105'
                         : (!canSave)
                           ? 'bg-slate-100 text-slate-300'
-                          : 'bg-blue-600 text-white shadow-xl shadow-blue-100 hover:brightness-110'
+                          : 'bg-blue-600 text-white shadow-sm hover:brightness-110'
                       }`}
                   >
                     {saveSuccess ? (<><CheckCircle2 size={14} className="animate-in zoom-in-50 duration-300" /> Salvo!</>) : 'Salvar Avaliação'}
@@ -1259,8 +1259,8 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
       {/* ── Escolha ao salvar: aula nova com planejamento e/ou REC ligada ── */}
       {saveDecision && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 w-full max-w-md shadow-2xl animate-in zoom-in-95 max-h-[95vh] overflow-y-auto space-y-4">
-            <h3 className="text-sm font-black uppercase">Ajustar o Diário</h3>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 md:p-6 w-full max-w-lg shadow-2xl animate-in zoom-in-95 max-h-[95vh] overflow-y-auto space-y-4">
+            <h3 className="text-lg font-black uppercase">Ajustar o Diário</h3>
 
             {saveDecision.conflictSubject && (
               <div className="space-y-2">
@@ -1305,11 +1305,11 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
             )}
 
             <div className="flex gap-3">
-              <button onClick={() => setSaveDecision(null)} className="flex-1 py-3 font-black text-slate-400 uppercase text-[9px]">Voltar</button>
+              <button onClick={() => setSaveDecision(null)} className="flex-1 py-3 rounded-lg border border-slate-200 dark:border-slate-700 font-black text-slate-500 dark:text-slate-300 uppercase text-[11px] hover:bg-slate-50 dark:hover:bg-slate-800">Voltar</button>
               <button
                 onClick={() => commitSave(saveDecision.event, saveDecision.original, saveDecision.conflictSubject ? saveDecision.choice : undefined,
                   saveDecision.moveLinked ? saveDecision.linked : [])}
-                className="flex-1 py-3 rounded-lg font-black uppercase text-[9px] tracking-tight bg-blue-600 text-white shadow-xl shadow-blue-100 hover:brightness-110"
+                className="flex-1 py-3 rounded-lg font-black uppercase text-[11px] tracking-tight bg-blue-600 text-white shadow-sm hover:brightness-110"
               >
                 Salvar
               </button>

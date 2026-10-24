@@ -95,38 +95,45 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex-1 w-full relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+    <div className="space-y-3 pb-20">
+      {/* Cabeçalho e filtros no mesmo molde de Avaliações e Agenda */}
+      <div className="bg-white dark:bg-slate-900 px-4 py-3 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between gap-3">
+        <h3 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
+          <Lightbulb className="text-blue-600 w-4 h-4" /> Lembretes
+        </h3>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="flex items-center justify-center gap-1.5 bg-blue-600 text-white px-4 py-2.5 rounded-lg font-black uppercase text-[11px] tracking-tight hover:brightness-110 transition shadow-sm shrink-0"
+        >
+          <Plus size={14} /> Criar Nota
+        </button>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm p-3 flex flex-col md:flex-row gap-2">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
           <input
             type="text"
             placeholder="Pesquisar lembretes..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 shadow-sm font-medium"
+            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 dark:text-white border-none rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold placeholder:text-slate-400 placeholder:font-normal"
           />
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
+        <div className="flex gap-2">
           <select
             value={categoryFilter}
             onChange={e => setCategoryFilter(e.target.value)}
-            className="flex-1 md:flex-none bg-white border border-slate-100 rounded-xl px-4 py-3 text-xs font-black uppercase tracking-tight outline-none cursor-pointer shadow-sm"
+            className="flex-1 md:flex-none bg-slate-50 dark:bg-slate-800 dark:text-white border-none rounded-lg px-3 py-2 text-[10px] font-bold outline-none cursor-pointer"
           >
             <option value="all">Todas Categorias</option>
             {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
-          <SortOrderButton order={sortOrder} onToggle={toggleSortOrder} className="!px-4 !rounded-xl !text-[10px] !bg-white border border-slate-100 shadow-sm" />
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-tight hover:bg-blue-700 transition shadow-lg shadow-blue-100"
-          >
-            <Plus size={18} /> Criar Nota
-          </button>
+          <SortOrderButton order={sortOrder} onToggle={toggleSortOrder} className="!px-3 !rounded-lg !text-[10px]" />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredReminders.map(r => {
           const cat = CATEGORIES.find(c => c.id === r.category) || CATEGORIES[3];
           const hasAlarm = !!r.alarmTime;
@@ -137,7 +144,7 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
           const iconStyle = iconColor ? { color: iconColor, backgroundColor: iconColor + '15' } : {};
 
           return (
-            <div key={r.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 flex flex-col relative group hover:shadow-xl transition-all duration-300 animate-in fade-in" style={iconColor ? { borderLeft: `3px solid ${iconColor}` } : {}}>
+            <div key={r.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm p-4 md:p-5 flex flex-col relative group hover:shadow-xl transition-all duration-300 animate-in fade-in" style={iconColor ? { borderLeft: `3px solid ${iconColor}` } : {}}>
               <div className="flex justify-between items-start mb-4">
                 <div className={`p-2 rounded-lg ${!iconColor ? `${cat.bg} ${cat.color}` : ''}`} style={iconStyle}>
                   <cat.icon size={20} />
@@ -158,7 +165,7 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
                 </div>
               </div>
               <div className="flex-1">
-                <h4 className="font-black text-slate-800 uppercase text-sm mb-1 line-clamp-1">{r.title}</h4>
+                <h4 className="font-black text-slate-800 dark:text-white uppercase text-sm mb-1 line-clamp-1">{r.title}</h4>
                 <p className="text-[10px] text-slate-500 font-black uppercase tracking-tight mb-2">
                   {/* Display Date + Full Weekday Name using getSafeDate */}
                   {getSafeDate(r.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
@@ -168,26 +175,26 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
                   {cat.label}
                 </p>
                 {hasAlarm && (
-                  <p className="text-[9px] font-black text-amber-600 uppercase mb-3 flex items-center gap-1">
+                  <p className="text-[10px] font-black text-amber-600 uppercase mb-3 flex items-center gap-1">
                     <Clock size={10} /> Alerta: {new Date(r.alarmTime!).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
                   </p>
                 )}
-                <p className="text-xs text-slate-600 leading-relaxed line-clamp-4 font-medium mb-4">{r.content}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-4 font-medium mb-4">{r.content}</p>
               </div>
 
-              <div className="pt-4 border-t border-slate-50 flex items-center gap-2">
+              <div className="pt-4 border-t border-slate-50 dark:border-slate-800 flex items-center gap-2">
                 {school && (
-                  <span className="flex items-center gap-1 text-[9px] font-black uppercase bg-slate-50 px-2 py-1 rounded-lg text-slate-400" style={iconColor ? { color: iconColor, backgroundColor: iconColor + '10' } : {}}>
+                  <span className="flex items-center gap-1 text-[10px] font-black uppercase bg-slate-50 px-2 py-1 rounded-lg text-slate-400" style={iconColor ? { color: iconColor, backgroundColor: iconColor + '10' } : {}}>
                     <SchoolIcon size={10} /> {school.name.slice(0, 10)}...
                   </span>
                 )}
                 {r.studentId && (
-                  <span className="flex items-center gap-1 text-[9px] font-black uppercase bg-indigo-50 px-2 py-1 rounded-lg text-indigo-400">
+                  <span className="flex items-center gap-1 text-[10px] font-black uppercase bg-indigo-50 px-2 py-1 rounded-lg text-indigo-400">
                     <Users size={10} /> Particular
                   </span>
                 )}
                 {!r.schoolId && !r.studentId && (
-                  <span className="text-[9px] text-slate-300 font-bold uppercase">Geral</span>
+                  <span className="text-[10px] text-slate-300 font-bold uppercase">Geral</span>
                 )}
               </div>
             </div>
@@ -195,7 +202,7 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
         })}
 
         {filteredReminders.length === 0 && (
-          <div className="col-span-full py-20 bg-white rounded-2xl border-2 border-dashed border-slate-100 flex flex-col items-center justify-center gap-4 text-center">
+          <div className="col-span-full py-16 bg-white dark:bg-slate-900 rounded-xl border-2 border-dashed border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center gap-4 text-center">
             <Lightbulb size={48} className="text-slate-300" />
             <div>
               <p className="text-slate-500 font-black uppercase text-xs tracking-tight">Nenhum lembrete encontrado</p>
@@ -207,13 +214,13 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-8 w-full max-w-xl shadow-2xl animate-in zoom-in-95 overflow-hidden">
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Novo Lembrete</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-300 hover:text-slate-600"><X /></button>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 md:p-6 w-full max-w-lg shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center gap-2 mb-5">
+              <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight truncate">Novo Lembrete</h3>
+              <button onClick={() => setIsModalOpen(false)} className="shrink-0 text-slate-400 hover:text-slate-600 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 p-1.5 rounded-full transition-colors"><X size={16} /></button>
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1.5 ml-1">Assunto / Título</label>
@@ -221,7 +228,7 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
                     type="text"
                     value={form.title}
                     onChange={e => setForm({ ...form, title: e.target.value })}
-                    className="w-full bg-slate-50 border-none rounded-xl px-5 py-3 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 dark:text-white border-none rounded-lg px-3 py-2.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Título breve da nota..."
                   />
                 </div>
@@ -232,7 +239,7 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
                   <select
                     value={form.schoolId}
                     onChange={e => setForm({ ...form, schoolId: e.target.value })}
-                    className="w-full bg-slate-50 border-none rounded-xl px-5 py-3 font-bold text-slate-700 cursor-pointer outline-none"
+                    className="w-full bg-slate-50 dark:bg-slate-800 dark:text-white border-none rounded-lg px-3 py-2.5 text-sm font-bold text-slate-700 cursor-pointer outline-none"
                   >
                     <option value="">Geral (Sem vínculo)</option>
                     {data.schools.filter(s => !s.deleted).sort((a, b) => a.name.localeCompare(b.name)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -244,7 +251,7 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
                   <select
                     value={form.category}
                     onChange={e => setForm({ ...form, category: e.target.value as any })}
-                    className="w-full bg-slate-50 border-none rounded-2xl px-5 py-3 font-bold text-slate-700 cursor-pointer outline-none"
+                    className="w-full bg-slate-50 dark:bg-slate-800 dark:text-white border-none rounded-lg px-3 py-2.5 text-sm font-bold text-slate-700 cursor-pointer outline-none"
                   >
                     {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                   </select>
@@ -255,12 +262,12 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
                     type="date"
                     value={form.date}
                     onChange={e => setForm({ ...form, date: e.target.value })}
-                    className="w-full bg-slate-50 border-none rounded-xl px-5 py-3 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full bg-slate-50 dark:bg-slate-800 dark:text-white border-none rounded-lg px-3 py-2.5 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
-              <div className="bg-amber-50 p-6 rounded-xl border border-amber-100">
+              <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg">
                 <label className="block text-[10px] font-black text-amber-600 uppercase tracking-tight mb-3 flex items-center gap-2">
                   <Bell size={14} /> Configurar Alerta (Alarme)
                 </label>
@@ -269,7 +276,7 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
                     type="time"
                     value={form.alarmTime}
                     onChange={e => setForm({ ...form, alarmTime: e.target.value })}
-                    className="flex-1 bg-white border-none rounded-lg px-4 py-2 font-bold text-amber-700 outline-none"
+                    className="flex-1 bg-white dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 text-sm font-bold text-amber-700 outline-none"
                   />
                   {form.alarmTime && (
                     <button onClick={() => setForm({ ...form, alarmTime: '' })} className="text-amber-400 hover:text-amber-600">
@@ -277,7 +284,7 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
                     </button>
                   )}
                 </div>
-                <p className="text-[9px] text-amber-500 mt-2 font-bold uppercase">O Alarme soará na data selecionada acima.</p>
+                <p className="text-[10px] text-amber-500 mt-2 font-bold uppercase">O Alarme soará na data selecionada acima.</p>
               </div>
 
               <div>
@@ -286,15 +293,15 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
                   rows={4}
                   value={form.content}
                   onChange={e => setForm({ ...form, content: e.target.value })}
-                  className="w-full bg-slate-50 border-none rounded-xl px-6 py-4 font-medium text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-50 dark:bg-slate-800 dark:text-white border-none rounded-lg px-3 py-2.5 font-medium text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Descreva aqui os detalhes da ocorrência, observação ou tema futuro..."
                 />
               </div>
             </div>
 
-            <div className="mt-8 flex gap-4">
-              <button onClick={() => setIsModalOpen(false)} className="flex-1 py-4 font-black text-slate-400 uppercase text-[10px] tracking-tight">Descartar</button>
-              <button onClick={handleSave} className="flex-1 py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-tight shadow-xl shadow-blue-100 hover:bg-blue-700 transition">Salvar Lembrete</button>
+            <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex gap-3">
+              <button onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-lg border border-slate-200 dark:border-slate-700 font-black text-slate-500 dark:text-slate-300 uppercase text-[11px] tracking-tight hover:bg-slate-50 dark:hover:bg-slate-800">Descartar</button>
+              <button onClick={handleSave} className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-black uppercase text-[11px] tracking-tight shadow-sm hover:brightness-110 transition">Salvar Lembrete</button>
             </div>
           </div>
         </div>

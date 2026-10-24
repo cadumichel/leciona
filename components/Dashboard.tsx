@@ -531,7 +531,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         <div className={compact ? 'flex justify-between items-center mb-3' : 'flex justify-between items-center mb-2 md:mb-6'}>
           <div className="flex items-center gap-1.5">
             <CalendarIcon className="text-primary" size={14} />
-            <h4 className={compact ? 'text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight' : 'text-[9px] md:text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight'}>{dashMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h4>
+            <h4 className={compact ? 'text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight' : 'text-[10px] md:text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight'}>{dashMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h4>
           </div>
           <div className="flex gap-1">
             <button onClick={() => setDashMonth(new Date(year, month - 1))} className="p-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-all border border-slate-100 dark:border-slate-800"><ChevronLeft size={12} /></button>
@@ -540,7 +540,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '2px' }}>
           {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => (
-            <div key={`${d}-${i}`} className={compact ? 'text-center text-[9px] font-black text-slate-400 py-0.5 uppercase tracking-tight' : 'text-center text-[7px] font-black text-slate-400 py-0.5 uppercase tracking-tight'}>{d}</div>
+            <div key={`${d}-${i}`} className={compact ? 'text-center text-[10px] font-black text-slate-400 py-0.5 uppercase tracking-tight' : 'text-center text-[10px] font-black text-slate-400 py-0.5 uppercase tracking-tight'}>{d}</div>
           ))}
           {days.map((d, i) => {
             if (!d) return <div key={i} />;
@@ -557,7 +557,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
             return (
               <div key={i} title={dayTitle} className={`${compact ? 'h-9 rounded-md' : 'aspect-square rounded'} flex flex-col items-center justify-center relative border transition-all ${cellBg}`}>
-                <span className={`${compact ? 'text-[11px]' : 'text-[8px]'} font-black leading-none ${isToday ? 'text-primary' : (d.holidayName || d.recessInfo) ? 'text-pink-600' : 'text-slate-500'}`}>{d.day}</span>
+                <span className={`${compact ? 'text-[11px]' : 'text-[10px]'} font-black leading-none ${isToday ? 'text-primary' : (d.holidayName || d.recessInfo) ? 'text-pink-600' : 'text-slate-500'}`}>{d.day}</span>
                 <div className={compact ? 'flex gap-0.5 mt-1' : 'flex gap-px mt-0.5'}>
                   {d.events.slice(0, 2).map((ev, idx) => {
                     const school = data.schools.find(s => s.id === ev.schoolId);
@@ -731,7 +731,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
             <div onClick={onNavigateToReminders} className="flex items-center justify-between mb-3 md:mb-4 cursor-pointer group">
               <div className="flex items-center gap-2">
                 <div className="p-1 md:p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm text-amber-500"><Bell size={12} className="md:w-[14px] md:h-[14px]" /></div>
-                <h4 className="text-[9px] md:text-[10px] font-black uppercase text-amber-600 tracking-tight">Notas & Lembretes</h4>
+                <h4 className="text-[10px] font-black uppercase text-amber-600 tracking-tight">Notas & Lembretes</h4>
               </div>
               <ArrowRight size={12} className="text-amber-400 group-hover:translate-x-1 transition-transform md:w-[14px] md:h-[14px]" />
             </div>
@@ -744,21 +744,21 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
 
                   return (
                     <div key={reminder.id} onClick={onNavigateToReminders} className="bg-white dark:bg-slate-900 p-2.5 md:p-3 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 cursor-pointer hover:translate-x-1 transition-transform" style={{ borderLeft: `3px solid ${color}` }}>
-                      <p className="text-[9px] md:text-[10px] font-black text-slate-700 dark:text-slate-200 truncate">{reminder.title}</p>
+                      <p className="text-[10px] font-black text-slate-700 dark:text-slate-200 truncate">{reminder.title}</p>
                       <div className="flex justify-between items-center mt-0.5">
-                        <p className="text-[8px] text-slate-500 font-bold truncate max-w-[60%]">{reminder.content}</p>
-                        {school && <span className="text-[7px] font-black uppercase truncate max-w-[35%]" style={{ color: color }}>{school.name}</span>}
+                        <p className="text-[10px] text-slate-500 font-bold truncate max-w-[60%]">{reminder.content}</p>
+                        {school && <span className="text-[10px] font-black uppercase truncate max-w-[35%]" style={{ color: color }}>{school.name}</span>}
                       </div>
                     </div>
                   );
                 })}
                 {data.reminders.length > 3 && (
-                  <p className="text-[8px] md:text-[9px] font-black text-amber-500 text-center uppercase tracking-tighter mt-2">+ {data.reminders.length - 3} outros</p>
+                  <p className="text-[10px] font-black text-amber-500 text-center uppercase tracking-tighter mt-2">+ {data.reminders.length - 3} outros</p>
                 )}
               </div>
             ) : (
               <div className="text-center py-4">
-                <p className="text-[8px] md:text-[9px] text-amber-700/60 font-bold uppercase">Nenhum lembrete ativo</p>
+                <p className="text-[10px] text-amber-700/60 font-bold uppercase">Nenhum lembrete ativo</p>
               </div>
             )}
           </div>
@@ -769,10 +769,10 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
           Leciona v{APP_VERSION}
         </p>
-        <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-1">
           Criado para professores pelo professor Cadu Michel
         </p>
-        <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400">
+        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
           Contato: appleciona@gmail.com
         </p>
       </div>
@@ -871,7 +871,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         className={`relative ${extraClass} text-left px-1.5 py-1.5 rounded-lg border transition-all ${clickable ? 'hover:-translate-y-0.5 hover:shadow-sm cursor-pointer' : 'cursor-default'} ${TIMELINE_STYLES[status]}`}
         style={isNow ? { backgroundColor: 'var(--primary-color)', borderColor: 'var(--primary-color)' } : undefined}
       >
-        <span className="flex items-baseline gap-0.5 text-[9px] leading-none mb-1 whitespace-nowrap overflow-hidden">
+        <span className="flex items-baseline gap-0.5 text-[10px] leading-none mb-1 whitespace-nowrap overflow-hidden">
           {numberLabel && <span className="font-black">{numberLabel}</span>}
           <span className={`font-bold tabular-nums tracking-tight ${isNow ? 'opacity-90' : 'opacity-60'}`}>{numberLabel ? '- ' : ''}{lesson.startTime}h</span>
         </span>
@@ -879,7 +879,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         {(isNow || showCheck || status === 'pending' || lesson.assessment) && (
           <span className="absolute -top-1.5 -right-1 flex items-center gap-0.5 pointer-events-none">
             {isNow && (
-              <span className="h-3.5 px-1 rounded-full bg-white text-[7px] font-black uppercase tracking-wider flex items-center shadow-sm ring-1 ring-slate-200 dark:ring-slate-700" style={{ color: 'var(--primary-color)' }}>agora</span>
+              <span className="h-3.5 px-1 rounded-full bg-white text-[10px] font-black uppercase tracking-wider flex items-center shadow-sm ring-1 ring-slate-200 dark:ring-slate-700" style={{ color: 'var(--primary-color)' }}>agora</span>
             )}
             {lesson.assessment && (
               <span className="w-3.5 h-3.5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-slate-900"><FileCheck size={8} strokeWidth={3} /></span>
@@ -888,7 +888,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
               <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-slate-900"><Check size={9} strokeWidth={4} /></span>
             )}
             {status === 'pending' && (
-              <span className="w-3.5 h-3.5 rounded-full bg-amber-400 text-white flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-slate-900 text-[9px] font-black leading-none">!</span>
+              <span className="w-3.5 h-3.5 rounded-full bg-amber-400 text-white flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-slate-900 text-[10px] font-black leading-none">!</span>
             )}
           </span>
         )}
@@ -913,7 +913,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
           {todayTimeline.map((group, gIdx) => (
             <div key={`${group.key}-${gIdx}`} className="flex flex-col gap-1.5" style={{ flex: `${group.lessons.length} ${group.lessons.length} 0px`, minWidth: group.lessons.length * 64 + (group.lessons.length - 1) * 6 }}>
-              <span className="text-[9px] font-black uppercase tracking-tight truncate flex items-center gap-1.5" style={{ color: group.color }}>
+              <span className="text-[10px] font-black uppercase tracking-tight truncate flex items-center gap-1.5" style={{ color: group.color }}>
                 <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
                 <span className="truncate">{group.schoolName}{group.shiftName ? ` · ${group.shiftName}` : ''}</span>
               </span>
@@ -935,12 +935,12 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     return (
       <button key={event.id} type="button" onClick={onClick} className={`w-full flex items-center gap-3 py-2 text-left group ${faded ? 'opacity-80' : ''}`}>
         <div className="w-11 shrink-0 rounded-md py-1 text-center" style={{ backgroundColor: color + '15', color }}>
-          <span className="block text-[7px] font-black uppercase leading-none">{getShortWeekDay(event.date)}</span>
+          <span className="block text-[10px] font-black uppercase leading-none">{getShortWeekDay(event.date)}</span>
           <span className="block text-[11px] font-black leading-none mt-0.5">{getDayMonth(event.date)}</span>
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-black text-slate-800 dark:text-white uppercase truncate group-hover:underline">{event.title}</p>
-          <p className="text-[8px] font-bold text-slate-500 uppercase tracking-tight truncate mt-0.5">
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight truncate mt-0.5">
             {subtitle} · <span style={{ color }}>{school?.name}</span>
           </p>
         </div>
@@ -961,12 +961,12 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     <div className="bg-white dark:bg-slate-900 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
       <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-tight mb-2 flex items-center gap-2"><FileCheck className="text-primary" size={14} /> Avaliações (15d)</h3>
       {shownThisWeek.length + shownNextWeek.length === 0 ? (
-        <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 py-2">Sem avaliações próximas</p>
+        <p className="text-[10px] font-black uppercase tracking-tight text-slate-400 py-2">Sem avaliações próximas</p>
       ) : (
         <div>
           {shownThisWeek.length > 0 && (
             <>
-              <h4 className="text-[8px] font-black uppercase text-slate-400 tracking-widest mt-1">Esta semana</h4>
+              <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mt-1">Esta semana</h4>
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {shownThisWeek.map(e => renderCompactRow(e, assessmentSubtitle(e), onNavigateToAssessments))}
               </div>
@@ -974,14 +974,14 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
           )}
           {shownNextWeek.length > 0 && (
             <>
-              <h4 className="text-[8px] font-black uppercase text-slate-400 tracking-widest mt-2">Próxima semana</h4>
+              <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mt-2">Próxima semana</h4>
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {shownNextWeek.map(e => renderCompactRow(e, assessmentSubtitle(e), onNavigateToAssessments, true))}
               </div>
             </>
           )}
           {hiddenAssessments > 0 && (
-            <button onClick={onNavigateToAssessments} className="mt-2 text-[9px] font-black uppercase tracking-tight text-primary hover:underline">+ {hiddenAssessments} {hiddenAssessments === 1 ? 'outra' : 'outras'}</button>
+            <button onClick={onNavigateToAssessments} className="mt-2 text-[10px] font-black uppercase tracking-tight text-primary hover:underline">+ {hiddenAssessments} {hiddenAssessments === 1 ? 'outra' : 'outras'}</button>
           )}
         </div>
       )}
@@ -992,14 +992,14 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     <div className="bg-white dark:bg-slate-900 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
       <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-tight mb-2 flex items-center gap-2"><Calendar className="text-orange-500" size={14} /> Eventos (15d)</h3>
       {upcomingEvents.length === 0 ? (
-        <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 py-2">Sem eventos próximos</p>
+        <p className="text-[10px] font-black uppercase tracking-tight text-slate-400 py-2">Sem eventos próximos</p>
       ) : (
         <div>
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {upcomingEvents.slice(0, COMPACT_LIMIT).map(e => renderCompactRow(e, EVENT_TYPE_LABELS[e.type] || e.type, onNavigateToAgenda))}
           </div>
           {hiddenEvents > 0 && (
-            <button onClick={onNavigateToAgenda} className="mt-2 text-[9px] font-black uppercase tracking-tight text-primary hover:underline">+ {hiddenEvents} {hiddenEvents === 1 ? 'outro' : 'outros'}</button>
+            <button onClick={onNavigateToAgenda} className="mt-2 text-[10px] font-black uppercase tracking-tight text-primary hover:underline">+ {hiddenEvents} {hiddenEvents === 1 ? 'outro' : 'outros'}</button>
           )}
         </div>
       )}
@@ -1012,7 +1012,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
     <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm">
       <div className="flex items-center justify-between mb-4">
         <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-1.5"><CalendarDays className="text-primary" size={14} /> Grade Semanal</h4>
-        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">{weeklyTotal} aulas na semana</span>
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{weeklyTotal} aulas na semana</span>
       </div>
       <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${weeklyGrid.length}, minmax(0, 1fr))` }}>
         {weeklyGrid.map(d => {
@@ -1021,15 +1021,15 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
             <div key={d.day} className={`rounded-xl p-3 min-w-0 ${isToday ? 'ring-1 ring-primary' : 'bg-slate-50 dark:bg-slate-800/40'}`} style={isToday ? { backgroundColor: 'var(--primary-light)' } : undefined}>
               <div className="flex items-baseline justify-between mb-2 pb-1.5 border-b border-slate-200 dark:border-slate-700">
                 <span className={`text-[10px] font-black uppercase tracking-widest ${isToday ? 'text-primary' : 'text-slate-500'}`}>{d.label}{isToday ? ' · hoje' : ''}</span>
-                {d.count > 0 && <span className="text-[9px] font-bold text-slate-400">{d.count} {d.count === 1 ? 'aula' : 'aulas'}</span>}
+                {d.count > 0 && <span className="text-[10px] font-bold text-slate-400">{d.count} {d.count === 1 ? 'aula' : 'aulas'}</span>}
               </div>
               {d.groups.length === 0 ? (
-                <p className="text-[9px] font-bold text-slate-300 dark:text-slate-600 italic text-center py-2">—</p>
+                <p className="text-[10px] font-bold text-slate-300 dark:text-slate-600 italic text-center py-2">—</p>
               ) : (
                 <div className="space-y-2.5">
                   {d.groups.map((g, gIdx) => (
                     <div key={`${g.key}-${gIdx}`} className="min-w-0">
-                      <p className="text-[8px] font-black uppercase tracking-wider truncate mb-1" style={{ color: g.color }}>{g.period} · {g.schoolName}</p>
+                      <p className="text-[10px] font-black uppercase tracking-wider truncate mb-1" style={{ color: g.color }}>{g.period} · {g.schoolName}</p>
                       <ul className="space-y-0.5 border-l-2 pl-2" style={{ borderColor: g.color + '60' }}>
                         {g.lessons.map(l => (
                           <li key={l.key} className="flex items-baseline gap-2 min-w-0 text-[10px]" title={`${l.time} ${l.className}`}>
@@ -1063,7 +1063,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         {hasDesktopAlerts ? renderAlerts('flex flex-wrap justify-end items-center gap-2 min-w-0 max-w-[65%]') : (
           <div className="flex items-center gap-3 bg-white dark:bg-slate-900 px-4 py-2 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm shrink-0">
             <Sparkles className="text-primary animate-pulse w-4 h-4" />
-            <span className="text-[9px] font-black uppercase tracking-tight text-slate-500">Inspirado para hoje</span>
+            <span className="text-[10px] font-black uppercase tracking-tight text-slate-500">Inspirado para hoje</span>
           </div>
         )}
       </div>
@@ -1123,22 +1123,22 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
   const todayStripMobile = (
     <div className="relative bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
       <div className="flex items-center justify-between gap-2 mb-2">
-        <h3 className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2 shrink-0"><CalendarDays className="text-primary w-3 h-3 md:w-[14px] md:h-[14px]" /> Aulas de hoje</h3>
+        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-tight flex items-center gap-2 shrink-0"><CalendarDays className="text-primary w-3 h-3 md:w-[14px] md:h-[14px]" /> Aulas de hoje</h3>
         {timelineLessons.length > 0 && (
-          <span className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase tracking-tight text-right">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight text-right">
             {timelineDone}/{timelineLessons.length} registradas
             {timelinePending > 0 && <span className="text-amber-600"> · {timelinePending} {timelinePending === 1 ? 'pendente' : 'pendentes'}</span>}
           </span>
         )}
       </div>
       {todayTimeline.length === 0 ? (
-        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">{todayHolidayName ? `Feriado: ${todayHolidayName}` : 'Sem aulas na grade hoje'}</p>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{todayHolidayName ? `Feriado: ${todayHolidayName}` : 'Sem aulas na grade hoje'}</p>
       ) : (
         <>
           <div ref={mobileStripRef} onScroll={updateStripEdges} className="relative flex gap-4 overflow-x-auto -mx-4 px-4 md:-mx-6 md:px-6 pt-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
             {todayTimeline.map((group, gIdx) => (
               <div key={`${group.key}-${gIdx}`} className="flex flex-col gap-1.5 shrink-0">
-                <span className="text-[8px] font-black uppercase tracking-tight flex items-center gap-1.5 whitespace-nowrap" style={{ color: group.color }}>
+                <span className="text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 whitespace-nowrap" style={{ color: group.color }}>
                   <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
                   {group.schoolName}{group.shiftName ? ` · ${group.shiftName}` : ''}
                 </span>
@@ -1161,8 +1161,8 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
   const weeklyGridMobile = weeklyTotal > 0 && selectedWeekDay && (
     <div className="bg-white dark:bg-slate-900 p-4 md:p-6 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-[9px] md:text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-1.5"><CalendarDays className="text-primary" size={14} /> Grade Semanal</h4>
-        <span className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase tracking-tight">{weeklyTotal} aulas na semana</span>
+        <h4 className="text-[10px] md:text-xs font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-1.5"><CalendarDays className="text-primary" size={14} /> Grade Semanal</h4>
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{weeklyTotal} aulas na semana</span>
       </div>
       <div className="grid gap-1.5 mb-3" style={{ gridTemplateColumns: `repeat(${weeklyGrid.length}, minmax(0, 1fr))` }}>
         {weeklyGrid.map(d => {
@@ -1177,18 +1177,18 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
               style={selected ? { backgroundColor: 'var(--primary-color)' } : undefined}
             >
               <span className="block text-[10px] font-black leading-none">{d.label}</span>
-              <span className="block text-[8px] font-bold leading-none mt-1 opacity-80">{isToday ? 'hoje' : `${d.count}`}</span>
+              <span className="block text-[10px] font-bold leading-none mt-1 opacity-80">{isToday ? 'hoje' : `${d.count}`}</span>
             </button>
           );
         })}
       </div>
       {selectedWeekDay.groups.length === 0 ? (
-        <p className="text-[9px] font-bold text-slate-400 uppercase text-center py-3">Sem aulas neste dia</p>
+        <p className="text-[10px] font-bold text-slate-400 uppercase text-center py-3">Sem aulas neste dia</p>
       ) : (
         <div className="space-y-3">
           {selectedWeekDay.groups.map((g, gIdx) => (
             <div key={`${g.key}-${gIdx}`}>
-              <p className="text-[8px] font-black uppercase tracking-wider mb-1" style={{ color: g.color }}>{g.period} · {g.schoolName}</p>
+              <p className="text-[10px] font-black uppercase tracking-wider mb-1" style={{ color: g.color }}>{g.period} · {g.schoolName}</p>
               <ul className="space-y-1 border-l-2 pl-2.5" style={{ borderColor: g.color + '60' }}>
                 {g.lessons.map(l => (
                   <li key={l.key} className="flex items-baseline gap-3 text-[11px]">
@@ -1210,7 +1210,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         <h1 className="text-lg md:text-3xl font-black text-slate-800 dark:text-white tracking-tight leading-none truncate block w-full">
           Olá, {data.profile.title || 'Prof.'} {data.profile.name || 'Docente'}!
         </h1>
-        <p className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-1 md:mt-2 truncate w-full">
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-1 md:mt-2 truncate w-full">
           {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
         </p>
       </div>
@@ -1218,7 +1218,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
       {hasDesktopAlerts ? renderAlerts('flex flex-col gap-2 w-full min-w-0', true) : (
         <div className="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm w-fit">
           <Sparkles className="text-primary animate-pulse w-3 h-3" />
-          <span className="text-[8px] font-black uppercase tracking-tight text-slate-500">Inspirado para hoje</span>
+          <span className="text-[10px] font-black uppercase tracking-tight text-slate-500">Inspirado para hoje</span>
         </div>
       )}
 

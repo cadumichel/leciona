@@ -19,6 +19,7 @@ import {
 import { getDayOfWeekFromDate, getShortWeekDay, getDayMonth, toSafeISO, todayLocal } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName, isSameClassRef } from '../utils/classRefs';
+import SortOrderButton, { byDate, useSortOrder } from './SortOrderButton';
 
 interface AgendaManagementProps {
   data: AppData;
@@ -92,6 +93,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
   const [filterType, setFilterType] = useState<'all' | 'meeting' | 'festivity' | 'trip' | 'material' | 'other'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'upcoming' | 'done'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, toggleSortOrder] = useSortOrder('agenda', 'asc');
 
   // ── Layout/Grouping State ────────────────────────────────────────────────
   const [cardsPerRow, setCardsPerRow] = useState(1);
@@ -156,8 +158,8 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
       );
     }
 
-    return list.sort((a, b) => a.date.localeCompare(b.date));
-  }, [agendaEvents, filterSchoolId, filterTermIdx, filterType, filterStatus, searchQuery, data.calendars, today]);
+    return list.sort(byDate(sortOrder));
+  }, [sortOrder, agendaEvents, filterSchoolId, filterTermIdx, filterType, filterStatus, searchQuery, data.calendars, today]);
 
   // ── Grouping ─────────────────────────────────────────────────────────────
 
@@ -168,6 +170,9 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
     const months: MonthGroup[] = [];
     const weekSeq = new Map<string, number>();
     let weekCounter = 0;
+    // Semana 1, 2… sempre na ordem do calendário, mesmo com os mais recentes primeiro
+    [...new Set(filteredEvents.map(e => getMondayOfWeek(e.date.split('T')[0])))].sort()
+      .forEach(k => weekSeq.set(k, ++weekCounter));
 
     filteredEvents.forEach(e => {
       const monthKey = getMonthKey(e.date);
@@ -490,6 +495,8 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
               </button>
             ))}
           </div>
+
+          <SortOrderButton order={sortOrder} onToggle={toggleSortOrder} />
 
           {/* Busca no computador: ocupa o resto da linha */}
           <div className="relative flex-1 min-w-[180px] hidden lg:block">

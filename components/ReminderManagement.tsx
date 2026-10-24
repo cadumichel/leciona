@@ -17,6 +17,7 @@ import {
   Clock
 } from 'lucide-react';
 import { getSafeDate, todayLocal } from '../utils';
+import SortOrderButton, { useSortOrder } from './SortOrderButton';
 
 interface ReminderManagementProps {
   data: AppData;
@@ -34,6 +35,7 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [sortOrder, toggleSortOrder] = useSortOrder('lembretes', 'desc');
 
   const [form, setForm] = useState<Partial<Reminder>>({
     category: 'general',
@@ -56,8 +58,10 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
       if (school && school.deleted) return false;
 
       return matchSearch && matchCat;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [data.reminders, search, categoryFilter]);
+    }).sort((a, b) => sortOrder === 'asc'
+      ? new Date(a.date).getTime() - new Date(b.date).getTime()
+      : new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [data.reminders, search, categoryFilter, sortOrder]);
 
   const handleSave = () => {
     if (!form.title || !form.content) return;
@@ -112,6 +116,7 @@ export default function ReminderManagement({ data, onUpdateData }: ReminderManag
             <option value="all">Todas Categorias</option>
             {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
+          <SortOrderButton order={sortOrder} onToggle={toggleSortOrder} className="!px-4 !rounded-xl !text-[10px] !bg-white border border-slate-100 shadow-sm" />
           <button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-tight hover:bg-blue-700 transition shadow-lg shadow-blue-100"

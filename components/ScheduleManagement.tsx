@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { AppData, School, DayOfWeek, Shift, TimeSlot, ScheduleEntry, Student, PrivateSchedule, ScheduleVersion, LessonLog, SchoolEvent } from '../types';
 import { DAYS_OF_WEEK_NAMES } from '../constants';
-import { Plus, Trash2, LayoutGrid, Calendar as CalendarIcon, Save, Info, AlertCircle, User, Clock, ShieldAlert, Layers, ChevronDown, Check, ArrowRight, PackageX } from 'lucide-react';
+import { Plus, Trash2, LayoutGrid, Calendar as CalendarIcon, CalendarDays, Save, Info, AlertCircle, User, Clock, ShieldAlert, Layers, ChevronDown, Check, ArrowRight, PackageX } from 'lucide-react';
 import { MigrationWizard, MigrationDecision } from './MigrationWizard';
 import { checkTimeOverlap, formatDateBR, todayLocal } from '../utils';
 import { getClassName } from '../utils/classRefs';
@@ -15,6 +15,8 @@ interface ScheduleManagementProps {
 const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateData }) => {
   const [selectedDay, setSelectedDay] = useState<DayOfWeek>(1); // Monday por padrão
   const [showWeekends, setShowWeekends] = useState(false); // Toggle Sábado/Domingo
+  // Semana inteira: todos os dias da escola numa tabela (ver e editar)
+  const [weekView, setWeekView] = useState(false);
 
   // VERSIONAMENTO
   const [selectedVersionId, setSelectedVersionId] = useState<string>('');
@@ -109,14 +111,35 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
     }
   }, [data?.schools, data?.students, selectedInstitutionId, safeSchools, safeStudents]);
 
-  // Horários particulares que conflitam com o dia selecionado
-  const privateConflicts = useMemo(() => {
-    return (data?.students || []).flatMap(st =>
-      (st.schedules || [])
-        .filter(s => Number(s.dayOfWeek) === Number(selectedDay))
-        .map(s => ({ ...s, studentName: st.name, studentColor: st.color, studentId: st.id }))
-    );
-  }, [data?.students, selectedDay]);
+  // Horários particulares num dia (conflitam com as aulas das escolas)
+  const privateConflictsOn = (day: DayOfWeek) => (data?.students || []).flatMap(st =>
+    (st.schedules || [])
+      .filter(s => Number(s.dayOfWeek) === Number(day))
+      .map(s => ({ ...s, studentName: st.name, studentColor: st.color, studentId: st.id }))
+  );
+
+  /** Horário já ocupado por aula particular ou por outra escola nesse dia */
+  const slotConflicts = (day: DayOfWeek, slot: TimeSlot) => {
+    if (activeInstitution?.type !== 'school') return { studentConflict: null, otherSchoolConflict: null };
+    const studentConflict = privateConflictsOn(day).find(pc =>
+      checkTimeOverlap(slot.startTime, slot.endTime, pc.startTime, pc.endTime)) || null;
+    const conflictingSchedule = editedSchedules.find(s => {
+      if (Number(s.dayOfWeek) !== Number(day)) return false;
+      if (s.schoolId === selectedInstitutionId) return false; // Ignora a mesma escola
+      const otherSchool = (data.schools || []).find(sc => sc.id === s.schoolId);
+      if (!otherSchool || otherSchool.deleted) return false;
+      const otherSlot = otherSchool.shifts?.find(sh => sh.id === s.shiftId)?.slots.find(sl => sl.id === s.slotId);
+      if (!otherSlot) return false;
+      return checkTimeOverlap(slot.startTime, slot.endTime, otherSlot.startTime, otherSlot.endTime);
+    });
+    const conflictSchool = conflictingSchedule && (data.schools || []).find(s => s.id === conflictingSchedule.schoolId);
+    const otherSchoolConflict = conflictingSchedule ? {
+      schoolName: conflictSchool?.name || 'Outra escola',
+      schoolColor: conflictSchool?.color || '#6366f1',
+      className: conflictingSchedule.activityLabel || getClassName(data, conflictingSchedule.schoolId, conflictingSchedule.classId)
+    } : null;
+    return { studentConflict, otherSchoolConflict };
+  };
 
   const institutionShifts = useMemo(() => {
     if (!activeInstitution) return [];
@@ -143,6 +166,22 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
   }, [activeInstitution, selectedDay]);
 
   const activeColor = activeInstitution?.data?.color;
+  const showWeek = weekView && activeInstitution?.type === 'school';
+  const weekDays = ([1, 2, 3, 4, 5, 6, 0] as DayOfWeek[]).filter(d => showWeekends || (d !== 6 && d !== 0));
+
+  /** Opções de cada horário da escola: livre, janela, atividade fixa e as turmas */
+  const schoolClassOptions = (school: School, short = false) => (
+    <>
+      <option value="">Livre</option>
+      <option value="window" className="text-amber-600 font-bold">Janela / Livre</option>
+      <option value={ACTIVITY_OPTION} className="text-teal-600 font-bold">{short ? 'Atividade fixa' : 'Atividade fixa (sem turma)'}</option>
+      {(school.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map((c, i) => {
+        const name = typeof c === 'string' ? c : c.name;
+        const key = typeof c === 'string' ? `${c}-${i}` : c.id;
+        return <option key={key} value={name}>{name}</option>;
+      })}
+    </>
+  );
 
   const handleCreateVersion = () => {
     if (!newVersionDate) {
@@ -270,14 +309,14 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
   const ACTIVITY_OPTION = '__activity';
 
   /** Renomeia a atividade fixa de um horário (só na grade em edição) */
-  const handleRenameActivity = (shiftId: string, slotId: string, label: string) => {
+  const handleRenameActivity = (shiftId: string, slotId: string, label: string, day: DayOfWeek = selectedDay) => {
     setEditedSchedules(editedSchedules.map(s =>
-      Number(s.dayOfWeek) === Number(selectedDay) && s.schoolId === selectedInstitutionId && s.shiftId === shiftId && s.slotId === slotId
+      Number(s.dayOfWeek) === Number(day) && s.schoolId === selectedInstitutionId && s.shiftId === shiftId && s.slotId === slotId
         ? { ...s, activityLabel: label } : s));
     setHasChanges(true);
   };
 
-  const handleUpdateSchedule = (shiftId: string, slotId: string, value: string) => {
+  const handleUpdateSchedule = (shiftId: string, slotId: string, value: string, day: DayOfWeek = selectedDay) => {
     // Atividade fixa = horário sem turma (como a Janela), com nome próprio
     const isActivity = value === ACTIVITY_OPTION;
     const classId = isActivity ? 'window' : value;
@@ -293,7 +332,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
     if (!classId) {
       // Remove
       newSchedules = newSchedules.filter(s =>
-        !(Number(s.dayOfWeek) === Number(selectedDay) && s.schoolId === selectedInstitutionId && s.shiftId === shiftId && s.slotId === slotId)
+        !(Number(s.dayOfWeek) === Number(day) && s.schoolId === selectedInstitutionId && s.shiftId === shiftId && s.slotId === slotId)
       );
     } else {
       // Update/Add
@@ -304,10 +343,10 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
       if (slot) {
         // Verifica conflito com outras escolas NA MESMA VERSÃO
         const schoolConflict = newSchedules.find(s => {
-          if (Number(s.dayOfWeek) === Number(selectedDay) && s.schoolId === selectedInstitutionId && s.shiftId === shiftId && s.slotId === slotId) {
+          if (Number(s.dayOfWeek) === Number(day) && s.schoolId === selectedInstitutionId && s.shiftId === shiftId && s.slotId === slotId) {
             return false; // Ignore self
           }
-          if (Number(s.dayOfWeek) === Number(selectedDay)) {
+          if (Number(s.dayOfWeek) === Number(day)) {
             const otherInst = data.schools?.filter(s => !s.deleted).find(os => os.id === s.schoolId);
             if (!otherInst) return false;
             const otherSlot = otherInst.shifts?.find(osh => osh.id === s.shiftId)?.slots?.find(osl => osl.id === s.slotId);
@@ -318,7 +357,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
           return false;
         });
 
-        const privateConflict = privateConflicts.find(pc =>
+        const privateConflict = privateConflictsOn(day).find(pc =>
           checkTimeOverlap(slot.startTime, slot.endTime, pc.startTime, pc.endTime)
         );
 
@@ -331,13 +370,13 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
 
       // Remove existing for this slot
       newSchedules = newSchedules.filter(s =>
-        !(Number(s.dayOfWeek) === Number(selectedDay) && s.schoolId === selectedInstitutionId && s.shiftId === shiftId && s.slotId === slotId)
+        !(Number(s.dayOfWeek) === Number(day) && s.schoolId === selectedInstitutionId && s.shiftId === shiftId && s.slotId === slotId)
       );
 
       // Add new
       newSchedules.push({
         id: crypto.randomUUID(),
-        dayOfWeek: Number(selectedDay) as DayOfWeek,
+        dayOfWeek: Number(day) as DayOfWeek,
         schoolId: selectedInstitutionId,
         shiftId,
         slotId,
@@ -350,6 +389,92 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
     setEditedSchedules(newSchedules);
     setHasChanges(true);
   };
+
+  /** Semana inteira: uma tabela por turno, com os dias nas colunas e os horários nas linhas */
+  const renderWeekGrid = (school: School, shifts: Shift[]) => shifts.map(shift => (
+    <div key={shift.id} className="bg-white dark:bg-slate-900 p-3 md:p-5 lg:p-3 rounded-xl md:rounded-2xl lg:rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 animate-in fade-in duration-300">
+      <h3 className="font-black text-slate-800 dark:text-slate-100 mb-3 lg:mb-2 flex items-center gap-2 uppercase tracking-tight text-xs">
+        <LayoutGrid className="text-primary" size={18} /> Turno: {shift.name}
+      </h3>
+      <div className="overflow-x-auto -mx-1 px-1">
+        <table className="w-full table-fixed border-separate" style={{ borderSpacing: '4px 3px', minWidth: 96 + weekDays.length * 116 }}>
+          <thead>
+            <tr>
+              <th style={{ width: 92 }} className="sticky left-0 z-10 bg-white dark:bg-slate-900" />
+              {weekDays.map(d => (
+                <th key={d} className="text-[10px] font-black uppercase tracking-tight text-slate-500 dark:text-slate-400 pb-1">
+                  {DAYS_OF_WEEK_NAMES[d]?.slice(0, 3)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(shift.slots || []).map(slot => slot.type === 'break' ? (
+              <tr key={slot.id}>
+                <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 text-[9px] font-bold text-slate-400 whitespace-nowrap">{slot.startTime} - {slot.endTime}</td>
+                <td colSpan={weekDays.length} className="text-center font-black text-slate-400 text-[8px] md:text-[9px] uppercase tracking-tight py-0.5 bg-slate-50 dark:bg-slate-800/50 rounded-md">
+                  Intervalo
+                </td>
+              </tr>
+            ) : (
+              <tr key={slot.id}>
+                <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 align-middle whitespace-nowrap pr-1">
+                  <p className="text-[8px] md:text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight">{slot.label}</p>
+                  <p className="text-[9px] md:text-[10px] font-bold text-slate-600 dark:text-slate-400">{slot.startTime} - {slot.endTime}</p>
+                </td>
+                {weekDays.map(day => {
+                  const entry = editedSchedules.find(s =>
+                    Number(s.dayOfWeek) === Number(day) && s.schoolId === school.id && s.shiftId === shift.id && s.slotId === slot.id);
+                  const { studentConflict, otherSchoolConflict } = slotConflicts(day, slot);
+                  if (studentConflict || otherSchoolConflict) {
+                    return (
+                      <td key={day} className="align-top">
+                        <div
+                          className={`px-2 py-1 rounded-lg border text-[8px] font-bold uppercase leading-tight ${studentConflict ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800 text-amber-700' : 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-800'}`}
+                          style={otherSchoolConflict && !studentConflict ? { color: otherSchoolConflict.schoolColor } : undefined}
+                          title="Horário ocupado"
+                        >
+                          <span className="flex items-center gap-1 text-slate-500"><ShieldAlert size={10} /> Ocupado</span>
+                          {studentConflict
+                            ? `Particular: ${studentConflict.studentName}`
+                            : `${otherSchoolConflict!.schoolName} • ${otherSchoolConflict!.className !== 'window' ? otherSchoolConflict!.className : 'Janela'}`}
+                        </div>
+                      </td>
+                    );
+                  }
+                  const isActivity = entry?.activityLabel !== undefined;
+                  return (
+                    <td key={day} className="align-top">
+                      <select
+                        value={isActivity ? ACTIVITY_OPTION : (entry?.classId || '')}
+                        onChange={e => handleUpdateSchedule(shift.id, slot.id, e.target.value, day)}
+                        className={`w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 md:py-1.5 text-xs font-bold outline-none cursor-pointer appearance-none ${isActivity ? 'text-teal-600' :
+                          entry?.classId === 'window' ? 'text-amber-600' :
+                            entry?.classId ? 'text-primary' : 'text-slate-400'
+                          }`}
+                        style={entry && !isActivity && entry.classId !== 'window' ? { borderLeft: `3px solid ${school.color}` } : undefined}
+                      >
+                        {schoolClassOptions(school, true)}
+                      </select>
+                      {isActivity && (
+                        <input
+                          value={entry!.activityLabel}
+                          onChange={e => handleRenameActivity(shift.id, slot.id, e.target.value, day)}
+                          placeholder="Nome da atividade"
+                          title="Nome da atividade fixa (ex.: Aplicação de provas)"
+                          className="mt-1 w-full bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg px-2 py-1 text-[11px] font-bold text-teal-700 dark:text-teal-300 outline-none"
+                        />
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  ));
 
   if (!data) return null;
 
@@ -561,8 +686,8 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
               return (
                 <button
                   key={dayNum}
-                  onClick={() => setSelectedDay(dayNum)}
-                  className={`flex-1 md:flex-none py-2 px-1 md:px-4 rounded-lg text-[10px] md:text-xs font-black uppercase transition-all whitespace-nowrap text-center ${selectedDay === dayNum
+                  onClick={() => { setSelectedDay(dayNum); setWeekView(false); }}
+                  className={`flex-1 md:flex-none py-2 px-1 md:px-4 rounded-lg text-[10px] md:text-xs font-black uppercase transition-all whitespace-nowrap text-center ${!showWeek && selectedDay === dayNum
                     ? 'bg-white dark:bg-slate-700 text-primary shadow-sm scale-100 md:scale-105'
                     : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
                     }`}
@@ -571,6 +696,18 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                 </button>
               );
             })}
+          {activeInstitution?.type === 'school' && (
+            <button
+              onClick={() => setWeekView(true)}
+              title="Ver e editar todos os dias da semana de uma vez"
+              className={`flex-1 md:flex-none flex items-center justify-center gap-1 py-2 px-2 md:px-4 rounded-lg text-[10px] md:text-xs font-black uppercase transition-all whitespace-nowrap ${showWeek
+                ? 'bg-white dark:bg-slate-700 text-primary shadow-sm scale-100 md:scale-105'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                }`}
+            >
+              <CalendarDays size={13} /> Semana
+            </button>
+          )}
         </div>
       </div>
 
@@ -605,6 +742,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
             };
 
             const sortedShifts = sortShiftsByTime(institutionShifts);
+            if (showWeek && activeInstitution.type === 'school') return renderWeekGrid(activeInstitution.data, sortedShifts);
 
             return sortedShifts.map(shift => (
               <div key={shift.id} className="bg-white dark:bg-slate-900 p-3 md:p-5 lg:p-3 rounded-xl md:rounded-2xl lg:rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 animate-in fade-in duration-300">
@@ -621,39 +759,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                       s.slotId === slot.id
                     );
 
-                    // Verifica se este slot da escola conflita com QUALQUER aluno particular
-                    const studentConflict = activeInstitution.type === 'school' ? privateConflicts.find(pc =>
-                      checkTimeOverlap(slot.startTime, slot.endTime, pc.startTime, pc.endTime)
-                    ) : null;
-
-                    // Verifica se este horário conflita com OUTRAS ESCOLAS
-                    const otherSchoolConflict = activeInstitution.type === 'school' ? (() => {
-                      // Busca horários de outras escolas no mesmo dia
-                      const conflictingSchedule = editedSchedules.find(s => {
-                        if (Number(s.dayOfWeek) !== Number(selectedDay)) return false;
-                        if (s.schoolId === selectedInstitutionId) return false; // Ignora a mesma escola
-
-                        const otherSchool = (data.schools || []).find(sc => sc.id === s.schoolId);
-                        if (!otherSchool || otherSchool.deleted) return false;
-
-                        const otherShift = otherSchool.shifts?.find(sh => sh.id === s.shiftId);
-                        const otherSlot = otherShift?.slots.find(sl => sl.id === s.slotId);
-
-                        if (!otherSlot) return false;
-
-                        return checkTimeOverlap(slot.startTime, slot.endTime, otherSlot.startTime, otherSlot.endTime);
-                      });
-
-                      if (conflictingSchedule) {
-                        const conflictSchool = (data.schools || []).find(s => s.id === conflictingSchedule.schoolId);
-                        return {
-                          schoolName: conflictSchool?.name || 'Outra escola',
-                          schoolColor: conflictSchool?.color || '#6366f1',
-                          className: conflictingSchedule.activityLabel || getClassName(data, conflictingSchedule.schoolId, conflictingSchedule.classId)
-                        };
-                      }
-                      return null;
-                    })() : null;
+                    const { studentConflict, otherSchoolConflict } = slotConflicts(selectedDay, slot);
 
                     const hasConflict = studentConflict || otherSchoolConflict;
 
@@ -706,16 +812,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
                               } disabled:opacity-100 disabled:bg-white disabled:border-transparent`}
                           >
                             {activeInstitution.type === 'school' ? (
-                              <>
-                                <option value="">Livre</option>
-                                <option value="window" className="text-amber-600 font-bold">Janela / Livre</option>
-                                <option value={ACTIVITY_OPTION} className="text-teal-600 font-bold">Atividade fixa (sem turma)</option>
-                                {(activeInstitution.data.classes || []).filter(c => typeof c === 'string' || !c.deleted).sort((a, b) => (typeof a === 'string' ? a : a.name).localeCompare(typeof b === 'string' ? b : b.name)).map((c, i) => {
-                                  const name = typeof c === 'string' ? c : c.name;
-                                  const key = typeof c === 'string' ? `${c}-${i}` : c.id;
-                                  return <option key={key} value={name}>{name}</option>;
-                                })}
-                              </>
+                              schoolClassOptions(activeInstitution.data)
                             ) : (
                               <option value={activeInstitution.data.name}>Atendimento Particular</option>
                             )}

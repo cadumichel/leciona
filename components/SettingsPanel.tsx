@@ -1384,6 +1384,19 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                               <Toggle checked={data.settings.showDailyQuote} onChange={e => onUpdateData({ settings: { ...data.settings, showDailyQuote: e.target.checked } })} />
                            </div>
 
+                           <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-transparent">
+                              <div className="flex items-center gap-2">
+                                 <div className="p-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-200">
+                                    <CalendarRange size={16} />
+                                 </div>
+                                 <div>
+                                    <span className="text-xs font-black uppercase dark:text-white block mb-0.5">Cronograma no Diário</span>
+                                    <p className="text-xs text-slate-400 font-medium normal-case dark:text-slate-500">Mostra, ao registrar a aula, quantas aulas faltam até o fim do período e a próxima avaliação.</p>
+                                 </div>
+                              </div>
+                              <Toggle checked={!data.settings.hideCronograma} onChange={e => onUpdateData({ settings: { ...data.settings, hideCronograma: !e.target.checked } })} />
+                           </div>
+
 
                            <div>
                               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-3 ml-1">Cor do Tema</label>

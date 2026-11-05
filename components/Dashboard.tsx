@@ -805,7 +805,8 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
   // Avaliações para marcar com a turma (1 semana de antecedência) e turmas sem trabalho no período
   const notices = scheduleNotices(data, todayDateStr);
   const workAlerts = missingWorkAlerts(data, todayDateStr);
-  const hasDesktopAlerts = showPendingAlert || !!unpreparedAlert || overduePayments.length > 0 || notices.length > 0 || workAlerts.length > 0;
+  const alertCount = [showPendingAlert, !!unpreparedAlert, overduePayments.length > 0, notices.length > 0, workAlerts.length > 0].filter(Boolean).length;
+  const hasDesktopAlerts = alertCount > 0;
 
   // full: no celular cada faixa ocupa a largura toda
   const renderAlerts = (containerClass: string, full = false) => (
@@ -834,7 +835,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
         <button
           onClick={onNavigateToAssessments}
           title={notices.map(scheduleNoticeText).join('\n')}
-          className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-white min-w-0 max-w-full hover:scale-[1.02] transition-transform ${full ? 'w-full' : ''} ${notices[0].status === 'soon' ? 'bg-orange-500' : 'animate-siren'}`}
+          className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-white min-w-0 max-w-full hover:scale-[1.02] transition-transform ${full ? 'w-full' : ''} ${notices[0].status === 'soon' ? 'bg-amber-500' : 'bg-orange-500'}`}
         >
           <Megaphone size={14} className="shrink-0" />
           <span className={`text-[10px] font-black uppercase truncate ${full ? 'flex-1 text-left' : ''}`}>
@@ -1096,7 +1097,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onUpdateData, onNavigateToL
             {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
           </p>
         </div>
-        {hasDesktopAlerts ? renderAlerts('flex flex-wrap justify-end items-center gap-2 min-w-0 max-w-[65%]') : (
+        {hasDesktopAlerts ? renderAlerts(`grid ${alertCount === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-2 min-w-0 w-[62%] shrink-0`, true) : (
           <div className="flex items-center gap-3 bg-white dark:bg-slate-900 px-4 py-2 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm shrink-0">
             <Sparkles className="text-primary animate-pulse w-4 h-4" />
             <span className="text-[10px] font-black uppercase tracking-tight text-slate-500">Inspirado para hoje</span>

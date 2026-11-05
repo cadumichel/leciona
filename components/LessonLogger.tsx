@@ -2255,8 +2255,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           <div className="-mt-3 md:-mt-5 lg:mt-0 mb-6 md:mb-8 lg:mb-3 space-y-1.5">
             {classNotices.toSchedule.map(n => (
               <div key={`s-${n.event.id}`} className={`flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg border text-[11px] font-bold ${n.status === 'soon'
-                ? 'bg-orange-50 border-orange-200 text-orange-800 dark:bg-orange-900/20 dark:border-orange-800 dark:text-orange-300'
-                : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300'}`}>
+                ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300'
+                : 'bg-orange-100 border-orange-300 text-orange-900 dark:bg-orange-900/30 dark:border-orange-700 dark:text-orange-200'}`}>
                 <Megaphone size={13} className="shrink-0" />
                 <span className="flex-1 min-w-[160px]">
                   <b className="uppercase text-[10px] mr-1">Marcar com a turma:</b>
@@ -2282,7 +2282,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               </div>
             ))}
             {classNotices.pending.map(({ event, items }) => (
-              <div key={`p-${event.id}`} className="px-3 py-2 rounded-lg border text-[11px] font-bold bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300">
+              <div key={`p-${event.id}`} className="px-3 py-2 rounded-lg border text-[11px] font-bold bg-orange-50 border-orange-200 text-orange-800 dark:bg-orange-900/20 dark:border-orange-800 dark:text-orange-300">
                 <div className="flex items-center gap-2">
                   <PackageX size={13} className="shrink-0" />
                   <span className="flex-1"><b className="uppercase text-[10px] mr-1">Falta entregar:</b>{event.title} (entrega {formatDateBR(event.date).slice(0, 5)})</span>
@@ -2293,7 +2293,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                       onClick={() => onUpdateData({ events: data.events.map(e => (e.id === event.id ? {
                         ...e, missingDeliveries: (e.missingDeliveries || []).map(m => (m.id === item.id ? { ...m, deliveredAt: activeLesson.date } : m))
                       } : e)) })}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800 hover:border-emerald-400 hover:text-emerald-700">
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-orange-200 dark:border-orange-800 hover:border-emerald-400 hover:text-emerald-700">
                       {item.name} <CheckCircle2 size={11} />
                     </button>
                   ))}

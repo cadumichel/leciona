@@ -976,7 +976,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                         <button type="button" onClick={e => { e.stopPropagation(); setDeliveryEventId(event.id); }}
                           title={pending ? `Registro de entrega: ${pending} sem entregar` : 'Registro de entrega'}
                           className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-1 rounded-md border text-[10px] font-black uppercase ${pending
-                            ? 'bg-red-50 border-red-200 text-red-600 dark:bg-red-900/20 dark:border-red-800'
+                            ? 'bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-900/20 dark:border-orange-800'
                             : 'bg-slate-50 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'}`}>
                           <PackageX size={11} />
                           {pending ? (cardsPerRow >= 3 ? pending : `${pending} sem entregar`) : (cardsPerRow >= 3 ? null : 'Entregas')}

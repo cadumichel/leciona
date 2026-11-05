@@ -15,7 +15,7 @@ import { deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebaseConnection';
 import { downloadCSV, downloadICS, formatDateBR, todayLocal } from '../utils';
 import { getClassName, isSameClassRef } from '../utils/classRefs';
-import { buildLogRows, buildAssessmentRows } from '../utils/exportRows';
+import { buildLogRows, buildAssessmentRows, cancelledLessonsWithoutLog, byDate } from '../utils/exportRows';
 import { latestGrade } from '../utils/grades';
 import { QuickStartGuide, INITIAL_DATA } from '../App';
 import TermsOfUseModal from './TermsOfUseModal';
@@ -575,7 +575,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       };
 
       if (type === 'logs') {
-         const logs = filterLogs(data.logs);
+         // Aulas canceladas por evento entram também quando não têm registro no diário
+         const logs = filterLogs([...data.logs, ...cancelledLessonsWithoutLog(data)]).sort(byDate);
 
          if (logs.length === 0) return alert('Sem registros para exportar com os filtros atuais.');
 

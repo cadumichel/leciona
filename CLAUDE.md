@@ -76,6 +76,17 @@ objetivo.
   original). Cônsul: REC paralela 15 dias depois, criada junto com a prova; Uniavan e São Luiz: REC
   trimestral com o conteúdo das provas do trimestre; 2ª chamada copia a original (no São Luiz, no
   contraturno: sem aula e sem registro no diário). Apagar a original apaga as ligadas.
+- **Trabalhos** (`utils/works.ts`, `components/WorkDeliveries.tsx`): aba Trabalhos em Avaliações. Trabalho
+  `workPlace` em sala/em casa e `workFormat` individual/em grupo (`workGroups`, alunos da lista da turma ou
+  nomes digitados). O trabalho fica na aula da entrega (registro "Avaliação: X"); as outras aulas em sala são
+  registros "Trabalho em sala: X" com `workId` (andam com a mudança de grade; apagar o trabalho tira só o
+  registro automático). Quem não entregou fica em `missingDeliveries` até `deliveredAt` e aparece nas aulas
+  seguintes da turma no Diário. Regra da escola em Ajustes → Escolas: `worksPerTerm` (exceção por turma em
+  `worksPerTermByClass`) e aviso das turmas sem trabalho a `workAlertWeeks` (padrão 6) semanas do fim do período.
+- **Marcar a avaliação com 1 semana** (`utils/scheduleNotice.ts`): avaliação Pendente (nem Agendada nem
+  Pronta; 2ª chamada fora). Prazo = 7 dias antes; aula-limite = última aula real da turma até o prazo (sem
+  feriado/recesso/evento); aviso no Início e no Diário da turma a partir de 7 dias antes da aula-limite, com
+  botão "Marquei com a turma" (vira Agendada). Sem aula até o prazo = "fora do prazo".
 - **Início**: `components/Dashboard.tsx` + `utils/dashboardWeb.ts` (linha do dia e grade semanal).
 - **Virada do ano letivo**: `utils/newSchoolYear.ts` + `components/NewSchoolYearWizard.tsx`.
 - **Planilhas exportadas**: `utils/exportRows.ts`.

@@ -30,8 +30,8 @@ var getDayOfWeekFromDate = (dateStr) => {
 };
 var getHolidayName = (date) => {
   const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day4 = String(date.getDate()).padStart(2, "0");
-  const key = `${month}-${day4}`;
+  const day5 = String(date.getDate()).padStart(2, "0");
+  const key = `${month}-${day5}`;
   return BRAZIL_HOLIDAYS[key] || null;
 };
 var isHoliday = (date) => {
@@ -1018,6 +1018,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 
+// utils/works.ts
+var day4 = (d) => String(d || "").split("T")[0];
+var workSessionSubject = (title) => `Trabalho em sala: ${title}`;
+var isAutoWorkSessionLog = (log, title) => !!log && (log.subject || "").trim() === workSessionSubject(title) && !(log.homework || "").trim() && !(log.notes || "").trim() && !(log.attendance && log.attendance.length > 0) && !(log.occurrences && log.occurrences.length > 0);
+var workSessionLogs = (logs, workId) => (logs || []).filter((l) => l.workId === workId && l.status !== "removed").sort((a, b) => day4(a.date).localeCompare(day4(b.date)) || (a.startTime || "").localeCompare(b.startTime || ""));
+
 // connector/escrita.ts
 var SITUACOES = ["Pendente", "Agendada", "Pronta"];
 var camposDaSituacao = (s) => ({ prepared: s === "Pronta", scheduled: s === "Agendada" });
@@ -1288,6 +1294,15 @@ var prepararAlteracoes = (data, pedidos, hoje, agora = Date.now()) => {
           else if (reg && (reg.subject || "").startsWith("Avalia\xE7\xE3o:")) {
             item.avisos.push(`O registro do di\xE1rio de ${formatDateBR(e.date)} ("${(reg.subject || "").slice(0, 60)}") foi editado e ser\xE1 mantido.`);
           }
+          workSessionLogs(data.logs || [], e.id).forEach((l) => {
+            const log = l;
+            if (tocados.has(log.id)) return;
+            if (isAutoWorkSessionLog(log, e.title)) mudar("logs", log, null, `Apagar o registro "Trabalho em sala: ${e.title}" de ${formatDateBR(log.date)}`);
+            else {
+              const { workId, ...semLigacao } = log;
+              mudar("logs", log, semLigacao, `Tirar a liga\xE7\xE3o com o trabalho do registro de ${formatDateBR(log.date)}`);
+            }
+          });
         });
         plano.resumo.push(item.descricao);
         item.ok = true;

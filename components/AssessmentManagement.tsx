@@ -3,13 +3,14 @@ import { AppData, SchoolEvent, TimeSlot, LessonLog, AcademicCalendar, Term } fro
 import {
   FileCheck, Calendar, Trash2, Plus, X, Copy, CheckCircle2, Pencil,
   School as SchoolIcon, Search, ChevronRight, ChevronDown, SlidersHorizontal,
-  Clock, AlertTriangle, CheckCheck, BookOpen
+  Clock, AlertTriangle, CheckCheck, BookOpen, Home, Users, PackageX
 } from 'lucide-react';
 import { isHoliday, getHolidayName, getDayOfWeekFromDate, getSafeDate, toSafeISO } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { DisconnectedNotice } from './ConnectionWarnings';
 import { PlannedChoice, planAssessmentLogs, removeAssessmentLogs } from '../utils/assessmentLogs';
 import { activityAt, assessmentPlaceLabel, assessmentPlaces } from '../utils/assessmentPlace';
+import { isLessonBlocked } from '../utils/lessonStats';
 
 /** Valor do campo Horário para "Contraturno" (a avaliação fica sem slotId) */
 const CONTRATURNO = '__contraturno';
@@ -18,6 +19,12 @@ import {
   recoveryPolicyOf, secondCallModeOf, suggestRecovery, termRecoveryContent
 } from '../utils/recovery';
 import SortOrderButton, { byDate, useSortOrder } from './SortOrderButton';
+import { WorkDeliveryModal, WorkGroupsEditor } from './WorkDeliveries';
+import {
+  WORK_FORMAT_LABELS, WORK_PLACE_LABELS, WorkSession, pendingDeliveriesOf, planWorkSessionLogs, removeWorkSessionLogs,
+  workCountsByClass, workSessionLogs
+} from '../utils/works';
+import { todayLocal } from '../utils';
 
 interface AssessmentManagementProps {
   data: AppData;
@@ -109,6 +116,12 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   const [filterTermIdx, setFilterTermIdx] = useState('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'scheduled' | 'done'>('scheduled');
   const [searchQuery, setSearchQuery] = useState('');
+  /** Provas, trabalhos ou todas (aba "Trabalhos") */
+  const [filterType, setFilterType] = useState<'all' | 'test' | 'work'>('all');
+  /** Outras aulas do trabalho em sala (além da aula da entrega) */
+  const [workSessions, setWorkSessions] = useState<WorkSession[]>([]);
+  /** Trabalho com a janela de registro de entrega aberta */
+  const [deliveryEventId, setDeliveryEventId] = useState<string | null>(null);
   const [sortOrder, toggleSortOrder] = useSortOrder('avaliacoes', 'asc');
 
   // ── Layout/Grouping State ────────────────────────────────────────────────
@@ -308,6 +321,15 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     if (kind) event.kind = kind; else delete event.kind;
     if ((kind === 'second_call' || kind === 'recovery') && newEvent.parentId) event.parentId = newEvent.parentId;
     else delete event.parentId;
+    // Trabalho: em sala/em casa, individual/em grupo e grupos (utils/works.ts)
+    if (event.type === 'work') {
+      if (newEvent.workPlace) event.workPlace = newEvent.workPlace; else delete event.workPlace;
+      if (newEvent.workFormat) event.workFormat = newEvent.workFormat; else delete event.workFormat;
+      const groups = (newEvent.workGroups || []).filter(g => g.name.trim() || g.members.length);
+      if (event.workFormat === 'group' && groups.length) event.workGroups = groups; else delete event.workGroups;
+    } else {
+      delete event.workPlace; delete event.workFormat; delete event.workGroups;
+    }
 
     // Aula nova já tem conteúdo planejado? (utils/assessmentLogs.ts)
     const plan = planAssessmentLogs(data, original, event, undefined, () => crypto.randomUUID());
@@ -343,6 +365,8 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   const commitSave = (event: SchoolEvent, original: SchoolEvent | undefined, choice: PlannedChoice | undefined, linkedMoves: LinkedMove[]) => {
     const newId = () => crypto.randomUUID();
     let currentLogs = planAssessmentLogs(data, original, event, choice, newId).logs;
+    // Outras aulas do trabalho em sala: registro "Trabalho em sala: X" no diário
+    currentLogs = planWorkSessionLogs(currentLogs, event, workSessions, original, newId);
     let currentEvents = data.events.filter(e => e.id !== event.id);
     const newEvents: SchoolEvent[] = [event];
 
@@ -392,7 +416,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     const currentGrades = data.grades.filter(g => !removedIds.has(g.assessmentId));
 
     // Remove só o registro automático "Avaliação: X" (registro escrito pelo Cadu fica)
-    const currentLogs = removeAssessmentLogs(data.logs, removed);
+    const currentLogs = removeWorkSessionLogs(removeAssessmentLogs(data.logs, removed), removed);
 
     onUpdateData({ events: currentEvents, grades: currentGrades, logs: currentLogs });
     setDeletingEventId(null);
@@ -407,7 +431,10 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     const event: SchoolEvent = {
       id: eventId, title: newEvent.title, date: safeDateISO,
       schoolId: copyData.targetSchoolId, classId: copyData.targetClassId, slotId: copyData.targetSlotId,
-      type: newEvent.type as 'test' | 'work', description: newEvent.description || '', blocksClasses: false
+      type: newEvent.type as 'test' | 'work', description: newEvent.description || '', blocksClasses: false,
+      // Trabalho: a cópia leva em sala/em casa e individual/em grupo (os grupos são de cada turma)
+      ...(newEvent.type === 'work' && newEvent.workPlace ? { workPlace: newEvent.workPlace } : {}),
+      ...(newEvent.type === 'work' && newEvent.workFormat ? { workFormat: newEvent.workFormat } : {})
     };
     // Aula com conteúdo planejado: o conteúdo fica e ganha a linha "Avaliação: X"
     const { logs } = planAssessmentLogs(data, undefined, event, 'merge', () => crypto.randomUUID());
@@ -463,6 +490,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   const filteredEvents = useMemo(() => {
     let list = assessmentEvents;
 
+    if (filterType !== 'all') list = list.filter(e => e.type === filterType);
     if (filterSchoolId !== 'all') list = list.filter(e => e.schoolId === filterSchoolId);
 
     if (filterClassId !== 'all') {
@@ -510,7 +538,10 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     }
 
     return list.sort(byDate(sortOrder));
-  }, [sortOrder, assessmentEvents, filterSchoolId, filterClassId, filterTermIdx, filterStatus, searchQuery, data.schools, data.calendars, data.grades, today]);
+  }, [sortOrder, filterType, assessmentEvents, filterSchoolId, filterClassId, filterTermIdx, filterStatus, searchQuery, data.schools, data.calendars, data.grades, today]);
+
+  // Trabalhos no período atual de cada turma (só escolas que exigem)
+  const workCounts = useMemo(() => (filterType === 'work' ? workCountsByClass(data, todayLocal()) : []), [filterType, data]);
 
   // Group by month (and optionally by Mon–Fri week inside each month)
   type WeekGroup = { weekKey: string; label: string; events: SchoolEvent[] };
@@ -582,8 +613,9 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   // ── Open form for new assessment ──────────────────────────────────────────
   const openNewForm = () => {
     setSaveSuccess(false);
+    setWorkSessions([]);
     setNewEvent({
-      type: 'test', title: '', date: new Date().toLocaleDateString('en-CA'),
+      type: filterType === 'work' ? 'work' : 'test', title: '', date: todayLocal(),
       schoolId: (data.schools || [])[0]?.id || '', classId: '', slotId: '', description: ''
     });
     setDateWarning(''); setIsInvalidDate(false);
@@ -596,8 +628,10 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
     setNewEvent({
       id: event.id, title: event.title, date: event.date.split('T')[0],
       schoolId: event.schoolId, classId: event.classId, slotId: event.slotId || CONTRATURNO,
-      type: event.type, description: event.description, parentId: event.parentId
+      type: event.type, description: event.description, parentId: event.parentId,
+      workPlace: event.workPlace, workFormat: event.workFormat, workGroups: event.workGroups
     });
+    setWorkSessions(workSessionLogs(data.logs, event.id).map(l => ({ date: dayOf(l.date), slotId: l.slotId })));
     setDateWarning(''); setIsInvalidDate(false);
     setFormKind(event.kind || 'regular');
     setCreateRec(false); setDescTouched(true);
@@ -615,7 +649,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
             <FileCheck className="text-blue-600 w-4 h-4" /> Avaliações
           </h3>
           <p className="text-[10px] text-slate-500 font-black uppercase tracking-tight">
-            {filteredEvents.length} avaliação{filteredEvents.length !== 1 ? 'ões' : ''} {filterSchoolId !== 'all' || filterClassId !== 'all' || filterTermIdx !== 'all' || searchQuery ? 'encontrada' + (filteredEvents.length !== 1 ? 's' : '') : 'no total'}
+            {filteredEvents.length} {filterType === 'work' ? (filteredEvents.length !== 1 ? 'trabalhos' : 'trabalho') : filterType === 'test' ? (filteredEvents.length !== 1 ? 'provas' : 'prova') : (filteredEvents.length !== 1 ? 'avaliações' : 'avaliação')} {filterSchoolId !== 'all' || filterClassId !== 'all' || filterTermIdx !== 'all' || searchQuery ? (filterType === 'work' ? 'encontrado' : 'encontrada') + (filteredEvents.length !== 1 ? 's' : '') : 'no total'}
           </p>
         </div>
         <button
@@ -633,6 +667,17 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
           <div className="flex items-center gap-1 shrink-0">
             <SlidersHorizontal size={12} className="text-slate-400" />
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">Filtros:</span>
+          </div>
+
+          {/* Tipo: todas, provas ou trabalhos */}
+          <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg shrink-0">
+            {([['all', 'Todas'], ['test', 'Provas'], ['work', 'Trabalhos']] as const).map(([val, label]) => (
+              <button key={val} onClick={() => setFilterType(val)}
+                className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-tight transition-all ${filterType === val
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                {label}
+              </button>
+            ))}
           </div>
 
           {/* School filter */}
@@ -748,6 +793,28 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
         </div>
       </div>
 
+      {/* ── Trabalhos no período: cadastrados × exigidos pela escola (Ajustes → Escolas) ── */}
+      {filterType === 'work' && workCounts.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm p-3">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-tight mb-2">Trabalhos no período atual</p>
+          <div className="flex flex-wrap gap-1.5">
+            {workCounts.filter(r => filterSchoolId === 'all' || r.schoolId === filterSchoolId).map(r => {
+              const ok = r.count >= r.required;
+              return (
+                <span key={`${r.schoolId}-${r.classId}`} title={`${r.schoolName} · ${r.term.name}`}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border text-[10px] font-black ${ok
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-300'
+                    : 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300'}`}>
+                  {r.className}
+                  <span className="opacity-70">{r.count}/{r.required}</span>
+                  {data.schools.filter(sc => !sc.deleted).length > 1 && <span className="font-bold opacity-60">· {r.schoolName}</span>}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── Grouped Assessment List ── */}
       {grouped.length === 0 ? (
         <div className="py-16 bg-white dark:bg-slate-900 rounded-lg border-2 border-dashed border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center gap-4 text-center">
@@ -835,6 +902,21 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                         >
                           {event.type === `test` ? `Prova` : `Trabalho`}
                         </span>
+                        {event.type === 'work' && event.workPlace && (
+                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded uppercase shrink-0 bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 inline-flex items-center gap-0.5">
+                            {event.workPlace === 'home' ? <Home size={9} /> : null}
+                            {WORK_PLACE_LABELS[event.workPlace]}
+                            {event.workPlace === 'class' && (() => {
+                              const n = workSessionLogs(data.logs, event.id).length + 1;
+                              return n > 1 ? ` · ${n} aulas` : '';
+                            })()}
+                          </span>
+                        )}
+                        {event.type === 'work' && event.workFormat === 'group' && (
+                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded uppercase shrink-0 bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 inline-flex items-center gap-0.5">
+                            <Users size={9} /> {event.workGroups?.length ? `${event.workGroups.length} grupos` : 'Grupo'}
+                          </span>
+                        )}
                       </div>
                       {event.description && event.description.trim() && (
                         <p className="mt-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400 leading-snug line-clamp-2 break-words" title={event.description}>
@@ -887,6 +969,20 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                          <option value="ready">Pronta</option>
                        </select>
                     </div>
+
+                    {event.type === 'work' && dayOf(event.date) <= today && (() => {
+                      const pending = pendingDeliveriesOf(event).length;
+                      return (
+                        <button type="button" onClick={e => { e.stopPropagation(); setDeliveryEventId(event.id); }}
+                          title={pending ? `Registro de entrega: ${pending} sem entregar` : 'Registro de entrega'}
+                          className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-1 rounded-md border text-[10px] font-black uppercase ${pending
+                            ? 'bg-red-50 border-red-200 text-red-600 dark:bg-red-900/20 dark:border-red-800'
+                            : 'bg-slate-50 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'}`}>
+                          <PackageX size={11} />
+                          {pending ? (cardsPerRow >= 3 ? pending : `${pending} sem entregar`) : (cardsPerRow >= 3 ? null : 'Entregas')}
+                        </button>
+                      );
+                    })()}
 
                     <span className="flex-1 min-w-0 text-[10px] font-black truncate" style={{ color }}>{school?.name}</span>
 
@@ -1034,7 +1130,7 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                   {/* Date + Slot */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Data</label>
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">{newEvent.type === 'work' && newEvent.workPlace ? 'Data da entrega' : 'Data'}</label>
                       <input type="date" value={newEvent.date} onChange={e => handleDateChange(e.target.value)} className={`w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2.5 font-bold dark:text-white text-sm ${isInvalidDate ? 'ring-2 ring-pink-500' : ''}`} />
                       {dateWarning && <p className="text-[10px] text-pink-600 font-black uppercase mt-0.5 ml-1">{dateWarning}</p>}
                     </div>
@@ -1063,6 +1159,93 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
                       )}
                     </div>
                   </div>
+
+                  {/* Trabalho: em sala ou em casa, individual ou em grupo (utils/works.ts) */}
+                  {newEvent.type === 'work' && (
+                    <div className="rounded-xl border border-blue-100 dark:border-blue-900/40 p-3 space-y-3" style={{ backgroundColor: 'rgba(239,246,255,0.6)' }}>
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Onde é feito</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(['class', 'home'] as const).map(place => (
+                            <button key={place} type="button"
+                              onClick={() => setNewEvent(prev => ({ ...prev, workPlace: prev.workPlace === place ? undefined : place }))}
+                              className={`py-2 rounded-lg font-black uppercase text-[10px] tracking-tight border-2 transition-all flex items-center justify-center gap-1 ${newEvent.workPlace === place ? 'bg-white border-blue-500 text-blue-600 dark:bg-slate-800' : 'bg-white/70 dark:bg-slate-800 border-transparent text-slate-400'}`}>
+                              {place === 'home' ? <Home size={11} /> : <BookOpen size={11} />} {WORK_PLACE_LABELS[place]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {newEvent.workPlace === 'class' && (
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight ml-1">Outras aulas do trabalho em sala</label>
+                          {workSessions.map((session, i) => {
+                            const opts = activeSchool && newEvent.classId && session.date
+                              ? assessmentPlaces(data, activeSchool, newEvent.classId, session.date).lessons : [];
+                            const holiday = session.date ? getHolidayName(getSafeDate(session.date)) : null;
+                            const setSession = (next: WorkSession) => setWorkSessions(workSessions.map((x, j) => (j === i ? next : x)));
+                            return (
+                              <div key={i} className="flex gap-1.5 items-center">
+                                <input type="date" value={session.date}
+                                  onChange={e => {
+                                    const date = e.target.value;
+                                    const first = activeSchool && newEvent.classId && date ? assessmentPlaces(data, activeSchool, newEvent.classId, date).lessons[0] : undefined;
+                                    setSession({ date, slotId: first?.slot.id || '' });
+                                  }}
+                                  className="flex-1 min-w-0 bg-white dark:bg-slate-800 border-none rounded-lg px-2 py-1.5 font-bold dark:text-white text-xs" />
+                                <select value={session.slotId} onChange={e => setSession({ ...session, slotId: e.target.value })} disabled={!opts.length}
+                                  className="flex-1 min-w-0 bg-white dark:bg-slate-800 border-none rounded-lg px-2 py-1.5 font-bold dark:text-white text-xs disabled:opacity-50">
+                                  <option value="">{holiday ? `Feriado (${holiday})` : session.date ? (opts.length ? 'Escolha a aula...' : 'Sem aula da turma') : 'Escolha o dia'}</option>
+                                  {opts.map(p => <option key={p.slot.id} value={p.slot.id}>{p.number}ª aula ({p.slot.startTime})</option>)}
+                                </select>
+                                <button type="button" onClick={() => setWorkSessions(workSessions.filter((_, j) => j !== i))} className="p-1 text-slate-400 hover:text-red-500" title="Tirar esta aula">
+                                  <X size={13} />
+                                </button>
+                              </div>
+                            );
+                          })}
+                          <button type="button" disabled={!newEvent.classId}
+                            onClick={() => {
+                              // Sugere a aula anterior da turma (antes da entrega)
+                              const before = [...workSessions.map(x => x.date), newEvent.date || ''].filter(Boolean).sort()[0] || todayLocal();
+                              let date = '';
+                              let slotId = '';
+                              if (activeSchool && newEvent.classId) {
+                                for (let d = 1; d <= 30 && !slotId; d++) {
+                                  const candidate = addDays(before, -d);
+                                  if (getHolidayName(getSafeDate(candidate)) || isLessonBlocked(data, candidate, activeSchool.id, undefined, newEvent.classId)) continue;
+                                  const lesson = assessmentPlaces(data, activeSchool, newEvent.classId, candidate).lessons[0];
+                                  if (lesson) { date = candidate; slotId = lesson.slot.id; }
+                                }
+                              }
+                              setWorkSessions([...workSessions, { date, slotId }]);
+                            }}
+                            className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-dashed border-blue-300 text-[10px] font-black uppercase text-blue-600 disabled:opacity-40">
+                            <Plus size={12} /> Adicionar aula em sala
+                          </button>
+                          <p className="text-[10px] font-bold text-slate-400 ml-1">Cada aula ganha no diário o registro "Trabalho em sala: {newEvent.title || 'título'}".</p>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-tight mb-1 ml-1">Formato</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(['individual', 'group'] as const).map(fmtKey => (
+                            <button key={fmtKey} type="button"
+                              onClick={() => setNewEvent(prev => ({ ...prev, workFormat: prev.workFormat === fmtKey ? undefined : fmtKey }))}
+                              className={`py-2 rounded-lg font-black uppercase text-[10px] tracking-tight border-2 transition-all flex items-center justify-center gap-1 ${newEvent.workFormat === fmtKey ? 'bg-white border-blue-500 text-blue-600 dark:bg-slate-800' : 'bg-white/70 dark:bg-slate-800 border-transparent text-slate-400'}`}>
+                              {fmtKey === 'group' && <Users size={11} />} {WORK_FORMAT_LABELS[fmtKey]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {newEvent.workFormat === 'group' && (
+                        <WorkGroupsEditor data={data} schoolId={newEvent.schoolId || ''} classId={newEvent.classId || ''}
+                          groups={newEvent.workGroups || []} onChange={groups => setNewEvent(prev => ({ ...prev, workGroups: groups }))} />
+                      )}
+                    </div>
+                  )}
 
                   {/* REC paralela automática */}
                   {offerRec && (
@@ -1317,6 +1500,11 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
           </div>
         </div>
       )}
+
+      {deliveryEventId && (() => {
+        const ev = data.events.find(e => e.id === deliveryEventId);
+        return ev ? <WorkDeliveryModal data={data} event={ev} onUpdateData={onUpdateData} onClose={() => setDeliveryEventId(null)} /> : null;
+      })()}
 
     </div>
   );

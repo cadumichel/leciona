@@ -587,6 +587,17 @@ describe('conector (gravação): remarcar, corrigir e apagar avaliações', () =
     expect(juntado.events.some((e: any) => e.id === 'p2')).toBe(true);
   });
 
+  it('apagar trabalho em sala: sai o registro automático das outras aulas; o do Cadu fica sem a ligação', () => {
+    const doc = comRegistro();
+    doc.events[0] = { ...doc.events[0], type: 'work', workPlace: 'class' };
+    doc.logs.push({ id: 'ws1', date: '2026-10-20T00:00:00.000Z', schoolId: 'C', classId: 'c183', slotId: 's5', subject: 'Trabalho em sala: P2', homework: '', notes: '', workId: 'p2', _m: 100 });
+    doc.logs.push({ id: 'ws2', date: '2026-10-13T00:00:00.000Z', schoolId: 'C', classId: 'c183', slotId: 's5', subject: 'Pesquisa', homework: '', notes: '', workId: 'p2', _m: 100 });
+    const { plano } = prepararAlteracoes(doc, [{ turma: '183', data: '2026-10-27', acao: 'apagar' }], HOJE, AGORA);
+    Object.assign(doc, aplicarPlano(doc, plano!, AGORA).alteracoes);
+    expect(doc.logs.map((l: any) => l.id).sort()).toEqual(['l1', 'ws2']);
+    expect(doc.logs.find((l: any) => l.id === 'ws2').workId).toBeUndefined();
+  });
+
   it('não apaga avaliação com notas lançadas', () => {
     const doc = comRegistro();
     doc.grades = [{ id: 'g', studentId: 'x', assessmentId: 'p2', value: 7 }];

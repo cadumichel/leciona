@@ -191,7 +191,10 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
         shifts: newSchool.shifts || [],
         ...(newSchool.recoveryPolicy ? { recoveryPolicy: newSchool.recoveryPolicy } : {}),
         ...(newSchool.recoveryDelayDays ? { recoveryDelayDays: newSchool.recoveryDelayDays } : {}),
-        ...(newSchool.secondCallMode ? { secondCallMode: newSchool.secondCallMode } : {})
+        ...(newSchool.secondCallMode ? { secondCallMode: newSchool.secondCallMode } : {}),
+        ...(newSchool.worksPerTerm ? { worksPerTerm: newSchool.worksPerTerm } : {}),
+        ...(newSchool.worksPerTermByClass && Object.keys(newSchool.worksPerTermByClass).length ? { worksPerTermByClass: newSchool.worksPerTermByClass } : {}),
+        ...(newSchool.workAlertWeeks ? { workAlertWeeks: newSchool.workAlertWeeks } : {})
       };
       onUpdateData({ schools: [...data.schools, schoolToAdd] });
     }
@@ -658,6 +661,72 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                         <option value="in_class">Numa aula minha</option>
                         <option value="off_schedule">No contraturno (fora das minhas aulas)</option>
                       </select>
+                    </div>
+                    {/* Trabalhos exigidos por período (utils/works.ts) */}
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1 ml-1">Trabalhos por período</label>
+                      <select
+                        value={String(newSchool.worksPerTerm || 0)}
+                        onChange={e => setNewSchool({ ...newSchool, worksPerTerm: parseInt(e.target.value) || 0 })}
+                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg outline-none text-sm bg-white"
+                      >
+                        <option value="0">A escola não exige</option>
+                        <option value="1">1 trabalho por bimestre/trimestre</option>
+                        <option value="2">2 trabalhos por bimestre/trimestre</option>
+                        <option value="3">3 trabalhos por bimestre/trimestre</option>
+                        <option value="4">4 trabalhos por bimestre/trimestre</option>
+                      </select>
+                      {((newSchool.worksPerTerm || 0) > 0 || Object.keys(newSchool.worksPerTermByClass || {}).length > 0) && (
+                        <div className="flex items-center gap-2 mt-2 text-xs text-slate-600">
+                          <span>Avisar</span>
+                          <input
+                            type="number" min={1} max={20}
+                            value={newSchool.workAlertWeeks || 6}
+                            onChange={e => setNewSchool({ ...newSchool, workAlertWeeks: Math.max(1, parseInt(e.target.value) || 6) })}
+                            className="w-16 px-2 py-1 border border-slate-200 rounded-lg text-sm text-center"
+                          />
+                          <span>semanas antes do fim do período</span>
+                        </div>
+                      )}
+                      {(() => {
+                        const activeClasses = (newSchool.classes || []).filter(c => typeof c === 'string' || !c.deleted)
+                          .map(c => ({ id: typeof c === 'string' ? c : c.id, name: typeof c === 'string' ? c : c.name }));
+                        const exceptions = newSchool.worksPerTermByClass || {};
+                        const setException = (classId: string, value: number | null) => {
+                          const next = { ...exceptions };
+                          if (value === null) delete next[classId]; else next[classId] = value;
+                          setNewSchool({ ...newSchool, worksPerTermByClass: next });
+                        };
+                        const free = activeClasses.filter(c => !(c.id in exceptions));
+                        if (!activeClasses.length) return null;
+                        return (
+                          <div className="mt-2 space-y-1.5">
+                            {Object.entries(exceptions).map(([classId, value]) => {
+                              const cls = activeClasses.find(c => c.id === classId);
+                              if (!cls) return null;
+                              return (
+                                <div key={classId} className="flex items-center gap-2 text-xs text-slate-600">
+                                  <span className="font-bold min-w-[48px]">{cls.name}:</span>
+                                  <select value={String(value)} onChange={e => setException(classId, parseInt(e.target.value) || 0)}
+                                    className="flex-1 px-2 py-1 border border-slate-200 rounded-lg text-xs bg-white">
+                                    {[0, 1, 2, 3, 4].map(n => <option key={n} value={n}>{n === 0 ? 'não exige' : `${n} por período`}</option>)}
+                                  </select>
+                                  <button type="button" onClick={() => setException(classId, null)} className="text-slate-400 hover:text-red-500 p-1" title="Tirar exceção">
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                            {free.length > 0 && (
+                              <select value="" onChange={e => { if (e.target.value) setException(e.target.value, newSchool.worksPerTerm ? 0 : 1); }}
+                                className="w-full px-2 py-1.5 border border-dashed border-slate-200 rounded-lg text-[11px] text-slate-500 bg-white">
+                                <option value="">+ Turma com regra diferente…</option>
+                                {free.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                              </select>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 

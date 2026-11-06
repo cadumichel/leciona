@@ -38,7 +38,10 @@ import {
   ArrowDownWideNarrow,
   Edit3,
   Eye,
-  EyeOff
+  EyeOff,
+  Megaphone,
+  ClipboardList,
+  PackageX
 } from 'lucide-react';
 import { DAYS_OF_WEEK_NAMES } from '../constants';
 import { parseTimeToMinutes, getCurrentTimeInMinutes, getHolidayName, isHoliday, getDayOfWeekFromDate, toSafeISO, formatDateBR } from '../utils';
@@ -49,6 +52,10 @@ import { sanitizeText, LIMITS } from '../utils/validation';
 import { findPreviousLesson } from '../utils/retrospective';
 import { DisconnectedNotice } from './ConnectionWarnings';
 import { countRemainingLessons } from '../utils/remainingLessons';
+import { scheduleNotices, scheduleNoticeText } from '../utils/scheduleNotice';
+import { missingWorkAlerts, pendingDeliveriesForClass, worksAtLesson } from '../utils/works';
+import { WorkDeliveryModal } from './WorkDeliveries';
+import { todayLocal } from '../utils';
 import { useToast } from '../hooks/useToast';
 
 interface LessonLoggerProps {
@@ -234,6 +241,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 }) => {
   // ... (Estados iniciais mantidos) ...
   const [viewMode, setViewMode] = useState<ViewMode>('day');
+  /** Trabalho com a janela de registro de entrega aberta (avisos da turma na janela da aula) */
+  const [deliveryEventId, setDeliveryEventId] = useState<string | null>(null);
   const [futureViewType, setFutureViewType] = useState<FutureViewType>('calendar');
   const [historyViewType, setHistoryViewType] = useState<HistoryViewType>('list');
   const [futureSortOrder, setFutureSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -849,6 +858,22 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       date: activeLesson.date,
       afterStartTime: activeLesson.slot.startTime
     });
+  }, [activeLesson, data]);
+
+  // Avisos da turma na janela da aula: avaliação para marcar (1 semana), trabalhos do período,
+  // entregas pendentes e registro de entrega do trabalho desta aula (utils/scheduleNotice.ts, utils/works.ts)
+  const classNotices = useMemo(() => {
+    if (!activeLesson || activeLesson.type !== 'school' || activeLesson.schedule.classId === 'window') return null;
+    const schoolId = activeLesson.institution.id;
+    const classId = activeLesson.schedule.classId;
+    const future = activeLesson.date >= todayLocal();
+    const result = {
+      toSchedule: future ? scheduleNotices(data, activeLesson.date, schoolId, classId) : [],
+      works: future ? missingWorkAlerts(data, activeLesson.date, schoolId, classId) : [],
+      pending: pendingDeliveriesForClass(data, schoolId, classId, activeLesson.date),
+      worksHere: worksAtLesson(data, schoolId, classId, activeLesson.date, activeLesson.schedule.slotId)
+    };
+    return result.toSchedule.length || result.works.length || result.pending.length || result.worksHere.length ? result : null;
   }, [activeLesson, data]);
 
   const extraLogsForDay = useMemo(() => {
@@ -2229,6 +2254,73 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             </button>
           </div>
         )}
+
+        {classNotices && activeLesson && (
+          <div className="-mt-3 md:-mt-5 lg:mt-0 mb-6 md:mb-8 lg:mb-3 space-y-1.5">
+            {classNotices.toSchedule.map(n => (
+              <div key={`s-${n.event.id}`} className={`flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg border text-[11px] font-bold ${n.status === 'soon'
+                ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300'
+                : 'bg-orange-100 border-orange-300 text-orange-900 dark:bg-orange-900/30 dark:border-orange-700 dark:text-orange-200'}`}>
+                <Megaphone size={13} className="shrink-0" />
+                <span className="flex-1 min-w-[160px]">
+                  <b className="uppercase text-[10px] mr-1">Marcar com a turma:</b>
+                  {n.status === 'last' && n.limitDate === activeLesson.date
+                    ? `${n.event.type === 'test' ? 'Prova' : 'Trabalho'} ${n.event.title} em ${formatDateBR(n.event.date).slice(0, 5)}. Esta é a última aula para avisar com 1 semana.`
+                    : scheduleNoticeText(n)}
+                </span>
+                <button type="button"
+                  onClick={() => onUpdateData({ events: data.events.map(e => (e.id === n.event.id ? { ...e, scheduled: true } : e)) })}
+                  className="shrink-0 px-2 py-1 rounded-md bg-white dark:bg-slate-800 border border-current text-[10px] font-black uppercase hover:brightness-95">
+                  Marquei com a turma
+                </button>
+              </div>
+            ))}
+            {classNotices.works.map(w => (
+              <div key={`w-${w.classId}`} className="flex items-center gap-2 px-3 py-2 rounded-lg border text-[11px] font-bold bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300">
+                <ClipboardList size={13} className="shrink-0" />
+                <span className="flex-1">
+                  <b className="uppercase text-[10px] mr-1">Trabalhos:</b>
+                  {w.count === 0 ? 'Nenhum trabalho cadastrado' : `${w.count} de ${w.required} trabalhos cadastrados`} no {shortTermName(w.term.name)} (a escola pede {w.required}).
+                  {w.lessonsLeft !== undefined && ` Faltam ${w.lessonsLeft} ${w.lessonsLeft === 1 ? 'aula' : 'aulas'} até ${formatDateBR(w.term.end).slice(0, 5)}.`}
+                </span>
+              </div>
+            ))}
+            {classNotices.pending.map(({ event, items }) => (
+              <div key={`p-${event.id}`} className="px-3 py-2 rounded-lg border text-[11px] font-bold bg-orange-50 border-orange-200 text-orange-800 dark:bg-orange-900/20 dark:border-orange-800 dark:text-orange-300">
+                <div className="flex items-center gap-2">
+                  <PackageX size={13} className="shrink-0" />
+                  <span className="flex-1"><b className="uppercase text-[10px] mr-1">Falta entregar:</b>{event.title} (entrega {formatDateBR(event.date).slice(0, 5)})</span>
+                </div>
+                <div className="flex flex-wrap gap-1 mt-1.5 ml-5">
+                  {items.map(item => (
+                    <button key={item.id} type="button" title="Marcar como entregue"
+                      onClick={() => onUpdateData({ events: data.events.map(e => (e.id === event.id ? {
+                        ...e, missingDeliveries: (e.missingDeliveries || []).map(m => (m.id === item.id ? { ...m, deliveredAt: activeLesson.date } : m))
+                      } : e)) })}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-orange-200 dark:border-orange-800 hover:border-emerald-400 hover:text-emerald-700">
+                      {item.name} <CheckCircle2 size={11} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {classNotices.worksHere.map(event => (
+              <div key={`h-${event.id}`} className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg border text-[11px] font-bold bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-300">
+                <ClipboardList size={13} className="shrink-0 text-blue-600" />
+                <span className="flex-1 min-w-[160px]"><b className="uppercase text-[10px] mr-1">Trabalho nesta aula:</b>{event.title}</span>
+                <button type="button" onClick={() => setDeliveryEventId(event.id)}
+                  className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-[10px] font-black uppercase">
+                  <PackageX size={11} /> Registrar entregas
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {deliveryEventId && activeLesson && (() => {
+          const ev = data.events.find(e => e.id === deliveryEventId);
+          return ev ? <WorkDeliveryModal data={data} event={ev} date={activeLesson.date} onUpdateData={onUpdateData} onClose={() => setDeliveryEventId(null)} /> : null;
+        })()}
 
         {disconnected && <DisconnectedNotice onConnect={onConnect} />}
 

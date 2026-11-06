@@ -30,6 +30,12 @@ export interface School {
   recoveryDelayDays?: number;
   /** 2ª chamada: numa aula do professor ou no contraturno (sem aula) */
   secondCallMode?: 'in_class' | 'off_schedule';
+  /** Trabalhos exigidos por período (bimestre/trimestre); sem valor ou 0 = a escola não exige (utils/works.ts) */
+  worksPerTerm?: number;
+  /** Exceção por turma (código da turma → trabalhos por período) */
+  worksPerTermByClass?: Record<string, number>;
+  /** Semanas antes do fim do período para avisar das turmas sem trabalho (padrão 6) */
+  workAlertWeeks?: number;
 }
 
 export interface SchoolClass {
@@ -166,6 +172,8 @@ export interface LessonLog {
   startTime?: string;
   endTime?: string;
   status?: 'active' | 'removed';
+  /** Aula de um trabalho feito em sala (id do trabalho): registro "Trabalho em sala: {título}" (utils/works.ts) */
+  workId?: string;
 }
 
 export type EventType = 'test' | 'work' | 'meeting' | 'festivity' | 'trip' | 'material' | 'other';
@@ -190,6 +198,38 @@ export interface SchoolEvent {
   kind?: 'recovery' | 'term_recovery' | 'second_call';
   /** Avaliação original da REC ou da 2ª chamada */
   parentId?: string;
+  /** Trabalho: feito em sala (uma ou mais aulas) ou em casa (entrega na data) */
+  workPlace?: 'class' | 'home';
+  /** Trabalho: individual ou em grupo */
+  workFormat?: 'individual' | 'group';
+  /** Grupos do trabalho (opcional: dá para escolher "em grupo" sem cadastrar nomes) */
+  workGroups?: WorkGroup[];
+  /** Alunos ou grupos que não entregaram na data (ficam pendentes até a entrega) */
+  missingDeliveries?: MissingDelivery[];
+}
+
+export interface WorkMember {
+  /** Aluno da lista da turma (ClassStudent.id); sem id = nome digitado */
+  studentId?: string;
+  name: string;
+}
+
+export interface WorkGroup {
+  id: string;
+  name: string;
+  members: WorkMember[];
+}
+
+export interface MissingDelivery {
+  id: string;
+  /** Quem não entregou: um aluno da lista, um grupo ou um nome digitado */
+  studentId?: string;
+  groupId?: string;
+  name: string;
+  /** Dia em que a falta de entrega foi registrada (AAAA-MM-DD) */
+  registeredAt: string;
+  /** Dia em que entregou (com atraso); sem valor = ainda pendente */
+  deliveredAt?: string;
 }
 
 export interface Term {

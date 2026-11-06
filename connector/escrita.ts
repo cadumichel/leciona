@@ -1,10 +1,11 @@
-import { AcademicCalendar, AppData, School, SchoolClass, SchoolEvent } from '../types';
+import { AcademicCalendar, AppData, LessonLog, School, SchoolClass, SchoolEvent } from '../types';
 import { deepEqual, formatDateBR, getHolidayName, getSafeDate } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { isLessonBlocked } from '../utils/lessonStats';
 import { lessonNumberInShift } from '../utils/dashboardWeb';
 import { removeUndefined } from '../utils/sync';
 import { activityAt, assessmentPlaces } from '../utils/assessmentPlace';
+import { isAutoWorkSessionLog, workSessionLogs } from '../utils/works';
 import {
   buildRecovery, checkAssessmentDate, isRegularAssessment, linkedAssessments, nextLessonDate, recoveryDaysOf, recoveryPolicyOf,
   secondCallModeOf, suggestRecovery, termRecoveryContent
@@ -434,6 +435,16 @@ export const prepararAlteracoes = (data: AppData, pedidos: PedidoDeAlteracao[], 
           else if (reg && (reg.subject || '').startsWith('Avaliação:')) {
             item.avisos.push(`O registro do diário de ${formatDateBR(e.date)} ("${(reg.subject || '').slice(0, 60)}") foi editado e será mantido.`);
           }
+          // Outras aulas do trabalho em sala (utils/works.ts): sai o registro automático; o do Cadu fica sem a ligação
+          workSessionLogs(data.logs || [], e.id).forEach(l => {
+            const log = l as LessonLog & Item;
+            if (tocados.has(log.id)) return;
+            if (isAutoWorkSessionLog(log, e.title)) mudar('logs', log, null, `Apagar o registro "Trabalho em sala: ${e.title}" de ${formatDateBR(log.date)}`);
+            else {
+              const { workId, ...semLigacao } = log;
+              mudar('logs', log, semLigacao as Item, `Tirar a ligação com o trabalho do registro de ${formatDateBR(log.date)}`);
+            }
+          });
         });
         plano.resumo.push(item.descricao);
         item.ok = true;

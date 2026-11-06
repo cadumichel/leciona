@@ -89,7 +89,11 @@ objetivo.
   botão "Marquei com a turma" (vira Agendada). Sem aula até o prazo = "fora do prazo".
 - **Início**: `components/Dashboard.tsx` + `utils/dashboardWeb.ts` (linha do dia e grade semanal).
 - **Virada do ano letivo**: `utils/newSchoolYear.ts` + `components/NewSchoolYearWizard.tsx`.
-- **Planilhas exportadas**: `utils/exportRows.ts`.
+- **Planilhas exportadas**: `utils/exportRows.ts`. Coluna `Situacao` = "Aula cancelada: {evento}" para o
+  registro automático "Evento: X" e para aulas canceladas por evento sem registro (`cancelledLessonsWithoutLog`).
+- **Aulas canceladas por evento no Histórico do Diário**: `getLessonDisplayItems` com
+  `includeCancelledByEvent` devolve essas aulas com `cancelledBy` (selo rosa "Aula cancelada · evento"); só no
+  filtro "Todos", e não contam como aula programada. Recessos e feriados continuam fora.
 - **Retrospectiva do Diário** (janela de registro da aula): `utils/retrospective.ts`. Mostra a aula
   imediatamente anterior da turma pela grade (sem feriados, recessos e aulas removidas; aulas extras
   contam), mesmo sem conteúdo ("Sem conteúdo cadastrado"). Nunca pular para o último registro.

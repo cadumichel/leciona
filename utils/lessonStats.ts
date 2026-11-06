@@ -1,5 +1,5 @@
 
-import { AppData, LessonLog, ScheduleEntry, TimeSlot, School, DayOfWeek, Student } from '../types';
+import { AppData, LessonLog, ScheduleEntry, TimeSlot, School, DayOfWeek, Student, SchoolEvent } from '../types';
 import { isHoliday, getHolidayName, getSafeDate, parseTimeToMinutes, checkTimeOverlap } from '../utils';
 import { getSchedulesForDate } from './schedule';
 import { isSameClassRef } from './classRefs';
@@ -16,6 +16,8 @@ export interface LessonDisplayItem {
     isSubstitution?: boolean;
     hasContent: boolean;
     isPast: boolean;
+    /** Título do evento que cancelou a aula (só com includeCancelledByEvent). */
+    cancelledBy?: string;
 }
 
 export interface LessonStats {
@@ -32,6 +34,8 @@ export interface LessonFilters {
     periodIdx?: string;
     showWithContent?: boolean;
     showWithoutContent?: boolean;
+    /** Histórico: mostra as aulas canceladas por evento (com cancelledBy), em vez de escondê-las. */
+    includeCancelledByEvent?: boolean;
 }
 
 // Helper to check if a lesson is blocked
@@ -49,19 +53,27 @@ const calendarForDate = (data: AppData, schoolId: string, dateStr: string) => {
  * (da escola toda, do turno ou da turma). Feriados nacionais ficam de fora (use getHolidayName).
  * A turma do evento é o código e a da grade é o nome: compara com isSameClassRef.
  */
-export const getLessonBlockReason = (data: AppData, dateStr: string, schoolId: string, shiftId?: string, classId?: string): string | null => {
+export const getLessonBlockReason = (data: AppData, dateStr: string, schoolId: string, shiftId?: string, classId?: string): string | null =>
+    getCalendarBlockReason(data, dateStr, schoolId) || getCancellingEvent(data, dateStr, schoolId, shiftId, classId)?.title || null;
+
+/** Recesso de meio de ano ou recesso da escola nessa data. */
+export const getCalendarBlockReason = (data: AppData, dateStr: string, schoolId: string): string | null => {
     const calendar = calendarForDate(data, schoolId, dateStr);
     if (calendar) {
         if (calendar.midYearBreak?.start && dateStr >= calendar.midYearBreak.start && dateStr <= calendar.midYearBreak.end) return 'Recesso de Meio de Ano';
         const recess = calendar.extraRecesses?.find(r => r.date === dateStr);
         if (recess) return recess.name || 'Recesso';
     }
+    return null;
+};
 
+/** Evento que suspende a aula (da escola toda, do turno ou da turma), se houver. */
+export const getCancellingEvent = (data: AppData, dateStr: string, schoolId: string, shiftId?: string, classId?: string): SchoolEvent | null => {
     const events = (data.events || []).filter(e => e.schoolId === schoolId && e.date.startsWith(dateStr) && e.blocksClasses);
     for (const event of events) {
-        if (!event.slotId && !event.classId) return event.title;
-        if (event.slotId && event.slotId === shiftId) return event.title;
-        if (event.classId && classId && isSameClassRef(data, schoolId, event.classId, classId)) return event.title;
+        if (!event.slotId && !event.classId) return event;
+        if (event.slotId && event.slotId === shiftId) return event;
+        if (event.classId && classId && isSameClassRef(data, schoolId, event.classId, classId)) return event;
     }
     return null;
 };
@@ -85,7 +97,7 @@ export const getNoLessonReason = (data: AppData, dateStr: string, schoolId: stri
 
 export const getLessonDisplayItems = (data: AppData, filters: LessonFilters): LessonDisplayItem[] => {
     const items: LessonDisplayItem[] = [];
-    const { start, end, schoolId: filterInstId, classId: filterClassId, periodIdx: filterPeriodIdx, showWithContent, showWithoutContent } = filters;
+    const { start, end, schoolId: filterInstId, classId: filterClassId, periodIdx: filterPeriodIdx, showWithContent, showWithoutContent, includeCancelledByEvent } = filters;
 
     const startDate = new Date(start + 'T00:00:00');
     const endDate = new Date(end + 'T00:00:00');
@@ -114,7 +126,13 @@ export const getLessonDisplayItems = (data: AppData, filters: LessonFilters): Le
                 const school = data.schools.find(sc => sc.id === s.schoolId);
                 if (!school || school.deleted) return;
 
-                if (isLessonBlocked(data, dateStr, s.schoolId, s.shiftId, s.classId)) return;
+                // Aula cancelada por evento: no histórico aparece marcada; recesso continua de fora
+                let cancelledBy: string | undefined;
+                if (isLessonBlocked(data, dateStr, s.schoolId, s.shiftId, s.classId)) {
+                    if (!includeCancelledByEvent || getCalendarBlockReason(data, dateStr, s.schoolId)) return;
+                    cancelledBy = getCancellingEvent(data, dateStr, s.schoolId, s.shiftId, s.classId)?.title;
+                    if (!cancelledBy) return;
+                }
 
                 const slot = school.shifts.find(sh => sh.id === s.shiftId)?.slots.find(sl => sl.id === s.slotId);
                 if (!slot) return;
@@ -171,12 +189,16 @@ export const getLessonDisplayItems = (data: AppData, filters: LessonFilters): Le
                 // Original logic skips substitutions in the scheduled loop (handled in manual loop)
                 if (log && log.type === 'substitution') return;
 
-                const hasContent = !!(log && (log.subject || log.homework || log.notes || (log.attendance && log.attendance.length > 0)));
+                const written = !!(log && (log.subject || log.homework || log.notes || (log.attendance && log.attendance.length > 0)));
+                // Registro escrito pelo professor numa aula cancelada vale como aula normal
+                if (cancelledBy && written && !isAutoEventLog(log)) cancelledBy = undefined;
+                const hasContent = written && !cancelledBy;
 
-                // Apply Content Filters
+                // Apply Content Filters (cancelada não é pendente nem registrada: só em "Todas")
                 if (showWithContent !== undefined && showWithoutContent !== undefined) {
-                    if (hasContent && !showWithContent) return;
-                    if (!hasContent && !showWithoutContent) return;
+                    if (cancelledBy && !(showWithContent && showWithoutContent)) return;
+                    if (!cancelledBy && hasContent && !showWithContent) return;
+                    if (!cancelledBy && !hasContent && !showWithoutContent) return;
                 }
 
                 // Determine if past (for pending status)
@@ -193,7 +215,8 @@ export const getLessonDisplayItems = (data: AppData, filters: LessonFilters): Le
                     slot,
                     dayOfWeek,
                     hasContent,
-                    isPast
+                    isPast,
+                    ...(cancelledBy ? { cancelledBy } : {})
                 });
             });
 

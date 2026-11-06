@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { X, Archive, FileDown, CheckCircle2, CalendarRange, School as SchoolIcon, ArrowRight, ArrowLeft, Sparkles, AlertTriangle } from 'lucide-react';
 import { AppData } from '../types';
 import { downloadCSV, formatDateBR } from '../utils';
-import { buildLogRows, buildAssessmentRows, byDate } from '../utils/exportRows';
+import { buildLogRows, buildAssessmentRows, byDate, cancelledLessonsWithoutLog } from '../utils/exportRows';
 import { SyncedData } from '../utils/sync';
 import {
   NewYearPlan, defaultPlan, withYear, splitTerms, summarizeCurrentYear, buildNewSchoolYear
@@ -53,7 +53,7 @@ const NewSchoolYearWizard: React.FC<NewSchoolYearWizardProps> = ({ data, onClose
   };
 
   const downloadLogs = () => {
-    const logs = data.logs
+    const logs = [...data.logs, ...cancelledLessonsWithoutLog(data)]
       .filter(l => l.status !== 'removed' && l.classId !== 'window' && l.type !== 'substitution')
       .sort(byDate);
     downloadCSV(buildLogRows(data, logs), `leciona_diarios_${currentYear}`);

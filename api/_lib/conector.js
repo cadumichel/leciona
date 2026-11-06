@@ -185,24 +185,29 @@ var calendarForDate = (data, schoolId, dateStr) => {
   const calendars = (data.calendars || []).filter((c) => c.schoolId === schoolId);
   return calendars.find((c) => c.start && c.end && dateStr >= c.start.split("T")[0] && dateStr <= c.end.split("T")[0]) || calendars[0];
 };
-var getLessonBlockReason = (data, dateStr, schoolId, shiftId, classId) => {
+var getLessonBlockReason = (data, dateStr, schoolId, shiftId, classId) => getCalendarBlockReason(data, dateStr, schoolId) || getCancellingEvent(data, dateStr, schoolId, shiftId, classId)?.title || null;
+var getCalendarBlockReason = (data, dateStr, schoolId) => {
   const calendar = calendarForDate(data, schoolId, dateStr);
   if (calendar) {
     if (calendar.midYearBreak?.start && dateStr >= calendar.midYearBreak.start && dateStr <= calendar.midYearBreak.end) return "Recesso de Meio de Ano";
     const recess = calendar.extraRecesses?.find((r) => r.date === dateStr);
     if (recess) return recess.name || "Recesso";
   }
+  return null;
+};
+var getCancellingEvent = (data, dateStr, schoolId, shiftId, classId) => {
   const events = (data.events || []).filter((e) => e.schoolId === schoolId && e.date.startsWith(dateStr) && e.blocksClasses);
   for (const event of events) {
-    if (!event.slotId && !event.classId) return event.title;
-    if (event.slotId && event.slotId === shiftId) return event.title;
-    if (event.classId && classId && isSameClassRef(data, schoolId, event.classId, classId)) return event.title;
+    if (!event.slotId && !event.classId) return event;
+    if (event.slotId && event.slotId === shiftId) return event;
+    if (event.classId && classId && isSameClassRef(data, schoolId, event.classId, classId)) return event;
   }
   return null;
 };
+var isAutoEventLog = (log) => !!log && (log.subject || "").startsWith("Evento: ") && log.notes === "Aula substitu\xEDda por evento escolar." && !log.homework && !(log.attendance && log.attendance.length > 0);
 var getLessonDisplayItems = (data, filters) => {
   const items = [];
-  const { start, end, schoolId: filterInstId, classId: filterClassId, periodIdx: filterPeriodIdx, showWithContent, showWithoutContent } = filters;
+  const { start, end, schoolId: filterInstId, classId: filterClassId, periodIdx: filterPeriodIdx, showWithContent, showWithoutContent, includeCancelledByEvent } = filters;
   const startDate = /* @__PURE__ */ new Date(start + "T00:00:00");
   const endDate = /* @__PURE__ */ new Date(end + "T00:00:00");
   const now = /* @__PURE__ */ new Date();
@@ -220,7 +225,12 @@ var getLessonDisplayItems = (data, filters) => {
         if (filterClassId !== "all" && s.classId !== filterClassId) return;
         const school = data.schools.find((sc) => sc.id === s.schoolId);
         if (!school || school.deleted) return;
-        if (isLessonBlocked(data, dateStr, s.schoolId, s.shiftId, s.classId)) return;
+        let cancelledBy;
+        if (isLessonBlocked(data, dateStr, s.schoolId, s.shiftId, s.classId)) {
+          if (!includeCancelledByEvent || getCalendarBlockReason(data, dateStr, s.schoolId)) return;
+          cancelledBy = getCancellingEvent(data, dateStr, s.schoolId, s.shiftId, s.classId)?.title;
+          if (!cancelledBy) return;
+        }
         const slot = school.shifts.find((sh) => sh.id === s.shiftId)?.slots.find((sl) => sl.id === s.slotId);
         if (!slot) return;
         const schoolCalendars = data.calendars.filter((c) => c.schoolId === s.schoolId);
@@ -250,10 +260,13 @@ var getLessonDisplayItems = (data, filters) => {
         }
         if (log && log.status === "removed") return;
         if (log && log.type === "substitution") return;
-        const hasContent = !!(log && (log.subject || log.homework || log.notes || log.attendance && log.attendance.length > 0));
+        const written = !!(log && (log.subject || log.homework || log.notes || log.attendance && log.attendance.length > 0));
+        if (cancelledBy && written && !isAutoEventLog(log)) cancelledBy = void 0;
+        const hasContent = written && !cancelledBy;
         if (showWithContent !== void 0 && showWithoutContent !== void 0) {
-          if (hasContent && !showWithContent) return;
-          if (!hasContent && !showWithoutContent) return;
+          if (cancelledBy && !(showWithContent && showWithoutContent)) return;
+          if (!cancelledBy && hasContent && !showWithContent) return;
+          if (!cancelledBy && !hasContent && !showWithoutContent) return;
         }
         let isPast = false;
         if (dateStr < todayStr) isPast = true;
@@ -267,7 +280,8 @@ var getLessonDisplayItems = (data, filters) => {
           slot,
           dayOfWeek,
           hasContent,
-          isPast
+          isPast,
+          ...cancelledBy ? { cancelledBy } : {}
         });
       });
       if (data.settings.isPrivateTeacher && data.students) {

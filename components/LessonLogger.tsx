@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { AppData, LessonLog, ScheduleEntry, TimeSlot, School, DayOfWeek, Student, Term, Occurrence, StudentAttendance } from '../types';
 import {
   History,
+  CalendarX,
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
@@ -779,7 +780,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       classId: filterClassId,
       periodIdx: filterPeriodIdx,
       showWithContent: filterStatus !== 'pending',
-      showWithoutContent: filterStatus !== 'completed'
+      showWithoutContent: filterStatus !== 'completed',
+      includeCancelledByEvent: true
     });
 
     const today = new Date();
@@ -822,13 +824,15 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
   }, [data, historyDateRange, filterInstId, filterClassId, filterPeriodIdx, filterStatus]);
 
   const stats = useMemo(() => {
-    const pastItems = historyItems.filter(i => i.isPast);
+    // Aulas canceladas por evento aparecem no histórico, mas não contam como aula
+    const lessons = historyItems.filter(i => !i.cancelledBy);
+    const pastItems = lessons.filter(i => i.isPast);
     return {
       totalPastPlanned: pastItems.length,
       loggedPast: pastItems.filter(i => i.hasContent).length,
-      totalSchedule: historyItems.length,
-      totalWithContent: historyItems.filter(i => i.hasContent).length,
-      totalFutureWithContent: historyItems.filter(i => !i.isPast && i.hasContent).length
+      totalSchedule: lessons.length,
+      totalWithContent: lessons.filter(i => i.hasContent).length,
+      totalFutureWithContent: lessons.filter(i => !i.isPast && i.hasContent).length
     };
   }, [historyItems]);
 
@@ -3627,7 +3631,11 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                         </h3>
                         <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
                         <span className="text-[10px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
-                          {weekLessons.length} aulas
+                          {(() => {
+                            const cancelled = weekLessons.filter(l => l.cancelledBy).length;
+                            const total = weekLessons.length - cancelled;
+                            return `${total} ${total === 1 ? 'aula' : 'aulas'}${cancelled ? ` · ${cancelled} cancelada${cancelled === 1 ? '' : 's'}` : ''}`;
+                          })()}
                         </span>
                       </div>
 
@@ -3696,7 +3704,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                                   handleOpenLog(item.schedule as any, item.date);
                                 }
                               }}
-                              className={`bg-white dark:bg-slate-900 p-5 rounded-xl border-2 transition-all text-left hover:shadow-lg relative overflow-hidden min-w-0 cursor-pointer ${item.log ? 'border-green-100 dark:border-green-900/20' : 'border-red-50 dark:border-red-900/10'}`}
+                              className={`bg-white dark:bg-slate-900 p-5 rounded-xl border-2 transition-all text-left hover:shadow-lg relative overflow-hidden min-w-0 cursor-pointer ${item.cancelledBy ? 'border-pink-100 dark:border-pink-900/20' : item.log ? 'border-green-100 dark:border-green-900/20' : 'border-red-50 dark:border-red-900/10'}`}
                             >
                               <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: item.institution?.color || '#999' }}></div>
 
@@ -3734,24 +3742,31 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                                 </div>
                               </div>
 
-                              <div
-                                className={`p-1 mt-2 rounded-xl text-[10px] font-bold italic truncate flex-1 min-w-0 ${item.log ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400' : 'bg-red-50/50 dark:bg-red-900/20 text-red-400 dark:text-red-300'}`}
-                                onClick={(e) => {
-                                  // Prevent opening modal if clicking on editable field OR if in bulk edit mode
-                                  if (isBulkEditMode) e.stopPropagation();
-                                }}
-                              >
-                                {
-                                  // Always render EditableContentField to allow editing even for pending items
-                                  // Pass isPlaceholder=true if no log exists to show "Registro Pendente" when not editing
-                                  <EditableContentField
-                                    initialValue={item.log?.subject || ''}
-                                    onSave={(val, ctxId) => handleQuickSave(val, item.schedule, item.date, item.log, ctxId)} // Pass ctxId
-                                    isBulkEditing={isBulkEditMode}
-                                    isPlaceholder={!item.log}
-                                  />
-                                }
-                              </div>
+                              {item.cancelledBy ? (
+                                <div className="p-1 mt-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1 min-w-0 text-pink-600 dark:text-pink-300 bg-pink-50 dark:bg-pink-900/20" title={`Aula cancelada: ${item.cancelledBy}`}>
+                                  <CalendarX size={12} className="shrink-0" />
+                                  <span className="truncate">Aula cancelada · {item.cancelledBy}</span>
+                                </div>
+                              ) : (
+                                <div
+                                  className={`p-1 mt-2 rounded-xl text-[10px] font-bold italic truncate flex-1 min-w-0 ${item.log ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400' : 'bg-red-50/50 dark:bg-red-900/20 text-red-400 dark:text-red-300'}`}
+                                  onClick={(e) => {
+                                    // Prevent opening modal if clicking on editable field OR if in bulk edit mode
+                                    if (isBulkEditMode) e.stopPropagation();
+                                  }}
+                                >
+                                  {
+                                    // Always render EditableContentField to allow editing even for pending items
+                                    // Pass isPlaceholder=true if no log exists to show "Registro Pendente" when not editing
+                                    <EditableContentField
+                                      initialValue={item.log?.subject || ''}
+                                      onSave={(val, ctxId) => handleQuickSave(val, item.schedule, item.date, item.log, ctxId)} // Pass ctxId
+                                      isBulkEditing={isBulkEditMode}
+                                      isPlaceholder={!item.log}
+                                    />
+                                  }
+                                </div>
+                              )}
                             </div>
                           );
                         })}

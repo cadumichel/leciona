@@ -95,6 +95,10 @@ objetivo.
 - **Botão voltar do celular** (`hooks/useBackClose.ts`): aba fora do Início, aula aberta no Diário e janelas
   usam `useBackClose(aberto, fechar)`; voltar fecha a camada de cima em vez de sair do app. Janela nova = mais
   uma linha `useBackClose`.
+- **Tamanho das letras** (Ajustes → Aparência: Normal/Grande/Maior): `utils/tamanhoLetras.ts`, só neste aparelho
+  (`localStorage` `leciona-tamanho-letras`, atributo `data-letras` no `html`). O CSS é gerado por
+  `scripts/gerarTamanhoLetras.mjs` em `styles/tamanhoLetras.css`; tamanho de letra novo nas telas = rode o script
+  (o teste `tamanhoLetras` avisa). "Normal" é o app como sempre foi; o Cadu não quer letras maiores por padrão.
 - **Início**: `components/Dashboard.tsx` + `utils/dashboardWeb.ts` (linha do dia e grade semanal).
 - **Virada do ano letivo**: `utils/newSchoolYear.ts` + `components/NewSchoolYearWizard.tsx`.
 - **Planilhas exportadas**: `utils/exportRows.ts`. Coluna `Situacao` = "Aula cancelada: {evento}" para o

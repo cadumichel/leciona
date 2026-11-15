@@ -4,6 +4,10 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 // Tailwind compilado no build (tailwind.config.js)
 import './index.css';
+// Tamanho das letras escolhido em Ajustes (só neste aparelho)
+import './styles/tamanhoLetras.css';
+import { aplicarTamanhoLetras, lerTamanhoLetras } from './utils/tamanhoLetras';
+aplicarTamanhoLetras(lerTamanhoLetras());
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

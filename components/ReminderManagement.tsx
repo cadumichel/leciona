@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useBackClose } from '../hooks/useBackClose';
 import { AppData, Reminder } from '../types';
 import {
   Plus,
@@ -33,6 +34,7 @@ const CATEGORIES = [
 
 export default function ReminderManagement({ data, onUpdateData }: ReminderManagementProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  useBackClose(isModalOpen, () => setIsModalOpen(false));
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sortOrder, toggleSortOrder] = useSortOrder('lembretes', 'desc');

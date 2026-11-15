@@ -25,6 +25,7 @@ import {
   workCountsByClass, workSessionLogs
 } from '../utils/works';
 import { todayLocal } from '../utils';
+import { useBackClose } from '../hooks/useBackClose';
 
 interface AssessmentManagementProps {
   data: AppData;
@@ -109,6 +110,9 @@ const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ data, onUpd
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveDecision, setSaveDecision] = useState<SaveDecision | null>(null);
+  // Voltar do celular fecha a janela aberta (a de cima primeiro)
+  useBackClose(isAdding, () => { setIsAdding(false); setSaveDecision(null); });
+  useBackClose(!!saveDecision, () => setSaveDecision(null));
 
   // ── Filter State ─────────────────────────────────────────────────────────
   const [filterSchoolId, setFilterSchoolId] = useState('all');

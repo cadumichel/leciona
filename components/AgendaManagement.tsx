@@ -21,6 +21,7 @@ import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName, isSameClassRef } from '../utils/classRefs';
 import Toggle from './Toggle';
 import SortOrderButton, { byDate, useSortOrder } from './SortOrderButton';
+import { useBackClose } from '../hooks/useBackClose';
 
 interface AgendaManagementProps {
   data: AppData;
@@ -63,6 +64,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
 
   // ── Modal State ──────────────────────────────────────────────────────────
   const [isAddingEvent, setIsAddingEvent] = useState(false);
+  useBackClose(isAddingEvent, () => setIsAddingEvent(false));
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
 

@@ -36,6 +36,7 @@ import SyncStatus from './components/SyncStatus'; // Componente de Status de Syn
 import { ConnectionBanner, DisconnectedPopup } from './components/ConnectionWarnings';
 import { ToastProvider, useToast } from './hooks/useToast';
 import { useSyncedData } from './hooks/useSyncedData';
+import { useBackClose } from './hooks/useBackClose';
 import { useAsyncLock } from './utils/validation';
 import { getSchedulesForDate } from './utils/schedule';
 import { getClassName } from './utils/classRefs';
@@ -277,6 +278,9 @@ const App: React.FC = () => {
       setActiveTab('settings');
     }
   }, [isOnboarding, activeTab]);
+
+  // Voltar do celular numa aba fora do Início volta para o Início (em vez de sair do app)
+  useBackClose(activeTab !== 'dashboard' && !isOnboarding, () => setActiveTab('dashboard'));
 
   // Baixa as outras telas em segundo plano logo depois que o app abre
   useEffect(() => {

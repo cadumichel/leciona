@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppData, LessonLog, ScheduleEntry, TimeSlot, School, DayOfWeek, Student, Term, Occurrence, StudentAttendance } from '../types';
 import {
   History,
@@ -57,6 +57,7 @@ import { missingWorkAlerts, pendingDeliveriesForClass, worksAtLesson } from '../
 import { WorkDeliveryModal } from './WorkDeliveries';
 import { todayLocal } from '../utils';
 import { useBackClose } from '../hooks/useBackClose';
+import { lessonDraftKey, loadDraft, saveDraft, removeDraft, pickText, sameText, DraftText } from '../utils/lessonDraft';
 import { useToast } from '../hooks/useToast';
 
 interface LessonLoggerProps {
@@ -251,7 +252,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
   const [currentTime, setCurrentTime] = useState(getCurrentTimeInMinutes());
 
   // Security: Toast notifications
-  const { showError, showSuccess, showWarning } = useToast();
+  const { showError, showSuccess, showWarning, showInfo } = useToast();
 
   const getYYYYMMDD = (date: Date) => {
     return date.toLocaleDateString('en-CA');
@@ -1498,6 +1499,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       });
 
       onUpdateData({ logs: updatedLogs });
+      clearDraft(pickText(logForm));
       showSuccess('Aula atualizada com sucesso!');
       setSaveStatus('success');
       return;
@@ -1533,6 +1535,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     ));
 
     onUpdateData({ logs: [...filteredLogs, ...logsToSave] });
+    clearDraft(pickText(logForm));
 
     const count = logsToSave.length;
     showSuccess(count > 1 ? `${count} aulas registradas com sucesso!` : 'Aula registrada com sucesso!');
@@ -2073,12 +2076,66 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     }
   }, [blockReason, activeLesson]);
 
+  // --- Rascunho do registro (utils/lessonDraft.ts) ---
+  // O texto digitado fica guardado neste aparelho até ser salvo, e volta ao reabrir a mesma aula.
+  const draftKey = activeLesson
+    ? lessonDraftKey(activeLesson.institution.id, activeLesson.schedule.shiftId, activeLesson.slot.id, activeLesson.date)
+    : null;
+  const draftKeyRef = useRef<string | null>(null);
+  const draftBaseRef = useRef<DraftText>(pickText({}));
+  const [restoredDraftAt, setRestoredDraftAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!draftKey || blockReason) {
+      draftKeyRef.current = draftKey;
+      if (!draftKey) setRestoredDraftAt(null);
+      return;
+    }
+    if (draftKeyRef.current !== draftKey) {
+      // Aula acabou de abrir: o que veio do diário é a base; um rascunho diferente dela volta para a tela
+      draftKeyRef.current = draftKey;
+      draftBaseRef.current = pickText(logForm);
+      const draft = loadDraft(draftKey);
+      if (draft && !sameText(pickText(draft), draftBaseRef.current)) {
+        setLogForm(prev => ({ ...prev, ...pickText(draft) }));
+        setRestoredDraftAt(draft.savedAt);
+      } else {
+        if (draft) removeDraft(draftKey);
+        setRestoredDraftAt(null);
+      }
+      return;
+    }
+    const current = pickText(logForm);
+    if (sameText(current, draftBaseRef.current)) removeDraft(draftKey);
+    else saveDraft(draftKey, current);
+  }, [draftKey, logForm, blockReason]);
+
+  /** Depois de salvar ou limpar: o que está na tela passa a ser a base e o rascunho sai */
+  const clearDraft = (base: DraftText) => {
+    if (draftKey) removeDraft(draftKey);
+    draftBaseRef.current = base;
+    setRestoredDraftAt(null);
+  };
+
+  const discardDraft = () => {
+    const base = draftBaseRef.current;
+    setLogForm(prev => ({ ...prev, ...base }));
+    clearDraft(base);
+  };
+
+  const handleBackFromLesson = () => {
+    if (draftKey && !blockReason && !sameText(pickText(logForm), draftBaseRef.current)) {
+      showInfo('Registro não salvo guardado como rascunho. Ele volta quando você abrir esta aula.');
+    }
+    setActiveLesson(null);
+  };
+
   if (activeLesson) {
     return (
       <div className="max-w-2xl lg:max-w-3xl mx-auto p-5 md:p-6 lg:px-5 lg:py-4 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-right-4">
         {/* ... (cabeçalho e resto do formulário mantidos) ... */}
         <div className="flex justify-between items-center mb-6 md:mb-8 lg:mb-2">
-          <button onClick={() => setActiveLesson(null)} className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500 hover:text-slate-800 transition-colors"><ArrowLeft size={16} /> Voltar</button>
+          <button onClick={handleBackFromLesson} className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500 hover:text-slate-800 transition-colors"><ArrowLeft size={16} /> Voltar</button>
 
           <div className="flex items-center gap-2">
             {activeLesson && (() => {
@@ -2407,6 +2464,14 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             </div>
           ) : (
             <>
+              {restoredDraftAt && (
+                <div className="mb-3 flex items-center justify-between gap-3 p-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
+                  <p className="text-xs font-bold text-amber-800 dark:text-amber-200">
+                    Rascunho não salvo de {new Date(restoredDraftAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' às')}. Toque em Salvar para registrar.
+                  </p>
+                  <button onClick={discardDraft} className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40">Descartar</button>
+                </div>
+              )}
               <div>
                 <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 lg:mb-1 ml-2">Conteúdo da Aula {isFutureDate && <span className="text-primary">(Planejamento)</span>}</label>
                 <textarea value={logForm.subject} onChange={e => setLogForm({ ...logForm, subject: e.target.value })} disabled={isReadOnlyRecess} readOnly={isReadOnlyRecess} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg p-4 md:p-5 lg:p-3 lg:h-24 font-bold dark:text-white focus:ring-2 focus:ring-primary outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed" placeholder={isFutureDate ? "Planeje o conteúdo desta aula..." : "O que foi trabalhado hoje?"} rows={4} />
@@ -2778,6 +2843,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
                     setShowDeleteOptionsModal(false);
                     setLogForm({ subject: '', homework: '', notes: '', occurrences: [], attendance: [] });
+                    clearDraft(pickText({}));
                     showSuccess('Conteúdo da aula limpo com sucesso.');
                   }}
                   className="w-full p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 group transition-all text-left"

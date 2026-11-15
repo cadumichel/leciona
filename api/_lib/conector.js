@@ -849,6 +849,7 @@ var DURACAO_RENOVACAO = 30 * 24 * 60 * 60;
 var RETORNOS_DO_GEMINI = /* @__PURE__ */ new Set([
   "12625a335778f09ebafa53a60f24618d9d2deec9b84d835fc34f4332367cbcf1"
 ]);
+var retornoDoChatGPT = (url) => url.pathname === "/connector_platform_oauth_redirect" || /^\/connector\/oauth\/[A-Za-z0-9_-]+$/.test(url.pathname);
 var redirecionamentoPermitido = (uri) => {
   let url;
   try {
@@ -864,6 +865,10 @@ var redirecionamentoPermitido = (uri) => {
   }
   if (url.protocol === "https:" && ["claude.ai", "claude.com"].includes(url.hostname)) {
     return url.pathname === "/api/mcp/auth_callback";
+  }
+  if (url.protocol === "https:" && url.hostname === "chatgpt.com") {
+    if (url.username || url.password || url.port) return false;
+    return retornoDoChatGPT(url);
   }
   return url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
 };
@@ -2102,9 +2107,10 @@ button:disabled{opacity:.6}.erro{color:#b91c1c}
 });
 var paginaDeLogin = (pedido) => {
   const campos = Object.entries(pedido).map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`).join("");
-  return pagina("Conectar o Claude ao Leciona", `
-<h1>Conectar o Claude ao Leciona</h1>
-<p>O Claude vai poder <b>ler</b> suas avalia\xE7\xF5es, o conte\xFAdo do di\xE1rio, turmas, grade e calend\xE1rio.
+  return pagina("Conectar ao Leciona", `
+<h1>Conectar a IA ao Leciona</h1>
+<p>O assistente (Claude, Gemini ou ChatGPT) vai poder <b>ler</b> suas avalia\xE7\xF5es, o conte\xFAdo do di\xE1rio,
+turmas, grade e calend\xE1rio, e <b>gravar</b> mudan\xE7as depois que voc\xEA aprovar a pr\xE9via.
 Nomes de alunos, notas e chamada n\xE3o s\xE3o compartilhados.</p>
 <form id="f" method="post">${campos}<input type="hidden" name="id_token" id="t">
 <button type="button" id="b">Entrar com Google e autorizar</button></form>

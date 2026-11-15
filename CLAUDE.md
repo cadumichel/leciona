@@ -99,6 +99,9 @@ objetivo.
 - **Retrospectiva do Diário** (janela de registro da aula): `utils/retrospective.ts`. Mostra a aula
   imediatamente anterior da turma pela grade (sem feriados, recessos e aulas removidas; aulas extras
   contam), mesmo sem conteúdo ("Sem conteúdo cadastrado"). Nunca pular para o último registro.
+- **Rascunho do registro de aula** (`utils/lessonDraft.ts`): conteúdo, tarefa e notas digitados e ainda não
+  salvos ficam no `localStorage` (`leciona-rascunhos`, só neste aparelho, 14 dias) e voltam ao reabrir a mesma
+  aula, com o aviso "Rascunho não salvo" e o botão Descartar. Salvar ou limpar a aula apaga o rascunho.
 - **Aulas que faltam no período**: `utils/remainingLessons.ts`. Linha "Cronograma" abaixo da retrospectiva
   no Diário ("Faltam N aulas até o fim do 3º TRI (data). Próx. Avaliação: …"; visível por padrão,
   olho em `settings.hideCronograma`) e ferramenta

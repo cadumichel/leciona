@@ -34,7 +34,9 @@ objetivo.
 
 ## Arquitetura (o que importa saber)
 - React 19 + TypeScript + Vite 6 + PWA (vite-plugin-pwa), ícones lucide-react.
-- **Tailwind vem por CDN** (`index.html`), não é compilado. As cores do tema são CSS próprio em
+- **Tailwind 3.4 é compilado no build** (`tailwind.config.js` + `index.css`, importado em `index.tsx`);
+  ele só gera as classes que aparecem escritas nos arquivos listados em `content` (nunca monte nome de
+  classe por partes, como `bg-${cor}-500`). As cores do tema são CSS próprio em
   `App.tsx`: só existem `text-primary`, `bg-primary`, `border-primary`, `ring-primary` e
   `bg-primary-light`. Variações como `bg-primary/5` **não funcionam**; use
   `style={{ backgroundColor: 'var(--primary-color)' }}` (ou `--primary-light`, `--primary-medium`).

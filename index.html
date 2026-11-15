@@ -23,19 +23,12 @@
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {}
-      }
-    }
-  </script>
+  <!-- Fonte Inter: link direto (antes era um @import, que só começava a baixar depois do resto) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" />
 
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-
     body {
       font-family: 'Inter', sans-serif;
       background-color: #f8fafc;
@@ -80,19 +73,6 @@
       background: #1e293b;
     }
   </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "firebase/": "https://esm.sh/firebase@^12.7.0/"
-  }
-}
-</script>
 </head>
 
 <body>

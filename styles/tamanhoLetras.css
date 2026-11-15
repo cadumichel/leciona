@@ -1,0 +1,181 @@
+/* Gerado por scripts/gerarTamanhoLetras.mjs. Não edite à mão. */
+
+/* grande: 12% maior */
+html[data-letras="grande"] .text-\[7px\] { font-size: 7.8px; }
+html[data-letras="grande"] .text-\[8px\] { font-size: 9px; }
+html[data-letras="grande"] .text-\[9px\] { font-size: 10.1px; }
+html[data-letras="grande"] .text-\[10px\] { font-size: 11.2px; }
+html[data-letras="grande"] .text-\[11px\] { font-size: 12.3px; }
+html[data-letras="grande"] .text-\[12px\] { font-size: 13.4px; }
+html[data-letras="grande"] .text-\[13px\] { font-size: 14.6px; }
+html[data-letras="grande"] .text-\[14px\] { font-size: 15.7px; }
+html[data-letras="grande"] .text-xs { font-size: 13.4px; line-height: 17.9px; }
+html[data-letras="grande"] .text-sm { font-size: 15.7px; line-height: 22.4px; }
+html[data-letras="grande"] .text-base { font-size: 17.9px; line-height: 26.9px; }
+html[data-letras="grande"] .text-lg { font-size: 20.2px; line-height: 31.4px; }
+html[data-letras="grande"] .text-xl { font-size: 22.4px; line-height: 31.4px; }
+html[data-letras="grande"] .text-2xl { font-size: 26.9px; line-height: 35.8px; }
+html[data-letras="grande"] .text-3xl { font-size: 33.6px; line-height: 40.3px; }
+html[data-letras="grande"] .text-4xl { font-size: 40.3px; line-height: 44.8px; }
+@media (min-width: 640px) {
+html[data-letras="grande"] .sm\:text-\[7px\] { font-size: 7.8px; }
+html[data-letras="grande"] .sm\:text-\[8px\] { font-size: 9px; }
+html[data-letras="grande"] .sm\:text-\[9px\] { font-size: 10.1px; }
+html[data-letras="grande"] .sm\:text-\[10px\] { font-size: 11.2px; }
+html[data-letras="grande"] .sm\:text-\[11px\] { font-size: 12.3px; }
+html[data-letras="grande"] .sm\:text-\[12px\] { font-size: 13.4px; }
+html[data-letras="grande"] .sm\:text-\[13px\] { font-size: 14.6px; }
+html[data-letras="grande"] .sm\:text-\[14px\] { font-size: 15.7px; }
+html[data-letras="grande"] .sm\:text-xs { font-size: 13.4px; line-height: 17.9px; }
+html[data-letras="grande"] .sm\:text-sm { font-size: 15.7px; line-height: 22.4px; }
+html[data-letras="grande"] .sm\:text-base { font-size: 17.9px; line-height: 26.9px; }
+html[data-letras="grande"] .sm\:text-lg { font-size: 20.2px; line-height: 31.4px; }
+html[data-letras="grande"] .sm\:text-xl { font-size: 22.4px; line-height: 31.4px; }
+html[data-letras="grande"] .sm\:text-2xl { font-size: 26.9px; line-height: 35.8px; }
+html[data-letras="grande"] .sm\:text-3xl { font-size: 33.6px; line-height: 40.3px; }
+html[data-letras="grande"] .sm\:text-4xl { font-size: 40.3px; line-height: 44.8px; }
+}
+@media (min-width: 768px) {
+html[data-letras="grande"] .md\:text-\[7px\] { font-size: 7.8px; }
+html[data-letras="grande"] .md\:text-\[8px\] { font-size: 9px; }
+html[data-letras="grande"] .md\:text-\[9px\] { font-size: 10.1px; }
+html[data-letras="grande"] .md\:text-\[10px\] { font-size: 11.2px; }
+html[data-letras="grande"] .md\:text-\[11px\] { font-size: 12.3px; }
+html[data-letras="grande"] .md\:text-\[12px\] { font-size: 13.4px; }
+html[data-letras="grande"] .md\:text-\[13px\] { font-size: 14.6px; }
+html[data-letras="grande"] .md\:text-\[14px\] { font-size: 15.7px; }
+html[data-letras="grande"] .md\:text-xs { font-size: 13.4px; line-height: 17.9px; }
+html[data-letras="grande"] .md\:text-sm { font-size: 15.7px; line-height: 22.4px; }
+html[data-letras="grande"] .md\:text-base { font-size: 17.9px; line-height: 26.9px; }
+html[data-letras="grande"] .md\:text-lg { font-size: 20.2px; line-height: 31.4px; }
+html[data-letras="grande"] .md\:text-xl { font-size: 22.4px; line-height: 31.4px; }
+html[data-letras="grande"] .md\:text-2xl { font-size: 26.9px; line-height: 35.8px; }
+html[data-letras="grande"] .md\:text-3xl { font-size: 33.6px; line-height: 40.3px; }
+html[data-letras="grande"] .md\:text-4xl { font-size: 40.3px; line-height: 44.8px; }
+}
+@media (min-width: 1024px) {
+html[data-letras="grande"] .lg\:text-\[7px\] { font-size: 7.8px; }
+html[data-letras="grande"] .lg\:text-\[8px\] { font-size: 9px; }
+html[data-letras="grande"] .lg\:text-\[9px\] { font-size: 10.1px; }
+html[data-letras="grande"] .lg\:text-\[10px\] { font-size: 11.2px; }
+html[data-letras="grande"] .lg\:text-\[11px\] { font-size: 12.3px; }
+html[data-letras="grande"] .lg\:text-\[12px\] { font-size: 13.4px; }
+html[data-letras="grande"] .lg\:text-\[13px\] { font-size: 14.6px; }
+html[data-letras="grande"] .lg\:text-\[14px\] { font-size: 15.7px; }
+html[data-letras="grande"] .lg\:text-xs { font-size: 13.4px; line-height: 17.9px; }
+html[data-letras="grande"] .lg\:text-sm { font-size: 15.7px; line-height: 22.4px; }
+html[data-letras="grande"] .lg\:text-base { font-size: 17.9px; line-height: 26.9px; }
+html[data-letras="grande"] .lg\:text-lg { font-size: 20.2px; line-height: 31.4px; }
+html[data-letras="grande"] .lg\:text-xl { font-size: 22.4px; line-height: 31.4px; }
+html[data-letras="grande"] .lg\:text-2xl { font-size: 26.9px; line-height: 35.8px; }
+html[data-letras="grande"] .lg\:text-3xl { font-size: 33.6px; line-height: 40.3px; }
+html[data-letras="grande"] .lg\:text-4xl { font-size: 40.3px; line-height: 44.8px; }
+}
+@media (min-width: 1280px) {
+html[data-letras="grande"] .xl\:text-\[7px\] { font-size: 7.8px; }
+html[data-letras="grande"] .xl\:text-\[8px\] { font-size: 9px; }
+html[data-letras="grande"] .xl\:text-\[9px\] { font-size: 10.1px; }
+html[data-letras="grande"] .xl\:text-\[10px\] { font-size: 11.2px; }
+html[data-letras="grande"] .xl\:text-\[11px\] { font-size: 12.3px; }
+html[data-letras="grande"] .xl\:text-\[12px\] { font-size: 13.4px; }
+html[data-letras="grande"] .xl\:text-\[13px\] { font-size: 14.6px; }
+html[data-letras="grande"] .xl\:text-\[14px\] { font-size: 15.7px; }
+html[data-letras="grande"] .xl\:text-xs { font-size: 13.4px; line-height: 17.9px; }
+html[data-letras="grande"] .xl\:text-sm { font-size: 15.7px; line-height: 22.4px; }
+html[data-letras="grande"] .xl\:text-base { font-size: 17.9px; line-height: 26.9px; }
+html[data-letras="grande"] .xl\:text-lg { font-size: 20.2px; line-height: 31.4px; }
+html[data-letras="grande"] .xl\:text-xl { font-size: 22.4px; line-height: 31.4px; }
+html[data-letras="grande"] .xl\:text-2xl { font-size: 26.9px; line-height: 35.8px; }
+html[data-letras="grande"] .xl\:text-3xl { font-size: 33.6px; line-height: 40.3px; }
+html[data-letras="grande"] .xl\:text-4xl { font-size: 40.3px; line-height: 44.8px; }
+}
+
+/* maior: 25% maior */
+html[data-letras="maior"] .text-\[7px\] { font-size: 8.8px; }
+html[data-letras="maior"] .text-\[8px\] { font-size: 10px; }
+html[data-letras="maior"] .text-\[9px\] { font-size: 11.3px; }
+html[data-letras="maior"] .text-\[10px\] { font-size: 12.5px; }
+html[data-letras="maior"] .text-\[11px\] { font-size: 13.8px; }
+html[data-letras="maior"] .text-\[12px\] { font-size: 15px; }
+html[data-letras="maior"] .text-\[13px\] { font-size: 16.3px; }
+html[data-letras="maior"] .text-\[14px\] { font-size: 17.5px; }
+html[data-letras="maior"] .text-xs { font-size: 15px; line-height: 20px; }
+html[data-letras="maior"] .text-sm { font-size: 17.5px; line-height: 25px; }
+html[data-letras="maior"] .text-base { font-size: 20px; line-height: 30px; }
+html[data-letras="maior"] .text-lg { font-size: 22.5px; line-height: 35px; }
+html[data-letras="maior"] .text-xl { font-size: 25px; line-height: 35px; }
+html[data-letras="maior"] .text-2xl { font-size: 30px; line-height: 40px; }
+html[data-letras="maior"] .text-3xl { font-size: 37.5px; line-height: 45px; }
+html[data-letras="maior"] .text-4xl { font-size: 45px; line-height: 50px; }
+@media (min-width: 640px) {
+html[data-letras="maior"] .sm\:text-\[7px\] { font-size: 8.8px; }
+html[data-letras="maior"] .sm\:text-\[8px\] { font-size: 10px; }
+html[data-letras="maior"] .sm\:text-\[9px\] { font-size: 11.3px; }
+html[data-letras="maior"] .sm\:text-\[10px\] { font-size: 12.5px; }
+html[data-letras="maior"] .sm\:text-\[11px\] { font-size: 13.8px; }
+html[data-letras="maior"] .sm\:text-\[12px\] { font-size: 15px; }
+html[data-letras="maior"] .sm\:text-\[13px\] { font-size: 16.3px; }
+html[data-letras="maior"] .sm\:text-\[14px\] { font-size: 17.5px; }
+html[data-letras="maior"] .sm\:text-xs { font-size: 15px; line-height: 20px; }
+html[data-letras="maior"] .sm\:text-sm { font-size: 17.5px; line-height: 25px; }
+html[data-letras="maior"] .sm\:text-base { font-size: 20px; line-height: 30px; }
+html[data-letras="maior"] .sm\:text-lg { font-size: 22.5px; line-height: 35px; }
+html[data-letras="maior"] .sm\:text-xl { font-size: 25px; line-height: 35px; }
+html[data-letras="maior"] .sm\:text-2xl { font-size: 30px; line-height: 40px; }
+html[data-letras="maior"] .sm\:text-3xl { font-size: 37.5px; line-height: 45px; }
+html[data-letras="maior"] .sm\:text-4xl { font-size: 45px; line-height: 50px; }
+}
+@media (min-width: 768px) {
+html[data-letras="maior"] .md\:text-\[7px\] { font-size: 8.8px; }
+html[data-letras="maior"] .md\:text-\[8px\] { font-size: 10px; }
+html[data-letras="maior"] .md\:text-\[9px\] { font-size: 11.3px; }
+html[data-letras="maior"] .md\:text-\[10px\] { font-size: 12.5px; }
+html[data-letras="maior"] .md\:text-\[11px\] { font-size: 13.8px; }
+html[data-letras="maior"] .md\:text-\[12px\] { font-size: 15px; }
+html[data-letras="maior"] .md\:text-\[13px\] { font-size: 16.3px; }
+html[data-letras="maior"] .md\:text-\[14px\] { font-size: 17.5px; }
+html[data-letras="maior"] .md\:text-xs { font-size: 15px; line-height: 20px; }
+html[data-letras="maior"] .md\:text-sm { font-size: 17.5px; line-height: 25px; }
+html[data-letras="maior"] .md\:text-base { font-size: 20px; line-height: 30px; }
+html[data-letras="maior"] .md\:text-lg { font-size: 22.5px; line-height: 35px; }
+html[data-letras="maior"] .md\:text-xl { font-size: 25px; line-height: 35px; }
+html[data-letras="maior"] .md\:text-2xl { font-size: 30px; line-height: 40px; }
+html[data-letras="maior"] .md\:text-3xl { font-size: 37.5px; line-height: 45px; }
+html[data-letras="maior"] .md\:text-4xl { font-size: 45px; line-height: 50px; }
+}
+@media (min-width: 1024px) {
+html[data-letras="maior"] .lg\:text-\[7px\] { font-size: 8.8px; }
+html[data-letras="maior"] .lg\:text-\[8px\] { font-size: 10px; }
+html[data-letras="maior"] .lg\:text-\[9px\] { font-size: 11.3px; }
+html[data-letras="maior"] .lg\:text-\[10px\] { font-size: 12.5px; }
+html[data-letras="maior"] .lg\:text-\[11px\] { font-size: 13.8px; }
+html[data-letras="maior"] .lg\:text-\[12px\] { font-size: 15px; }
+html[data-letras="maior"] .lg\:text-\[13px\] { font-size: 16.3px; }
+html[data-letras="maior"] .lg\:text-\[14px\] { font-size: 17.5px; }
+html[data-letras="maior"] .lg\:text-xs { font-size: 15px; line-height: 20px; }
+html[data-letras="maior"] .lg\:text-sm { font-size: 17.5px; line-height: 25px; }
+html[data-letras="maior"] .lg\:text-base { font-size: 20px; line-height: 30px; }
+html[data-letras="maior"] .lg\:text-lg { font-size: 22.5px; line-height: 35px; }
+html[data-letras="maior"] .lg\:text-xl { font-size: 25px; line-height: 35px; }
+html[data-letras="maior"] .lg\:text-2xl { font-size: 30px; line-height: 40px; }
+html[data-letras="maior"] .lg\:text-3xl { font-size: 37.5px; line-height: 45px; }
+html[data-letras="maior"] .lg\:text-4xl { font-size: 45px; line-height: 50px; }
+}
+@media (min-width: 1280px) {
+html[data-letras="maior"] .xl\:text-\[7px\] { font-size: 8.8px; }
+html[data-letras="maior"] .xl\:text-\[8px\] { font-size: 10px; }
+html[data-letras="maior"] .xl\:text-\[9px\] { font-size: 11.3px; }
+html[data-letras="maior"] .xl\:text-\[10px\] { font-size: 12.5px; }
+html[data-letras="maior"] .xl\:text-\[11px\] { font-size: 13.8px; }
+html[data-letras="maior"] .xl\:text-\[12px\] { font-size: 15px; }
+html[data-letras="maior"] .xl\:text-\[13px\] { font-size: 16.3px; }
+html[data-letras="maior"] .xl\:text-\[14px\] { font-size: 17.5px; }
+html[data-letras="maior"] .xl\:text-xs { font-size: 15px; line-height: 20px; }
+html[data-letras="maior"] .xl\:text-sm { font-size: 17.5px; line-height: 25px; }
+html[data-letras="maior"] .xl\:text-base { font-size: 20px; line-height: 30px; }
+html[data-letras="maior"] .xl\:text-lg { font-size: 22.5px; line-height: 35px; }
+html[data-letras="maior"] .xl\:text-xl { font-size: 25px; line-height: 35px; }
+html[data-letras="maior"] .xl\:text-2xl { font-size: 30px; line-height: 40px; }
+html[data-letras="maior"] .xl\:text-3xl { font-size: 37.5px; line-height: 45px; }
+html[data-letras="maior"] .xl\:text-4xl { font-size: 45px; line-height: 50px; }
+}

@@ -157,7 +157,7 @@ const EditableContentField: React.FC<EditableContentFieldProps> = ({ initialValu
           onChange={(e) => setValue(e.target.value)}
           onBlur={handleSave}
           autoFocus={!isBulkEditing} // Only autofocus if clicked specifically
-          className={`w-full bg-white dark:bg-slate-800 border-2 rounded-xl p-2 text-[10px] md:text-xs font-bold dark:text-white outline-none resize-none transition-all ${saveStatus === 'error' ? 'border-red-300 focus:border-red-500' : 'border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'}`}
+          className={`w-full bg-white dark:bg-slate-800 border-2 rounded-xl p-2 text-[11px] md:text-xs font-bold dark:text-white outline-none resize-none transition-all ${saveStatus === 'error' ? 'border-red-300 focus:border-red-500' : 'border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'}`}
           rows={isBulkEditing ? 3 : 2}
           placeholder="O que foi trabalhado?"
 
@@ -187,11 +187,11 @@ const EditableContentField: React.FC<EditableContentFieldProps> = ({ initialValu
       {saveStatus === 'success' && <div className="absolute -top-1 -right-1 text-green-500 animate-in zoom-in"><CheckCircle2 size={12} /></div>}
 
       {value ? (
-        <p className="text-[10px] font-bold italic text-slate-600 dark:text-slate-400 truncate block w-full" style={{ whiteSpace: 'normal', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+        <p className="text-[11px] font-bold italic text-slate-600 dark:text-slate-400 truncate block w-full" style={{ whiteSpace: 'normal', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
           "{value}"
         </p>
       ) : (
-        <p className="text-[10px] font-bold italic text-slate-400 dark:text-slate-600 flex items-center gap-1">
+        <p className="text-[11px] font-bold italic text-slate-400 dark:text-slate-600 flex items-center gap-1">
           <Edit3 size={10} /> {isPlaceholder ? "Planejar aula..." : "Adicionar conteúdo..."}
         </p>
       )}
@@ -396,7 +396,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       <select
         value={gridColumns}
         onChange={(e) => setGridColumns(Number(e.target.value))}
-        className="bg-transparent text-[10px] font-black text-slate-600 dark:text-slate-300 outline-none px-1 py-1 cursor-pointer"
+        className="bg-transparent text-[11px] font-black text-slate-600 dark:text-slate-300 outline-none px-1 py-1 cursor-pointer"
       >
         {[1, 2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}x</option>)}
       </select>
@@ -999,9 +999,9 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
     return (
       <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800 animate-in fade-in zoom-in-95">
-        <h4 className="font-black uppercase text-[10px] mb-4 text-center">{baseDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h4>
+        <h4 className="font-black uppercase text-[11px] mb-4 text-center">{baseDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h4>
         <div className="grid grid-cols-7 gap-1">
-          {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={`${d}-${i}`} className="text-center text-[10px] font-black text-slate-400">{d}</div>)}
+          {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={`${d}-${i}`} className="text-center text-[11px] font-black text-slate-400">{d}</div>)}
           {days.map((d, i) => {
             if (!d) return <div key={i} />;
             let bg = 'bg-slate-50 dark:bg-slate-800/50';
@@ -1026,7 +1026,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 disabled={isHistoryDisabled}
                 className={`aspect-square rounded-lg flex items-center justify-center relative transition-all ${bg}`}
               >
-                <span className={`text-[10px] font-black ${selectedDate === d.dateStr ? 'text-white' : d.holidayName ? 'text-pink-600' : 'text-slate-500'}`}>{d.day}</span>
+                <span className={`text-[11px] font-black ${selectedDate === d.dateStr ? 'text-white' : d.holidayName ? 'text-pink-600' : 'text-slate-500'}`}>{d.day}</span>
                 {d.hasFilteredSchedule && selectedDate !== d.dateStr && !isHistoryDisabled && <div className="absolute top-1 right-1 w-1 h-1 bg-blue-500 rounded-full" />}
               </button>
             );
@@ -2196,7 +2196,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       <div className="max-w-2xl lg:max-w-3xl mx-auto p-5 md:p-6 lg:px-5 lg:py-4 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-right-4">
         {/* ... (cabeçalho e resto do formulário mantidos) ... */}
         <div className="flex justify-between items-center mb-6 md:mb-8 lg:mb-2">
-          <button onClick={handleBackFromLesson} className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500 hover:text-slate-800 transition-colors"><ArrowLeft size={16} /> Voltar</button>
+          <button onClick={handleBackFromLesson} className="flex items-center gap-2 text-[11px] font-black uppercase text-slate-500 hover:text-slate-800 transition-colors"><ArrowLeft size={16} /> Voltar</button>
 
           <div className="flex items-center gap-2">
             {activeLesson && (() => {
@@ -2229,8 +2229,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             {/* Navigation Controls */}
             <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-1 rounded-xl border border-slate-100 dark:border-slate-800">
               <div className="flex bg-white dark:bg-slate-700 rounded-lg p-0.5 shadow-sm">
-                <button onClick={() => setNavMode('day')} className={`px-2 py-1 rounded-md text-[10px] font-black uppercase transition-all ${navMode === 'day' ? 'bg-primary text-white' : 'text-slate-400'}`}>Dia</button>
-                <button onClick={() => setNavMode('class')} className={`px-2 py-1 rounded-md text-[10px] font-black uppercase transition-all ${navMode === 'class' ? 'bg-primary text-white' : 'text-slate-400'}`}>{activeLesson.type === 'private' ? 'Aluno' : 'Turma'}</button>
+                <button onClick={() => setNavMode('day')} className={`px-2 py-1 rounded-md text-[11px] font-black uppercase transition-all ${navMode === 'day' ? 'bg-primary text-white' : 'text-slate-400'}`}>Dia</button>
+                <button onClick={() => setNavMode('class')} className={`px-2 py-1 rounded-md text-[11px] font-black uppercase transition-all ${navMode === 'class' ? 'bg-primary text-white' : 'text-slate-400'}`}>{activeLesson.type === 'private' ? 'Aluno' : 'Turma'}</button>
               </div>
               <div className="flex items-center gap-1 pl-2 border-l border-slate-200 dark:border-slate-600">
                 <button onClick={() => findNextLesson('prev')} className="p-1.5 text-slate-400 hover:text-primary hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-all"><ChevronLeft size={16} /></button>
@@ -2303,17 +2303,17 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                       {title}
                     </h3>
                     {activeLesson.date < getYYYYMMDD(new Date()) && (
-                      <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-black uppercase tracking-tight">
+                      <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[11px] font-black uppercase tracking-tight">
                         Histórico
                       </span>
                     )}
                     {activeLesson.date > getYYYYMMDD(new Date()) && (
-                      <span className="px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 text-[10px] font-black uppercase tracking-tight">
+                      <span className="px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 text-[11px] font-black uppercase tracking-tight">
                         Planejamento
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] font-black text-slate-500 uppercase mt-1 lg:mt-0.5">
+                  <p className="text-[11px] font-black text-slate-500 uppercase mt-1 lg:mt-0.5">
                     {subtitle}
                   </p>
                 </>
@@ -2326,7 +2326,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           <div className="mb-6 md:mb-8 lg:mb-2 p-4 md:p-6 lg:px-4 lg:py-2.5 rounded-xl lg:rounded-lg border border-primary/20 bg-primary-light" style={{ backgroundColor: 'var(--primary-light)' }}>
             <div className="flex items-center gap-2 mb-2 md:mb-3 lg:mb-1">
               <History size={12} className="text-primary md:w-3.5 md:h-3.5" />
-              <span className="text-[10px] font-black text-primary uppercase tracking-tight">Retrospectiva</span>
+              <span className="text-[11px] font-black text-primary uppercase tracking-tight">Retrospectiva</span>
             </div>
             {lastLessonInfo.subject ? (
               <p className="text-xs font-bold text-slate-700 dark:text-slate-300 italic mb-2 lg:mb-1 lg:line-clamp-2">"{lastLessonInfo.subject}"</p>
@@ -2334,8 +2334,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               <p className="text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 lg:mb-1">{lastLessonInfo.hasContent ? 'Sem conteúdo cadastrado (só tarefa)' : 'Sem conteúdo cadastrado'}</p>
             )}
             <div className="flex gap-4">
-              {lastLessonInfo.homework && <div className="text-[10px] font-black text-slate-500 uppercase">Tarefa: {lastLessonInfo.homework}</div>}
-              <div className="text-[10px] font-black text-slate-500 uppercase">Em: {formatDateBR(lastLessonInfo.date)}</div>
+              {lastLessonInfo.homework && <div className="text-[11px] font-black text-slate-500 uppercase">Tarefa: {lastLessonInfo.homework}</div>}
+              <div className="text-[11px] font-black text-slate-500 uppercase">Em: {formatDateBR(lastLessonInfo.date)}</div>
             </div>
           </div>
         )}
@@ -2345,7 +2345,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             <button
               type="button"
               onClick={() => onUpdateData({ settings: { ...data.settings, hideCronograma: false } })}
-              className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 hover:text-primary transition-colors"
+              className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-primary transition-colors"
               title="Mostrar cronograma"
             >
               <CalendarRange size={12} className="shrink-0" />
@@ -2356,7 +2356,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
         )}
 
         {remainingInfo && activeLesson && !data.settings.hideCronograma && (
-          <div className="-mt-4 md:-mt-6 lg:mt-0 mb-6 md:mb-8 lg:mb-3 px-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+          <div className="-mt-4 md:-mt-6 lg:mt-0 mb-6 md:mb-8 lg:mb-3 px-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-slate-500 dark:text-slate-400">
             <CalendarRange size={12} className="text-primary shrink-0" />
             <span>
               {remainingInfo.count === 0
@@ -2390,14 +2390,14 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 : 'bg-orange-100 border-orange-300 text-orange-900 dark:bg-orange-900/30 dark:border-orange-700 dark:text-orange-200'}`}>
                 <Megaphone size={13} className="shrink-0" />
                 <span className="flex-1 min-w-[160px]">
-                  <b className="uppercase text-[10px] mr-1">Marcar com a turma:</b>
+                  <b className="uppercase text-[11px] mr-1">Marcar com a turma:</b>
                   {n.status === 'last' && n.limitDate === activeLesson.date
                     ? `${n.event.type === 'test' ? 'Prova' : 'Trabalho'} ${n.event.title} em ${formatDateBR(n.event.date).slice(0, 5)}. Esta é a última aula para avisar com 1 semana.`
                     : scheduleNoticeText(n)}
                 </span>
                 <button type="button"
                   onClick={() => onUpdateData({ events: data.events.map(e => (e.id === n.event.id ? { ...e, scheduled: true } : e)) })}
-                  className="shrink-0 px-2 py-1 rounded-md bg-white dark:bg-slate-800 border border-current text-[10px] font-black uppercase hover:brightness-95">
+                  className="shrink-0 px-2 py-1 rounded-md bg-white dark:bg-slate-800 border border-current text-[11px] font-black uppercase hover:brightness-95">
                   Marquei com a turma
                 </button>
               </div>
@@ -2406,7 +2406,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               <div key={`w-${w.classId}`} className="flex items-center gap-2 px-3 py-2 rounded-lg border text-[11px] font-bold bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300">
                 <ClipboardList size={13} className="shrink-0" />
                 <span className="flex-1">
-                  <b className="uppercase text-[10px] mr-1">Trabalhos:</b>
+                  <b className="uppercase text-[11px] mr-1">Trabalhos:</b>
                   {w.count === 0 ? 'Nenhum trabalho cadastrado' : `${w.count} de ${w.required} trabalhos cadastrados`} no {shortTermName(w.term.name)} (a escola pede {w.required}).
                   {w.lessonsLeft !== undefined && ` Faltam ${w.lessonsLeft} ${w.lessonsLeft === 1 ? 'aula' : 'aulas'} até ${formatDateBR(w.term.end).slice(0, 5)}.`}
                 </span>
@@ -2416,7 +2416,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               <div key={`p-${event.id}`} className="px-3 py-2 rounded-lg border text-[11px] font-bold bg-orange-50 border-orange-200 text-orange-800 dark:bg-orange-900/20 dark:border-orange-800 dark:text-orange-300">
                 <div className="flex items-center gap-2">
                   <PackageX size={13} className="shrink-0" />
-                  <span className="flex-1"><b className="uppercase text-[10px] mr-1">Falta entregar:</b>{event.title} (entrega {formatDateBR(event.date).slice(0, 5)})</span>
+                  <span className="flex-1"><b className="uppercase text-[11px] mr-1">Falta entregar:</b>{event.title} (entrega {formatDateBR(event.date).slice(0, 5)})</span>
                 </div>
                 <div className="flex flex-wrap gap-1 mt-1.5 ml-5">
                   {items.map(item => (
@@ -2434,9 +2434,9 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             {classNotices.worksHere.map(event => (
               <div key={`h-${event.id}`} className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg border text-[11px] font-bold bg-slate-50 border-slate-200 text-slate-700 dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-300">
                 <ClipboardList size={13} className="shrink-0 text-blue-600" />
-                <span className="flex-1 min-w-[160px]"><b className="uppercase text-[10px] mr-1">Trabalho nesta aula:</b>{event.title}</span>
+                <span className="flex-1 min-w-[160px]"><b className="uppercase text-[11px] mr-1">Trabalho nesta aula:</b>{event.title}</span>
                 <button type="button" onClick={() => setDeliveryEventId(event.id)}
-                  className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-[10px] font-black uppercase">
+                  className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-[11px] font-black uppercase">
                   <PackageX size={11} /> Registrar entregas
                 </button>
               </div>
@@ -2456,7 +2456,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
           <div className="mb-6 p-4 rounded-lg bg-pink-50 dark:bg-pink-900/20 border border-pink-100 dark:border-pink-900/30 flex items-center gap-3">
             <Palmtree className="text-pink-500" size={20} />
             <div>
-              <span className="block text-[10px] font-black uppercase text-pink-600 tracking-tight">Modo Visualização</span>
+              <span className="block text-[11px] font-black uppercase text-pink-600 tracking-tight">Modo Visualização</span>
               <p className="text-xs font-bold text-pink-700 dark:text-pink-300">Esta data possui um recesso ou evento bloqueante: {blockReason}</p>
             </div>
           </div>
@@ -2482,7 +2482,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 if (!here.length) return null;
                 return (
                   <div className="max-w-xs mx-auto mb-6 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 text-left">
-                    <span className="block text-[10px] font-black text-red-600 uppercase mb-1.5">Avaliações neste horário</span>
+                    <span className="block text-[11px] font-black text-red-600 uppercase mb-1.5">Avaliações neste horário</span>
                     {here.map(e => (
                       <p key={e.id} className="text-xs font-bold text-slate-700 dark:text-slate-200">
                         {e.type === 'test' ? 'Prova' : 'Trabalho'}: {e.title} · {getClassName(data, e.schoolId, e.classId, e.classId)}
@@ -2494,7 +2494,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
               {activeLesson.type === 'school' && (
                 <div className="max-w-xs mx-auto mb-6 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-left">
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-1.5">Dar aula para uma turma neste dia</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase mb-1.5">Dar aula para uma turma neste dia</label>
                   <div className="flex gap-2">
                     <select value={slotClassId} onChange={e => setSlotClassId(e.target.value)} className="flex-1 min-w-0 bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-2 py-2 text-xs font-bold dark:text-white outline-none">
                       <option value="">Escolha a turma…</option>
@@ -2507,18 +2507,18 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                     <button
                       onClick={handleTeachClassInSlot}
                       disabled={!slotClassId}
-                      className="px-3 py-2 rounded-lg bg-primary text-white text-[10px] font-black uppercase disabled:opacity-40"
+                      className="px-3 py-2 rounded-lg bg-primary text-white text-[11px] font-black uppercase disabled:opacity-40"
                     >
                       Criar aula
                     </button>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1.5">Vale só para {formatDateBR(activeLesson.date)}; a grade não muda.</p>
+                  <p className="text-[11px] text-slate-400 mt-1.5">Vale só para {formatDateBR(activeLesson.date)}; a grade não muda.</p>
                 </div>
               )}
 
               <button
                 onClick={() => setShowDeleteOptionsModal(true)}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-black uppercase text-[10px] tracking-tight hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all shadow-sm"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-black uppercase text-[11px] tracking-tight hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all shadow-sm"
               >
                 <Trash2 size={16} /> Opções de Exclusão
               </button>
@@ -2534,16 +2534,16 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 </div>
               )}
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 lg:mb-1 ml-2">Conteúdo da Aula {isFutureDate && <span className="text-primary">(Planejamento)</span>}</label>
+                <label className="block text-[11px] font-black text-slate-500 uppercase mb-2 lg:mb-1 ml-2">Conteúdo da Aula {isFutureDate && <span className="text-primary">(Planejamento)</span>}</label>
                 <textarea value={logForm.subject} onChange={e => setLogForm({ ...logForm, subject: e.target.value })} disabled={isReadOnlyRecess} readOnly={isReadOnlyRecess} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg p-4 md:p-5 lg:p-3 lg:h-24 font-bold dark:text-white focus:ring-2 focus:ring-primary outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed" placeholder={isFutureDate ? "Planeje o conteúdo desta aula..." : "O que foi trabalhado hoje?"} rows={4} />
               </div>
               <div className="grid md:grid-cols-2 gap-4 lg:gap-3">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 lg:mb-1 ml-2">Tarefa de Casa</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase mb-2 lg:mb-1 ml-2">Tarefa de Casa</label>
                   <input value={logForm.homework} onChange={e => setLogForm({ ...logForm, homework: e.target.value })} disabled={isReadOnlyRecess} readOnly={isReadOnlyRecess} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl lg:rounded-lg p-3 md:p-4 lg:p-2.5 font-bold dark:text-white focus:ring-2 focus:ring-primary outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed" placeholder="Ex: Exercícios pág. 42" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 lg:mb-1 ml-2">Notas Extras</label>
+                  <label className="block text-[11px] font-black text-slate-500 uppercase mb-2 lg:mb-1 ml-2">Notas Extras</label>
                   <input value={logForm.notes} onChange={e => setLogForm({ ...logForm, notes: e.target.value })} disabled={isReadOnlyRecess} readOnly={isReadOnlyRecess} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl lg:rounded-lg p-3 md:p-4 lg:p-2.5 font-bold dark:text-white focus:ring-2 focus:ring-primary outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed" placeholder="Observações..." />
                 </div>
               </div>
@@ -2555,7 +2555,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               {activeLesson.type !== 'private' && !isReadOnlyRecess && (
                 <button
                   onClick={() => setCopyData(prev => ({ ...prev, isOpen: true, targetDate: getYYYYMMDD(new Date()) }))}
-                  className="flex items-center gap-1 text-[10px] font-black text-blue-600 uppercase hover:underline mr-auto transition-all"
+                  className="flex items-center gap-1 text-[11px] font-black text-blue-600 uppercase hover:underline mr-auto transition-all"
                 >
                   <Copy size={12} /> Copiar para outra turma
                 </button>
@@ -2564,14 +2564,14 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               {data.settings.advancedModes?.attendance && activeLesson.type === 'school' && !isReadOnlyRecess && (
                 <button
                   onClick={() => setIsAttendanceModalOpen(true)}
-                  className="flex items-center gap-1 text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-800/50 hover:brightness-95 transition-all"
+                  className="flex items-center gap-1 text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-800/50 hover:brightness-95 transition-all"
                 >
                   <ClipboardCheck size={12} /> Fazer Chamada
                 </button>
               )}
 
               {!isReadOnlyRecess && (
-                <button onClick={() => setIsAddingOccurrence(!isAddingOccurrence)} className="flex items-center gap-1 text-[10px] font-black text-primary uppercase hover:bg-primary/10 px-2 py-1 rounded-lg transition-colors"><Plus size={12} /> Adicionar Ocorrência</button>
+                <button onClick={() => setIsAddingOccurrence(!isAddingOccurrence)} className="flex items-center gap-1 text-[11px] font-black text-primary uppercase hover:bg-primary/10 px-2 py-1 rounded-lg transition-colors"><Plus size={12} /> Adicionar Ocorrência</button>
               )}
             </div>
 
@@ -2582,13 +2582,13 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                   <div key={oc.id} className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <div className="p-2 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-xl shrink-0"><AlertTriangle size={14} /></div>
                     <div className="flex-1">
-                      <span className="block text-[10px] font-black uppercase text-red-500 tracking-tight mb-0.5">{oc.type}</span>
-                      <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 leading-snug">"{oc.description}"</p>
+                      <span className="block text-[11px] font-black uppercase text-red-500 tracking-tight mb-0.5">{oc.type}</span>
+                      <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 leading-snug">"{oc.description}"</p>
 
                       {oc.studentIds && oc.studentIds.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {oc.studentIds.map(sid => (
-                            <span key={sid} className="bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded text-[10px] font-bold text-slate-500 border border-slate-100 dark:border-slate-600">
+                            <span key={sid} className="bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded text-[11px] font-bold text-slate-500 border border-slate-100 dark:border-slate-600">
                               {(data.classRecords?.find(r => r.schoolId === activeLesson.institution.id && r.classId === activeLesson.schedule.classId)?.students.find(s => s.id === sid)?.name) || 'Aluno'}
                             </span>
                           ))}
@@ -2605,8 +2605,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               <div className="mb-4 flex items-center gap-3 p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-900/40">
                 <div className="p-2 bg-indigo-100 dark:bg-indigo-800 text-indigo-600 rounded-xl"><ClipboardCheck size={14} /></div>
                 <div>
-                  <span className="block text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-300 tracking-tight">Resumo da Chamada</span>
-                  <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                  <span className="block text-[11px] font-black uppercase text-indigo-600 dark:text-indigo-300 tracking-tight">Resumo da Chamada</span>
+                  <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
                     {logForm.attendance.filter(a => a.status === 'absent').length} Faltas, {logForm.attendance.filter(a => a.status === 'justified').length} Justificadas.
                   </p>
                 </div>
@@ -2616,30 +2616,30 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             {isAddingOccurrence && (
               <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700 animate-in fade-in slide-in-from-top-2">
                 <div className="grid md:grid-cols-3 gap-3 mb-3">
-                  <div className="md:col-span-1"><label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Tipo de Ocorrência</label><select value={tempOccurrence.type} onChange={e => setTempOccurrence(prev => ({ ...prev, type: e.target.value }))} className="w-full bg-white dark:bg-slate-700 border-none rounded-xl px-3 py-2 text-xs font-bold outline-none cursor-pointer dark:text-white">{OCCURRENCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                  <div className="md:col-span-2"><label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Descrição do Ocorrido</label><textarea value={tempOccurrence.description} onChange={e => setTempOccurrence(prev => ({ ...prev, description: e.target.value }))} className="w-full bg-white dark:bg-slate-700 border-none rounded-xl px-3 py-2 text-xs font-bold outline-none dark:text-white resize-none" placeholder="Ex: Joãozinho não trouxe o material..." rows={4} /></div>
+                  <div className="md:col-span-1"><label className="block text-[11px] font-black text-slate-400 uppercase mb-1 ml-1">Tipo de Ocorrência</label><select value={tempOccurrence.type} onChange={e => setTempOccurrence(prev => ({ ...prev, type: e.target.value }))} className="w-full bg-white dark:bg-slate-700 border-none rounded-xl px-3 py-2 text-xs font-bold outline-none cursor-pointer dark:text-white">{OCCURRENCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                  <div className="md:col-span-2"><label className="block text-[11px] font-black text-slate-400 uppercase mb-1 ml-1">Descrição do Ocorrido</label><textarea value={tempOccurrence.description} onChange={e => setTempOccurrence(prev => ({ ...prev, description: e.target.value }))} className="w-full bg-white dark:bg-slate-700 border-none rounded-xl px-3 py-2 text-xs font-bold outline-none dark:text-white resize-none" placeholder="Ex: Joãozinho não trouxe o material..." rows={4} /></div>
                 </div>
 
                 {/* Seletor de Alunos para Ocorrência Individualizada */}
                 {classRoster.length > 0 && (
                   <div className="mb-3 bg-white dark:bg-slate-700/50 p-3 rounded-lg border border-slate-100 dark:border-slate-600/50">
-                    <p className="text-[10px] font-black uppercase text-indigo-500 mb-2 flex items-center gap-1"><Users size={12} /> Alunos Envolvidos (Opcional):</p>
+                    <p className="text-[11px] font-black uppercase text-indigo-500 mb-2 flex items-center gap-1"><Users size={12} /> Alunos Envolvidos (Opcional):</p>
                     <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto custom-scrollbar">
                       {classRoster.map(s => (
                         <button
                           key={s.id}
                           onClick={() => toggleStudentInOccurrence(s.id)}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-all ${tempOccurrence.studentIds.includes(s.id) ? 'bg-indigo-100 border-indigo-200 text-indigo-700 shadow-sm' : 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-500 hover:bg-white'}`}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition-all ${tempOccurrence.studentIds.includes(s.id) ? 'bg-indigo-100 border-indigo-200 text-indigo-700 shadow-sm' : 'bg-slate-50 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-500 hover:bg-white'}`}
                         >
                           {s.name}
                         </button>
                       ))}
                     </div>
-                    {tempOccurrence.studentIds.length > 0 && <p className="text-[10px] font-black text-slate-400 uppercase mt-1 text-right">{tempOccurrence.studentIds.length} selecionado(s)</p>}
+                    {tempOccurrence.studentIds.length > 0 && <p className="text-[11px] font-black text-slate-400 uppercase mt-1 text-right">{tempOccurrence.studentIds.length} selecionado(s)</p>}
                   </div>
                 )}
 
-                <div className="flex justify-end gap-2"><button onClick={() => setIsAddingOccurrence(false)} className="px-4 py-2 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600">Cancelar</button><button onClick={handleAddOccurrence} disabled={!tempOccurrence.description.trim()} className="px-4 py-2 bg-red-500 text-white rounded-xl text-[10px] font-black uppercase shadow-lg shadow-red-100 hover:bg-red-600 disabled:opacity-50 disabled:shadow-none transition-all">Confirmar</button></div>
+                <div className="flex justify-end gap-2"><button onClick={() => setIsAddingOccurrence(false)} className="px-4 py-2 text-[11px] font-black uppercase text-slate-400 hover:text-slate-600">Cancelar</button><button onClick={handleAddOccurrence} disabled={!tempOccurrence.description.trim()} className="px-4 py-2 bg-red-500 text-white rounded-xl text-[11px] font-black uppercase shadow-lg shadow-red-100 hover:bg-red-600 disabled:opacity-50 disabled:shadow-none transition-all">Confirmar</button></div>
               </div>
             )}
           </div>
@@ -2648,19 +2648,19 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             <div className={`flex items-center gap-3 p-4 lg:px-3 lg:py-2 rounded-xl lg:rounded-lg border transition-all animate-in fade-in ${replicateLog ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-900/40' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800'}`}>
               <Copy size={20} className={replicateLog ? 'text-blue-500' : 'text-slate-400'} />
               <div className="flex-1">
-                <span className={`block text-[10px] font-black uppercase tracking-tight mb-0.5 ${replicateLog ? 'text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}`}>Preencher automaticamente aulas em sequência?</span>
-                <p className={`text-[10px] font-bold ${replicateLog ? 'text-blue-500 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`}>Replicar este conteúdo para +{consecutiveSlots.length} aula(s) seguinte(s) desta turma.</p>
+                <span className={`block text-[11px] font-black uppercase tracking-tight mb-0.5 ${replicateLog ? 'text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}`}>Preencher automaticamente aulas em sequência?</span>
+                <p className={`text-[11px] font-bold ${replicateLog ? 'text-blue-500 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`}>Replicar este conteúdo para +{consecutiveSlots.length} aula(s) seguinte(s) desta turma.</p>
               </div>
               <div className="flex bg-white dark:bg-slate-700 rounded-lg p-1 shadow-sm border border-slate-200 dark:border-slate-600">
                 <button
                   onClick={() => setReplicateLog(true)}
-                  className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${replicateLog ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`px-3 py-1.5 rounded-md text-[11px] font-black uppercase transition-all ${replicateLog ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   Sim
                 </button>
                 <button
                   onClick={() => setReplicateLog(false)}
-                  className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${!replicateLog ? 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-300' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`px-3 py-1.5 rounded-md text-[11px] font-black uppercase transition-all ${!replicateLog ? 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-300' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   Não
                 </button>
@@ -2706,7 +2706,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                     console.log('Delete button clicked for extra lesson:', activeLesson.schedule.slotId);
                     setShowDeleteConfirmation(true);
                   }}
-                  className="w-full py-4 md:py-4 bg-red-600 text-white rounded-xl font-black uppercase text-[10px] md:text-xs tracking-tight shadow-xl mt-4 flex items-center justify-center gap-2 hover:bg-red-700 transition-all"
+                  className="w-full py-4 md:py-4 bg-red-600 text-white rounded-xl font-black uppercase text-[11px] md:text-xs tracking-tight shadow-xl mt-4 flex items-center justify-center gap-2 hover:bg-red-700 transition-all"
                 >
                   <Trash2 size={16} /> Excluir Aula
                 </button>
@@ -2718,7 +2718,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             <button
               onClick={handleSaveLog}
               disabled={saveStatus === 'loading' || saveStatus === 'success'}
-              className={`w-full py-4 md:py-4 lg:py-3 text-white rounded-xl lg:rounded-lg font-black uppercase text-[10px] md:text-xs tracking-tight shadow-xl lg:shadow-md mt-4 lg:mt-1 flex items-center justify-center gap-2 transition-all ${saveStatus === 'success'
+              className={`w-full py-4 md:py-4 lg:py-3 text-white rounded-xl lg:rounded-lg font-black uppercase text-[11px] md:text-xs tracking-tight shadow-xl lg:shadow-md mt-4 lg:mt-1 flex items-center justify-center gap-2 transition-all ${saveStatus === 'success'
                 ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20'
                 : 'bg-primary hover:opacity-90'
                 }`}
@@ -2756,19 +2756,19 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                       <div className="flex gap-1">
                         <button
                           onClick={() => handleAttendanceChange(student.id, 'present')}
-                          className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${currentStatus === 'present' ? 'bg-green-500 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 hover:bg-slate-300'}`}
+                          className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all ${currentStatus === 'present' ? 'bg-green-500 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 hover:bg-slate-300'}`}
                         >
                           Presente
                         </button>
                         <button
                           onClick={() => handleAttendanceChange(student.id, 'absent')}
-                          className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${currentStatus === 'absent' ? 'bg-red-500 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 hover:bg-slate-300'}`}
+                          className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all ${currentStatus === 'absent' ? 'bg-red-500 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 hover:bg-slate-300'}`}
                         >
                           Falta
                         </button>
                         <button
                           onClick={() => handleAttendanceChange(student.id, 'justified')}
-                          className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${currentStatus === 'justified' ? 'bg-amber-400 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 hover:bg-slate-300'}`}
+                          className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all ${currentStatus === 'justified' ? 'bg-amber-400 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 hover:bg-slate-300'}`}
                         >
                           Justif.
                         </button>
@@ -2781,7 +2781,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               </div>
 
               <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
-                <button onClick={() => setIsAttendanceModalOpen(false)} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black uppercase text-[10px] tracking-tight shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">Confirmar Chamada</button>
+                <button onClick={() => setIsAttendanceModalOpen(false)} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black uppercase text-[11px] tracking-tight shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">Confirmar Chamada</button>
               </div>
             </div>
           </div>
@@ -2801,7 +2801,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4">
                 {/* 1. Seleção de Data */}
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual dia?</label>
+                  <label className="block text-[11px] font-black text-slate-400 uppercase mb-1 ml-1">Para qual dia?</label>
                   <input
                     type="date"
                     value={copyData.targetDate}
@@ -2812,26 +2812,26 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
                 {/* 2. Seleção de Conteúdo */}
                 <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-                  <p className="text-[10px] font-black text-slate-400 uppercase mb-2">O que copiar?</p>
+                  <p className="text-[11px] font-black text-slate-400 uppercase mb-2">O que copiar?</p>
                   <div className="flex gap-3">
                     <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 shadow-sm">
                       <input type="checkbox" checked={copyData.contentTypes.subject} onChange={e => setCopyData(prev => ({ ...prev, contentTypes: { ...prev.contentTypes, subject: e.target.checked } }))} className="accent-blue-600" />
-                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase">Conteúdo</span>
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase">Conteúdo</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 shadow-sm">
                       <input type="checkbox" checked={copyData.contentTypes.homework} onChange={e => setCopyData(prev => ({ ...prev, contentTypes: { ...prev.contentTypes, homework: e.target.checked } }))} className="accent-blue-600" />
-                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase">Tarefa</span>
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase">Tarefa</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 shadow-sm">
                       <input type="checkbox" checked={copyData.contentTypes.notes} onChange={e => setCopyData(prev => ({ ...prev, contentTypes: { ...prev.contentTypes, notes: e.target.checked } }))} className="accent-blue-600" />
-                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase">Notas</span>
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase">Notas</span>
                     </label>
                   </div>
                 </div>
 
                 {/* 3. Seleção de Slots */}
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">Selecione as turmas/horários de destino:</p>
+                  <p className="text-[11px] font-black text-slate-400 uppercase mb-2 ml-1">Selecione as turmas/horários de destino:</p>
                   <div className="space-y-2">
                     {availableSlotsForCopy.length > 0 ? availableSlotsForCopy.map(slot => (
                       <label key={slot.id} className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer ${copyData.selectedSlots.includes(slot.id) ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-blue-100'}`}>
@@ -2849,10 +2849,10 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                         />
                         <div className="flex-1">
                           <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-black uppercase text-slate-700 dark:text-white">{slot.label}</span>
-                            {slot.hasContent && <span className="text-[10px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded uppercase">Já possui registro</span>}
+                            <span className="text-[11px] font-black uppercase text-slate-700 dark:text-white">{slot.label}</span>
+                            {slot.hasContent && <span className="text-[11px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded uppercase">Já possui registro</span>}
                           </div>
-                          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">{slot.time}</p>
+                          <p className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase">{slot.time}</p>
                         </div>
                       </label>
                     )) : (
@@ -2865,8 +2865,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               </div>
 
               <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0 grid grid-cols-2 gap-3">
-                <button onClick={() => setCopyData(prev => ({ ...prev, isOpen: false, selectedSlots: [] }))} className="py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-black uppercase text-[10px] tracking-tight hover:bg-slate-200 transition-all">Cancelar</button>
-                <button onClick={handleCopyLesson} disabled={copyData.selectedSlots.length === 0} className="py-3 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-tight shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all">Confirmar Cópia</button>
+                <button onClick={() => setCopyData(prev => ({ ...prev, isOpen: false, selectedSlots: [] }))} className="py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-black uppercase text-[11px] tracking-tight hover:bg-slate-200 transition-all">Cancelar</button>
+                <button onClick={handleCopyLesson} disabled={copyData.selectedSlots.length === 0} className="py-3 bg-blue-600 text-white rounded-xl font-black uppercase text-[11px] tracking-tight shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all">Confirmar Cópia</button>
               </div>
             </div>
           </div>
@@ -2910,7 +2910,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                   className="w-full p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 group transition-all text-left"
                 >
                   <div className="font-black text-slate-700 dark:text-white uppercase text-xs mb-1 group-hover:text-blue-600">{activeLesson.schedule.classId === 'window' ? 'Restaurar Janela' : 'Limpar Conteúdo'}</div>
-                  <div className="text-[10px] text-slate-500 font-medium">{activeLesson.schedule.classId === 'window' ? 'Remove qualquer registro e mantém como janela.' : 'Mantém a aula na grade, mas remove texto, chamada e ocorrências.'}</div>
+                  <div className="text-[11px] text-slate-500 font-medium">{activeLesson.schedule.classId === 'window' ? 'Remove qualquer registro e mantém como janela.' : 'Mantém a aula na grade, mas remove texto, chamada e ocorrências.'}</div>
                 </button>
 
                 <button
@@ -2966,7 +2966,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                   className="w-full p-4 rounded-xl border-2 border-red-100 dark:border-red-900/30 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 group transition-all text-left"
                 >
                   <div className="font-black text-slate-700 dark:text-white uppercase text-xs mb-1 group-hover:text-red-500">Excluir {activeLesson.schedule.classId === 'window' ? 'Janela' : 'Aula'}</div>
-                  <div className="text-[10px] text-slate-500 font-medium">Remove este item da grade diária.</div>
+                  <div className="text-[11px] text-slate-500 font-medium">Remove este item da grade diária.</div>
                 </button>
               </div>
             </div>
@@ -3070,7 +3070,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               <AlertTriangle size={20} className="md:w-6 md:h-6" />
             </div>
             <div className="text-left">
-              <span className={`text-[10px] font-black uppercase block mb-0.5 md:mb-1 ${showPendencies ? 'text-white/80' : 'text-slate-500'}`}>Atenção Necessária</span>
+              <span className={`text-[11px] font-black uppercase block mb-0.5 md:mb-1 ${showPendencies ? 'text-white/80' : 'text-slate-500'}`}>Atenção Necessária</span>
               <p className={`text-xs md:text-sm font-black uppercase ${showPendencies ? 'text-white' : 'text-red-600'}`}>Você tem {pendingLessons.length} registros pendentes.</p>
             </div>
           </div>
@@ -3093,7 +3093,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       {/* ... (Menu de Abas) ... */}
       <div className="flex bg-white dark:bg-slate-900 p-1 md:p-1.5 lg:p-1 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm w-full overflow-hidden">
         {[{ id: 'day', label: 'Diário', icon: History }, { id: 'registered', label: 'Histórico', icon: CheckCircle2 }, { id: 'future', label: 'Planejamento', icon: CalendarDays }].map(tab => (
-          <button key={tab.id} onClick={() => setViewMode(tab.id as any)} className={`flex-1 flex items-center justify-center gap-2 px-2 md:px-4 py-2.5 md:py-3 lg:py-2 rounded-lg text-[10px] font-black uppercase transition-all ${viewMode === tab.id ? 'bg-primary text-white shadow-lg lg:shadow-md' : 'text-slate-500'}`}><tab.icon size={14} className="md:w-3.5 md:h-3.5" /> {tab.label}</button>
+          <button key={tab.id} onClick={() => setViewMode(tab.id as any)} className={`flex-1 flex items-center justify-center gap-2 px-2 md:px-4 py-2.5 md:py-3 lg:py-2 rounded-lg text-[11px] font-black uppercase transition-all ${viewMode === tab.id ? 'bg-primary text-white shadow-lg lg:shadow-md' : 'text-slate-500'}`}><tab.icon size={14} className="md:w-3.5 md:h-3.5" /> {tab.label}</button>
         ))}
       </div>
 
@@ -3102,15 +3102,15 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-2">
           {/* ... (Filtros) ... */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <select value={filterInstId} onChange={e => { setFilterInstId(e.target.value); setFilterClassId('all'); setFilterPeriodIdx('all'); }} className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-3 text-[10px] font-black uppercase dark:text-white outline-none cursor-pointer">
+            <select value={filterInstId} onChange={e => { setFilterInstId(e.target.value); setFilterClassId('all'); setFilterPeriodIdx('all'); }} className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-3 text-[11px] font-black uppercase dark:text-white outline-none cursor-pointer">
               <option value="all">Todas Instituições</option>
               {availableInstitutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
             </select>
-            <select value={filterClassId} onChange={e => setFilterClassId(e.target.value)} className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-3 text-[10px] font-black uppercase dark:text-white outline-none cursor-pointer">
+            <select value={filterClassId} onChange={e => setFilterClassId(e.target.value)} className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-3 text-[11px] font-black uppercase dark:text-white outline-none cursor-pointer">
               <option value="all">Todas as Turmas</option>
               {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            <select value={filterPeriodIdx} onChange={e => setFilterPeriodIdx(e.target.value)} className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-3 text-[10px] font-black uppercase dark:text-white outline-none cursor-pointer">
+            <select value={filterPeriodIdx} onChange={e => setFilterPeriodIdx(e.target.value)} className="bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-4 py-3 text-[11px] font-black uppercase dark:text-white outline-none cursor-pointer">
               <option value="all">Todos Períodos</option>
               {periodOptions.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
@@ -3125,7 +3125,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             {/* Estatísticas (Compacto) */}
             <div className="flex items-center gap-2 md:gap-3 bg-slate-50 dark:bg-slate-800/60 py-2 px-3 md:px-4 rounded-xl border border-slate-100 dark:border-slate-800 w-full lg:w-[280px] justify-center whitespace-nowrap flex-shrink-0">
               <BarChart2 size={14} className="text-slate-400" />
-              <div className="flex items-center gap-2 md:gap-3 text-[10px] font-black uppercase tracking-wide text-slate-500">
+              <div className="flex items-center gap-2 md:gap-3 text-[11px] font-black uppercase tracking-wide text-slate-500">
                 <div className="flex items-center gap-1">
                   <span>Programadas:</span>
                   <span className="text-slate-800 dark:text-white">{viewMode === 'registered' ? stats.totalPastPlanned : lessonStats.totalGeneralPlanned}</span>
@@ -3146,19 +3146,19 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               </div>
               <button
                 onClick={() => setFilterStatus('all')}
-                className={`flex-1 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${filterStatus === 'all' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                className={`flex-1 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all ${filterStatus === 'all' ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
               >
                 Todos
               </button>
               <button
                 onClick={() => setFilterStatus('pending')}
-                className={`flex-1 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${filterStatus === 'pending' ? 'bg-white dark:bg-slate-600 text-amber-600 dark:text-amber-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                className={`flex-1 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all ${filterStatus === 'pending' ? 'bg-white dark:bg-slate-600 text-amber-600 dark:text-amber-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
               >
                 Pendentes
               </button>
               <button
                 onClick={() => setFilterStatus('completed')}
-                className={`flex-1 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${filterStatus === 'completed' ? 'bg-white dark:bg-slate-600 text-green-600 dark:text-green-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                className={`flex-1 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase transition-all ${filterStatus === 'completed' ? 'bg-white dark:bg-slate-600 text-green-600 dark:text-green-400 shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
               >
                 Concluídos
               </button>
@@ -3175,7 +3175,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 <div className="hidden md:flex bg-slate-50 dark:bg-slate-800 p-1 rounded-lg items-center mr-2">
                   <button
                     onClick={() => setIsBulkEditMode(!isBulkEditMode)}
-                    className={`flex w-32 justify-center items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${isBulkEditMode ? 'bg-indigo-500 text-white shadow-md ring-2 ring-indigo-200' : 'text-indigo-500 bg-indigo-50 hover:bg-indigo-100'}`}
+                    className={`flex w-32 justify-center items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black uppercase transition-all ${isBulkEditMode ? 'bg-indigo-500 text-white shadow-md ring-2 ring-indigo-200' : 'text-indigo-500 bg-indigo-50 hover:bg-indigo-100'}`}
                   >
                     <Edit3 size={13} /> <span>{isBulkEditMode ? 'Salvar Edição' : 'Modo Edição'}</span>
                   </button>
@@ -3187,7 +3187,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 {((viewMode === 'future' && futureViewType === 'list') || (viewMode === 'registered' && historyViewType === 'list')) && (
                   <button
                     onClick={() => setIsBulkEditMode(!isBulkEditMode)}
-                    className={`md:hidden flex w-auto justify-center items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${isBulkEditMode ? 'bg-indigo-500 text-white shadow-md ring-2 ring-indigo-200' : 'text-indigo-500 bg-indigo-50 hover:bg-indigo-100'}`}
+                    className={`md:hidden flex w-auto justify-center items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black uppercase transition-all ${isBulkEditMode ? 'bg-indigo-500 text-white shadow-md ring-2 ring-indigo-200' : 'text-indigo-500 bg-indigo-50 hover:bg-indigo-100'}`}
                   >
                     <Edit3 size={13} />
                   </button>
@@ -3198,7 +3198,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                       <>
                         <button
                           onClick={() => setFutureSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black uppercase transition-all text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
                           title={futureSortOrder === 'asc' ? 'Mais Antigos Primeiro' : 'Mais Recentes Primeiro'}
                         >
                           {futureSortOrder === 'asc' ? <ArrowUpNarrowWide size={14} /> : <ArrowDownWideNarrow size={14} />}
@@ -3208,13 +3208,13 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                     )}
                     <button
                       onClick={() => setFutureViewType('list')}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${futureViewType === 'list' ? 'bg-primary text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black uppercase transition-all ${futureViewType === 'list' ? 'bg-primary text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
                     >
                       <LayoutList size={13} /> <span>Lista</span>
                     </button>
                     <button
                       onClick={() => setFutureViewType('calendar')}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${futureViewType === 'calendar' ? 'bg-primary text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black uppercase transition-all ${futureViewType === 'calendar' ? 'bg-primary text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
                     >
                       <CalendarDays size={13} /> <span>Calendário</span>
                     </button>
@@ -3225,7 +3225,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                       <>
                         <button
                           onClick={() => setHistorySortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black uppercase transition-all text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
                           title={historySortOrder === 'asc' ? 'Mais Antigos Primeiro' : 'Mais Recentes Primeiro'}
                         >
                           {historySortOrder === 'asc' ? <ArrowUpNarrowWide size={14} /> : <ArrowDownWideNarrow size={14} />}
@@ -3235,13 +3235,13 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                     )}
                     <button
                       onClick={() => setHistoryViewType('list')}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${historyViewType === 'list' ? 'bg-primary text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black uppercase transition-all ${historyViewType === 'list' ? 'bg-primary text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
                     >
                       <LayoutList size={13} /> <span>Lista</span>
                     </button>
                     <button
                       onClick={() => setHistoryViewType('calendar')}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${historyViewType === 'calendar' ? 'bg-primary text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black uppercase transition-all ${historyViewType === 'calendar' ? 'bg-primary text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
                     >
                       <CalendarDays size={13} /> <span>Calendário</span>
                     </button>
@@ -3272,7 +3272,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               <div className={`flex-1 flex flex-col items-center justify-center p-3 md:p-4 lg:py-1.5 rounded-xl lg:rounded-lg border-2 transition-all ${isFutureDate ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-100 dark:border-purple-800/50' : selectedDate < getYYYYMMDD(new Date()) ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/50' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 shadow-sm'}`}>
                 <div className="flex items-center gap-2 mb-1 lg:mb-0">
                   <CalendarDays size={14} className={isFutureDate ? "text-purple-500" : selectedDate < getYYYYMMDD(new Date()) ? "text-amber-500" : "text-slate-400"} />
-                  <span className={`text-[10px] font-black uppercase tracking-tight ${isFutureDate ? 'text-purple-600 dark:text-purple-300' : selectedDate < getYYYYMMDD(new Date()) ? 'text-amber-600 dark:text-amber-300' : 'text-slate-400 dark:text-slate-500'}`}>
+                  <span className={`text-[11px] font-black uppercase tracking-tight ${isFutureDate ? 'text-purple-600 dark:text-purple-300' : selectedDate < getYYYYMMDD(new Date()) ? 'text-amber-600 dark:text-amber-300' : 'text-slate-400 dark:text-slate-500'}`}>
                     {isFutureDate ? 'Modo Planejamento' : selectedDate < getYYYYMMDD(new Date()) ? 'Modo Histórico' : 'Visualização Diária'}
                   </span>
                 </div>
@@ -3280,7 +3280,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                   {new Date(selectedDate + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
                 </h3>
                 {selectedDate !== getYYYYMMDD(new Date()) && (
-                  <button onClick={() => setSelectedDate(getYYYYMMDD(new Date()))} className="mt-1 lg:mt-0 flex items-center gap-1 text-[10px] font-black uppercase text-blue-500 hover:text-blue-600 transition-colors">
+                  <button onClick={() => setSelectedDate(getYYYYMMDD(new Date()))} className="mt-1 lg:mt-0 flex items-center gap-1 text-[11px] font-black uppercase text-blue-500 hover:text-blue-600 transition-colors">
                     <RotateCcw size={10} /> Voltar para Hoje
                   </button>
                 )}
@@ -3301,8 +3301,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 <div key={key} className="flex-1 w-full space-y-2 md:space-y-3 lg:space-y-2 min-w-0">
                   <div className="flex items-center gap-2 md:gap-3 px-2 py-1.5 md:px-4 md:py-2 lg:py-1.5 bg-slate-100 dark:bg-slate-800/50 rounded-xl lg:rounded-lg border border-slate-200 dark:border-slate-700">
                     <Clock size={12} className="text-primary md:w-3.5 md:h-3.5" />
-                    <h3 className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-tight">{key}</h3>
-                    <span className="ml-auto text-[10px] font-black bg-white dark:bg-slate-700 text-slate-500 px-2 py-0.5 rounded-lg">
+                    <h3 className="text-[11px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-tight">{key}</h3>
+                    <span className="ml-auto text-[11px] font-black bg-white dark:bg-slate-700 text-slate-500 px-2 py-0.5 rounded-lg">
                       {integratedPanoramicColumns.groupedShifts[key].length} Aulas
                     </span>
                   </div>
@@ -3331,21 +3331,21 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                       >
                         {/* Badge para aulas extras (Exceto Regular) */}
                         {(item as any).isExtra && item.log?.type !== 'regular' && (
-                          <span className="absolute top-1 right-1 bg-indigo-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full uppercase flex items-center gap-0.5 shadow-md">
+                          <span className="absolute top-1 right-1 bg-indigo-500 text-white text-[11px] font-black px-1.5 py-0.5 rounded-full uppercase flex items-center gap-0.5 shadow-md">
                             {item.log?.type === 'extra' ? <><BookPlus size={8} /> Extra</> : <><Replace size={8} /> Subst</>}
                           </span>
                         )}
 
-                        <div className="w-6 h-6 md:w-10 md:h-10 lg:w-9 lg:h-9 rounded-lg md:rounded-xl lg:rounded-md flex items-center justify-center text-white font-black text-[10px] md:text-sm shadow-md shrink-0" style={{ backgroundColor: item.inst.color }}>
+                        <div className="w-6 h-6 md:w-10 md:h-10 lg:w-9 lg:h-9 rounded-lg md:rounded-xl lg:rounded-md flex items-center justify-center text-white font-black text-[11px] md:text-sm shadow-md shrink-0" style={{ backgroundColor: item.inst.color }}>
                           {item.inst.name[0]}
                         </div>
                         <div className="overflow-hidden flex-1 min-w-0">
                           <div className="flex justify-between items-center">
                             <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <h4 className={`font-black uppercase text-[10px] md:text-xs truncate leading-tight ${item.isActive ? 'text-primary' : item.isWindow ? 'text-slate-600 dark:text-slate-300' : 'text-slate-800 dark:text-white'}`}>{item.label}</h4>
-                              {item.isActive && <span className="flex items-center gap-1 bg-primary text-white text-[10px] font-black px-1.5 py-0.5 rounded uppercase tracking-tight"><PlayCircle size={8} fill="currentColor" /> Agora</span>}
+                              <h4 className={`font-black uppercase text-[11px] md:text-xs truncate leading-tight ${item.isActive ? 'text-primary' : item.isWindow ? 'text-slate-600 dark:text-slate-300' : 'text-slate-800 dark:text-white'}`}>{item.label}</h4>
+                              {item.isActive && <span className="flex items-center gap-1 bg-primary text-white text-[11px] font-black px-1.5 py-0.5 rounded uppercase tracking-tight"><PlayCircle size={8} fill="currentColor" /> Agora</span>}
                             </div>
-                            <span className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase shrink-0">{item.slot.startTime}</span>
+                            <span className="text-[11px] font-black text-slate-400 dark:text-slate-600 uppercase shrink-0">{item.slot.startTime}</span>
                           </div>
 
                           {isFutureDate && item.log && !item.blockedReason && (
@@ -3353,7 +3353,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                               className={`${isBulkEditMode ? '' : 'lg:hidden '}mt-1.5 mb-1 px-1 py-0.5 rounded-lg bg-purple-100 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 overflow-visible max-w-full min-w-0`}
                               onClick={(e) => isBulkEditMode && e.stopPropagation()}
                             >
-                              <p className="text-[10px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-tight mb-0.5 ml-1">Planejado:</p>
+                              <p className="text-[11px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-tight mb-0.5 ml-1">Planejado:</p>
                               <EditableContentField
                                 initialValue={item.log.subject}
                                 onSave={(val, ctxId) => handleQuickSave(val, item.schedule, item.date, item.log, ctxId)} // Pass ctxId
@@ -3365,30 +3365,30 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                           <div className="flex justify-between items-center mt-0.5 md:mt-1">
                             <div className="flex items-center gap-2">
                               {item.slot.type === 'break' ? (
-                                <span className="text-[10px] md:text-xs font-black text-slate-500 uppercase flex items-center gap-1">
+                                <span className="text-[11px] md:text-xs font-black text-slate-500 uppercase flex items-center gap-1">
                                   <Coffee size={12} className="text-amber-600" /> Intervalo
                                 </span>
                               ) : (
                                 <>
-                                  <span className="text-[10px] font-bold text-slate-500 truncate max-w-[80px]">{item.inst.name}</span>
-                                  <span className="text-[10px] md:text-[11px] font-black text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg uppercase tracking-tight shrink-0">
+                                  <span className="text-[11px] font-bold text-slate-500 truncate max-w-[80px]">{item.inst.name}</span>
+                                  <span className="text-[11px] font-black text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-lg uppercase tracking-tight shrink-0">
                                     {idx + 1}ª Aula
                                   </span>
                                 </>
                               )}
                             </div>
                             {isFutureDate && item.log && !item.blockedReason && !isBulkEditMode && (
-                              <span className="hidden lg:block flex-1 min-w-0 mx-2 truncate text-[10px] font-bold italic text-purple-700 dark:text-purple-300" title={item.log.subject}>
+                              <span className="hidden lg:block flex-1 min-w-0 mx-2 truncate text-[11px] font-bold italic text-purple-700 dark:text-purple-300" title={item.log.subject}>
                                 {item.log.subject || 'Planejado'}
                               </span>
                             )}
                             {item.blockedReason && item.slot.type !== 'break' ? (
-                              <span className="shrink-0 max-w-[130px] lg:max-w-[180px] flex items-center gap-1 text-[10px] font-black uppercase text-pink-600 dark:text-pink-300 bg-pink-50 dark:bg-pink-900/20 px-1.5 py-0.5 rounded" title={`Sem aula: ${item.blockedReason}`}>
+                              <span className="shrink-0 max-w-[130px] lg:max-w-[180px] flex items-center gap-1 text-[11px] font-black uppercase text-pink-600 dark:text-pink-300 bg-pink-50 dark:bg-pink-900/20 px-1.5 py-0.5 rounded" title={`Sem aula: ${item.blockedReason}`}>
                                 <Palmtree size={10} className="shrink-0" />
                                 <span className="truncate">Sem aula · {item.blockedReason}</span>
                               </span>
                             ) : (
-                            <div className={`flex items-center gap-1 shrink-0 text-[10px] font-black uppercase ${item.slot.type === 'break' ? 'hidden' : item.isFree ? 'text-slate-500' : item.isWindow ? 'text-slate-500' : hasLogText(item.log) ? (isFutureDate ? 'text-purple-500' : 'text-green-500') : (isFutureDate || (selectedDate === getYYYYMMDD(new Date()) && currentTime < (item as any).endTimeMin)) ? 'text-slate-400' : 'text-blue-500'}`}>
+                            <div className={`flex items-center gap-1 shrink-0 text-[11px] font-black uppercase ${item.slot.type === 'break' ? 'hidden' : item.isFree ? 'text-slate-500' : item.isWindow ? 'text-slate-500' : hasLogText(item.log) ? (isFutureDate ? 'text-purple-500' : 'text-green-500') : (isFutureDate || (selectedDate === getYYYYMMDD(new Date()) && currentTime < (item as any).endTimeMin)) ? 'text-slate-400' : 'text-blue-500'}`}>
                               {hasLogText(item.log) ? <CheckCircle2 size={10} /> : null}
                               {
                                 item.slot.type === 'break' ? '' :
@@ -3410,7 +3410,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               )) : (
                 <div className="col-span-full py-20 w-full text-center">
                   <Palmtree className="mx-auto mb-2 text-slate-300" size={32} />
-                  <p className="text-[10px] font-black uppercase text-slate-500">Nenhuma aula cadastrada hoje.</p>
+                  <p className="text-[11px] font-black uppercase text-slate-500">Nenhuma aula cadastrada hoje.</p>
                 </div>
               )}
             </div>
@@ -3425,7 +3425,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 className="flex items-center justify-center gap-2 p-4 lg:p-2.5 rounded-xl lg:rounded-lg border-2 border-dashed border-slate-300 text-slate-400 hover:bg-slate-50 hover:text-slate-600 hover:border-slate-400 transition-all group"
               >
                 <Plus size={18} className="group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] font-black uppercase tracking-tight">Adicionar Aula Regular</span>
+                <span className="text-[11px] font-black uppercase tracking-tight">Adicionar Aula Regular</span>
               </button>
 
               {/* OPÇÃO 2: AULA EXTRA (Para reforço, eventos ou substituições) */}
@@ -3434,7 +3434,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 className="flex items-center justify-center gap-2 p-4 lg:p-2.5 rounded-xl lg:rounded-lg border-2 border-dashed border-slate-300 text-slate-400 hover:bg-slate-50 hover:text-slate-600 hover:border-slate-400 transition-all group"
               >
                 <Plus size={18} className="group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] font-black uppercase tracking-tight">Aula Extra / Substituição</span>
+                <span className="text-[11px] font-black uppercase tracking-tight">Aula Extra / Substituição</span>
               </button>
             </div>
           </div>
@@ -3603,7 +3603,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 return (
                   <div className="py-20 text-center">
                     <CalendarRange className="mx-auto mb-2 text-slate-300" size={32} />
-                    <p className="text-[10px] font-black uppercase text-slate-500">Nenhuma aula futura encontrada para este período.</p>
+                    <p className="text-[11px] font-black uppercase text-slate-500">Nenhuma aula futura encontrada para este período.</p>
                   </div>
                 );
               }
@@ -3626,7 +3626,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                         Semana de {formatWeekRange(weekKey)}
                       </h3>
                       <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
-                      <span className="text-[10px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
+                      <span className="text-[11px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
                         {weekLessons.length} aulas
                       </span>
                     </div>
@@ -3672,19 +3672,19 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                                   filter: 'brightness(0.9)'
                                 }}
                               >
-                                <span className="text-[10px] uppercase">{DAYS_OF_WEEK_NAMES[item.dayOfWeek].slice(0, 3)}</span>
+                                <span className="text-[11px] uppercase">{DAYS_OF_WEEK_NAMES[item.dayOfWeek].slice(0, 3)}</span>
                                 <span className="text-xs">{new Date(item.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
                               </div>
                               <div className="flex-1 overflow-hidden">
                                 <div className="flex items-center justify-between gap-2">
                                   <h4 className="text-sm font-black uppercase truncate text-slate-800 dark:text-white">{getClassName(data, item.schedule.schoolId, item.schedule.classId, '')}</h4>
-                                  <span className="text-[10px] font-bold text-slate-500 uppercase shrink-0">
+                                  <span className="text-[11px] font-bold text-slate-500 uppercase shrink-0">
                                     {shiftName === 'Extra' || shiftName === 'Particular' ? item.slot.startTime : `${lessonNumber}ª aula`}
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-between gap-2 mt-0.5">
-                                  <p className="text-[10px] font-bold text-slate-500 uppercase truncate">{item.institution.name}</p>
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase truncate">{shiftName}</p>
+                                  <p className="text-[11px] font-bold text-slate-500 uppercase truncate">{item.institution.name}</p>
+                                  <p className="text-[11px] font-bold text-slate-400 uppercase truncate">{shiftName}</p>
                                 </div>
                               </div>
                             </div>
@@ -3696,7 +3696,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                                 if (isBulkEditMode || !item.log) e.stopPropagation();
                               }}
                             >
-                              {item.log && <p className="text-[10px] font-black text-purple-600 dark:text-purple-300 uppercase mb-1">Planejado:</p>}
+                              {item.log && <p className="text-[11px] font-black text-purple-600 dark:text-purple-300 uppercase mb-1">Planejado:</p>}
                               <EditableContentField
                                 initialValue={item.log?.subject || ''}
                                 onSave={(val, ctxId) => handleQuickSave(val, item.schedule, item.date, item.log, ctxId)} // Pass ctxId
@@ -3720,7 +3720,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
             {historyItems.length === 0 ? (
               <div className="py-20 text-center">
                 <History className="mx-auto mb-2 text-slate-300" size={32} />
-                <p className="text-[10px] font-black uppercase text-slate-500">Nenhum histórico encontrado para este período.</p>
+                <p className="text-[11px] font-black uppercase text-slate-500">Nenhum histórico encontrado para este período.</p>
               </div>
             ) : (
               (() => {
@@ -3760,7 +3760,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                           Semana de {formatWeekRange(weekKey)}
                         </h3>
                         <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700"></div>
-                        <span className="text-[10px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
+                        <span className="text-[11px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
                           {(() => {
                             const cancelled = weekLessons.filter(l => l.cancelledBy).length;
                             const total = weekLessons.length - cancelled;
@@ -3847,7 +3847,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                                     filter: 'brightness(0.9)'
                                   }}
                                 >
-                                  <span className="text-[10px] uppercase">{DAYS_OF_WEEK_NAMES[item.dayOfWeek].slice(0, 3)}</span>
+                                  <span className="text-[11px] uppercase">{DAYS_OF_WEEK_NAMES[item.dayOfWeek].slice(0, 3)}</span>
                                   <span className="text-xs">{new Date(item.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
                                 </div>
                                 <div className="flex-1 overflow-hidden">
@@ -3861,25 +3861,25 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                                         return item.schedule.classId;
                                       })()} {item.isExtra && '(Extra)'}
                                     </h4>
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase shrink-0">
+                                    <span className="text-[11px] font-bold text-slate-500 uppercase shrink-0">
                                       {!isOfficialSlot ? item.slot.startTime : `${lessonNumber}ª aula`}
                                     </span>
                                   </div>
                                   <div className="flex items-center justify-between gap-2 mt-0.5">
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase truncate">{item.institution?.name}</p>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase truncate">{shiftName}</p>
+                                    <p className="text-[11px] font-bold text-slate-500 uppercase truncate">{item.institution?.name}</p>
+                                    <p className="text-[11px] font-bold text-slate-400 uppercase truncate">{shiftName}</p>
                                   </div>
                                 </div>
                               </div>
 
                               {item.cancelledBy ? (
-                                <div className="p-1 mt-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1 min-w-0 text-pink-600 dark:text-pink-300 bg-pink-50 dark:bg-pink-900/20" title={`Aula cancelada: ${item.cancelledBy}`}>
+                                <div className="p-1 mt-2 rounded-xl text-[11px] font-black uppercase flex items-center gap-1 min-w-0 text-pink-600 dark:text-pink-300 bg-pink-50 dark:bg-pink-900/20" title={`Aula cancelada: ${item.cancelledBy}`}>
                                   <CalendarX size={12} className="shrink-0" />
                                   <span className="truncate">Aula cancelada · {item.cancelledBy}</span>
                                 </div>
                               ) : (
                                 <div
-                                  className={`p-1 mt-2 rounded-xl text-[10px] font-bold italic truncate flex-1 min-w-0 ${item.log ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400' : 'bg-red-50/50 dark:bg-red-900/20 text-red-400 dark:text-red-300'}`}
+                                  className={`p-1 mt-2 rounded-xl text-[11px] font-bold italic truncate flex-1 min-w-0 ${item.log ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400' : 'bg-red-50/50 dark:bg-red-900/20 text-red-400 dark:text-red-300'}`}
                                   onClick={(e) => {
                                     // Prevent opening modal if clicking on editable field OR if in bulk edit mode
                                     if (isBulkEditMode) e.stopPropagation();
@@ -3995,11 +3995,11 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <button onClick={() => setExtraLessonForm({ ...extraLessonForm, type: 'extra' })} className={`py-4 rounded-xl font-black uppercase text-[10px] tracking-tight border-2 transition-all ${extraLessonForm.type === 'extra' ? 'bg-indigo-50 border-indigo-500 text-indigo-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Aula Extra</button>
-                  <button onClick={() => setExtraLessonForm({ ...extraLessonForm, type: 'substitution' })} className={`py-4 rounded-xl font-black uppercase text-[10px] tracking-tight border-2 transition-all ${extraLessonForm.type === 'substitution' ? 'bg-amber-50 border-amber-500 text-amber-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Substituição</button>
+                  <button onClick={() => setExtraLessonForm({ ...extraLessonForm, type: 'extra' })} className={`py-4 rounded-xl font-black uppercase text-[11px] tracking-tight border-2 transition-all ${extraLessonForm.type === 'extra' ? 'bg-indigo-50 border-indigo-500 text-indigo-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Aula Extra</button>
+                  <button onClick={() => setExtraLessonForm({ ...extraLessonForm, type: 'substitution' })} className={`py-4 rounded-xl font-black uppercase text-[11px] tracking-tight border-2 transition-all ${extraLessonForm.type === 'substitution' ? 'bg-amber-50 border-amber-500 text-amber-600 shadow-lg' : 'bg-slate-50 border-transparent text-slate-400'}`}>Substituição</button>
                 </div>
 
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed px-1 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed px-1 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
                   {extraLessonForm.type === 'extra' ? (
                     <span className="flex gap-2 items-start"><BookPlus size={14} className="text-indigo-500 shrink-0 mt-0.5" /> <span>A <strong>Aula Extra</strong> constará no seu diário de classe e contabiliza como conteúdo da sua disciplina.</span></span>
                   ) : (
@@ -4009,11 +4009,11 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Data</label>
+                    <label className="block text-[11px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Data</label>
                     <input type="date" value={extraLessonForm.date} onChange={e => setExtraLessonForm({ ...extraLessonForm, date: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold dark:text-white text-sm" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Escola</label>
+                    <label className="block text-[11px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Escola</label>
                     <select value={extraLessonForm.schoolId} onChange={e => setExtraLessonForm({ ...extraLessonForm, schoolId: e.target.value, classId: '', selectedSlotId: 'custom' })} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold dark:text-white text-sm">
                       <option value="">Selecione...</option>
                       {data.schools.filter(s => !s.deleted).sort((a, b) => a.name.localeCompare(b.name)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -4023,7 +4023,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
                 {extraLessonForm.schoolId && (
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Turma</label>
+                    <label className="block text-[11px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Turma</label>
                     <select value={extraLessonForm.classId} onChange={e => setExtraLessonForm({ ...extraLessonForm, classId: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold dark:text-white text-sm">
                       <option value="">Selecione...</option>
                       {data.schools.find(s => s.id === extraLessonForm.schoolId)?.classes.map(c => {
@@ -4037,14 +4037,14 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
                 {extraLessonForm.type === 'substitution' && (
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Disciplina Substituída</label>
+                    <label className="block text-[11px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Disciplina Substituída</label>
                     <input type="text" value={extraLessonForm.substitutionSubject} onChange={e => setExtraLessonForm({ ...extraLessonForm, substitutionSubject: e.target.value })} className="w-full bg-amber-50 dark:bg-amber-900/10 border-none rounded-xl px-4 py-3 font-bold text-amber-700 dark:text-amber-400 text-sm" placeholder="Ex: Matemática, História..." />
                   </div>
                 )}
 
                 {extraLessonForm.schoolId && (
                   <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-2">Horário da Aula</label>
+                    <label className="block text-[11px] font-black text-slate-400 uppercase tracking-tight mb-2">Horário da Aula</label>
                     <select value={extraLessonForm.selectedSlotId} onChange={e => handleSlotSelection(e.target.value, extraLessonForm.schoolId)} className="w-full bg-white dark:bg-slate-700 border-none rounded-xl px-4 py-2 font-bold dark:text-white text-xs mb-3">
                       <option value="custom">Horário Personalizado</option>
                       {data.schools.find(s => s.id === extraLessonForm.schoolId)?.shifts.map(shift => (
@@ -4064,14 +4064,14 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 )}
 
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Conteúdo Ministrado</label>
+                  <label className="block text-[11px] font-black text-slate-400 uppercase tracking-tight mb-1.5 ml-1">Conteúdo Ministrado</label>
                   <textarea value={extraLessonForm.subject} onChange={e => setExtraLessonForm({ ...extraLessonForm, subject: e.target.value })} rows={2} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 font-bold dark:text-white text-sm" placeholder="O que foi dado na aula..." />
                 </div>
               </div>
 
               <div className="mt-8 flex gap-4">
-                <button onClick={() => setIsExtraLessonModalOpen(false)} className="flex-1 py-4 font-black text-slate-400 uppercase text-[10px]">Cancelar</button>
-                <button onClick={handleSaveExtraLesson} disabled={!extraLessonForm.date || !extraLessonForm.schoolId || !extraLessonForm.classId} className="flex-1 py-4 bg-indigo-600 text-white rounded-xl font-black uppercase text-[10px] tracking-tight shadow-xl shadow-indigo-100 disabled:opacity-50 disabled:shadow-none">Salvar Aula</button>
+                <button onClick={() => setIsExtraLessonModalOpen(false)} className="flex-1 py-4 font-black text-slate-400 uppercase text-[11px]">Cancelar</button>
+                <button onClick={handleSaveExtraLesson} disabled={!extraLessonForm.date || !extraLessonForm.schoolId || !extraLessonForm.classId} className="flex-1 py-4 bg-indigo-600 text-white rounded-xl font-black uppercase text-[11px] tracking-tight shadow-xl shadow-indigo-100 disabled:opacity-50 disabled:shadow-none">Salvar Aula</button>
               </div>
             </div>
           </div>
@@ -4093,7 +4093,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               <div className="space-y-4">
                 {/* 1. Data */}
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Data da Aula</label>
+                  <label className="block text-[11px] font-black text-slate-400 uppercase mb-1 ml-1">Data da Aula</label>
                   <input
                     type="date"
                     value={createRegularForm.date}
@@ -4104,7 +4104,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
                 {/* 2. Escola */}
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Escola</label>
+                  <label className="block text-[11px] font-black text-slate-400 uppercase mb-1 ml-1">Escola</label>
                   <select
                     value={createRegularForm.schoolId}
                     onChange={e => setCreateRegularForm(prev => ({ ...prev, schoolId: e.target.value, classId: '', shiftId: '', slotId: '' }))}
@@ -4120,7 +4120,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 {/* 3. Turma */}
                 {createRegularForm.schoolId && (
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Turma</label>
+                    <label className="block text-[11px] font-black text-slate-400 uppercase mb-1 ml-1">Turma</label>
                     <select
                       value={createRegularForm.classId}
                       onChange={e => setCreateRegularForm(prev => ({ ...prev, classId: e.target.value }))}
@@ -4139,7 +4139,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
                 {/* 4. Slot (Horário) */}
                 {createRegularForm.schoolId && (
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Horário (Slot Oficial)</label>
+                    <label className="block text-[11px] font-black text-slate-400 uppercase mb-1 ml-1">Horário (Slot Oficial)</label>
                     <select
                       value={createRegularForm.slotId ? `${createRegularForm.shiftId}|${createRegularForm.slotId}` : ''}
                       onChange={e => {
@@ -4164,11 +4164,11 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               </div>
 
               <div className="mt-8 grid grid-cols-2 gap-3">
-                <button onClick={() => setShowCreateRegularModal(false)} className="py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-black uppercase text-[10px] tracking-tight hover:bg-slate-200 transition-all">Cancelar</button>
+                <button onClick={() => setShowCreateRegularModal(false)} className="py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-black uppercase text-[11px] tracking-tight hover:bg-slate-200 transition-all">Cancelar</button>
                 <button
                   onClick={handleCreateRegularSkeleton}
                   disabled={!createRegularForm.date || !createRegularForm.schoolId || !createRegularForm.classId || !createRegularForm.slotId}
-                  className="py-3 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-tight shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all"
+                  className="py-3 bg-blue-600 text-white rounded-xl font-black uppercase text-[11px] tracking-tight shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all"
                 >
                   Criar Aula
                 </button>

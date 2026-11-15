@@ -35,6 +35,7 @@ const GradesManagement = lazy(loadGrades);
 import SyncStatus from './components/SyncStatus'; // Componente de Status de Sync
 import { ConnectionBanner, DisconnectedPopup } from './components/ConnectionWarnings';
 import { ToastProvider, useToast } from './hooks/useToast';
+import AppDialogs from './components/AppDialogs';
 import { useSyncedData } from './hooks/useSyncedData';
 import { useBackClose } from './hooks/useBackClose';
 import { useAsyncLock } from './utils/validation';
@@ -544,6 +545,7 @@ const AppWithToast = () => {
   return (
     <ToastProvider>
       <App />
+      <AppDialogs />
     </ToastProvider>
   );
 };

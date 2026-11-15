@@ -15,6 +15,7 @@ import {
 import { auth, db } from '../services/firebaseConnection';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { doc, setDoc, getDocFromServer, onSnapshot, Timestamp } from 'firebase/firestore';
+import { notifyWarning } from '../utils/dialogs';
 
 export const STORAGE_KEY = 'leciona-data-v1';
 /** '1' = há alterações locais que ainda não chegaram à nuvem */
@@ -516,7 +517,7 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
         clearPending();
       } catch (error) {
         console.error("Erro ao salvar antes do logout:", error);
-        alert("Aviso: Não foi possível enviar seus dados para a nuvem antes de sair. Eles continuam salvos neste aparelho.");
+        notifyWarning("Aviso: Não foi possível enviar seus dados para a nuvem antes de sair. Eles continuam salvos neste aparelho.");
       }
     }
 

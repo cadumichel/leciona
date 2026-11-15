@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useBackClose } from '../hooks/useBackClose';
 import { CheckSquare, ChevronDown, ChevronRight, Square, X, CalendarX } from 'lucide-react';
 import { AppData } from '../types';
 import { LessonDisplayItem } from '../utils/lessonStats';
@@ -53,6 +54,9 @@ const PendingLessonsPanel: React.FC<Props> = ({ data, items, today, onOpen, onMa
     return next;
   });
   const stopSelecting = () => { setSelecting(false); setSelected(new Set()); setConfirming(false); };
+  // Voltar do celular: fecha a confirmação e, depois, sai do modo Selecionar
+  useBackClose(selecting, stopSelecting);
+  useBackClose(confirming, () => setConfirming(false));
   const confirm = () => {
     const list = [...selected].map(id => byId.get(id)).filter(Boolean) as LessonDisplayItem[];
     onMarkNoLesson(list);

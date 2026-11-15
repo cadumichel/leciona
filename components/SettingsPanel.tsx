@@ -9,8 +9,9 @@ import {
    CalendarClock, GraduationCap, Wand2, Palmtree, CalendarRange, Trash2,
    CheckCircle2, Edit3, Settings, LogIn, Plus, Users, LayoutList, ClipboardCheck,
    Archive, RotateCcw, Clock, AlertCircle, Check, Bell, MessageSquare, Volume2, Smartphone, BellOff,
-   Sparkles, Scissors, FileText, Copy, UserMinus, LayoutGrid, Database, FileUp, FileDown, AlignLeft
+   Sparkles, Scissors, FileText, Copy, UserMinus, LayoutGrid, Database, FileUp, FileDown, AlignLeft, Type
 } from 'lucide-react';
+import { TAMANHOS_LETRAS, TamanhoLetras, lerTamanhoLetras, salvarTamanhoLetras } from '../utils/tamanhoLetras';
 import { deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebaseConnection';
 import { downloadCSV, downloadICS, formatDateBR, todayLocal } from '../utils';
@@ -57,6 +58,8 @@ const THEME_COLORS = [
 ];
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyncNow, user, onLogin, onLogout, isOnboarding = false, onFinishOnboarding, onRestoreData, onStartNewYear }) => {
+   // Tamanho das letras: só neste aparelho (utils/tamanhoLetras.ts)
+   const [tamanhoLetras, setTamanhoLetras] = useState<TamanhoLetras>(lerTamanhoLetras);
    const [showNewYearWizard, setShowNewYearWizard] = useState(false);
    const [activeSubTab, setActiveSubTab] = useState<'general' | 'schools' | 'calendar' | 'schedules' | 'classes' | 'students' | 'privatestudents'>('general');
    const [showTermsModal, setShowTermsModal] = useState(false);
@@ -1371,6 +1374,32 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                  </div>
                               </div>
                               <Toggle checked={data.settings.darkMode} onChange={e => onUpdateData({ settings: { ...data.settings, darkMode: e.target.checked } })} />
+                           </div>
+
+                           <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800 space-y-3">
+                              <div className="flex items-center gap-2">
+                                 <div className="p-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-200">
+                                    <Type size={16} />
+                                 </div>
+                                 <div>
+                                    <span className="text-xs font-black uppercase dark:text-white block mb-0.5">Tamanho das letras</span>
+                                    <p className="text-xs text-slate-400 font-medium normal-case dark:text-slate-500">Aumenta as letras do app. Vale só para este aparelho.</p>
+                                 </div>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Tamanho das letras">
+                                 {TAMANHOS_LETRAS.map(({ value, label }, i) => (
+                                    <button
+                                       key={value}
+                                       role="radio"
+                                       aria-checked={tamanhoLetras === value}
+                                       onClick={() => { setTamanhoLetras(value); salvarTamanhoLetras(value); }}
+                                       className={`min-h-[44px] rounded-lg border-2 flex items-center justify-center gap-1.5 font-black transition-all ${tamanhoLetras === value ? 'border-primary text-primary bg-white dark:bg-slate-900' : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300'}`}
+                                    >
+                                       <span style={{ fontSize: `${14 + i * 3}px` }}>A</span>
+                                       <span className="text-xs uppercase">{label}</span>
+                                    </button>
+                                 ))}
+                              </div>
                            </div>
 
                            <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-transparent">

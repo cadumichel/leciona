@@ -2046,7 +2046,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
   }, [activeLesson, data.calendars, data.events]);
 
   // Voltar do celular: fecha a janela aberta e, depois, a aula aberta (hooks/useBackClose.ts)
-  useBackClose(!!activeLesson, () => setActiveLesson(null));
+  useBackClose(!!activeLesson, () => handleBackFromLesson());
   useBackClose(isAttendanceModalOpen, () => setIsAttendanceModalOpen(false));
   useBackClose(copyData.isOpen, () => setCopyData(prev => ({ ...prev, isOpen: false, selectedSlots: [] })));
   useBackClose(showDeleteOptionsModal, () => setShowDeleteOptionsModal(false));

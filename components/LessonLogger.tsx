@@ -57,6 +57,7 @@ import { missingWorkAlerts, pendingDeliveriesForClass, worksAtLesson } from '../
 import { WorkDeliveryModal } from './WorkDeliveries';
 import { todayLocal } from '../utils';
 import PendingLessonsPanel from './PendingLessonsPanel';
+import { useBackClose } from '../hooks/useBackClose';
 import { lessonDraftKey, loadDraft, saveDraft, removeDraft, pickText, sameText, DraftText } from '../utils/lessonDraft';
 import { useToast } from '../hooks/useToast';
 
@@ -2104,6 +2105,14 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       activeLesson.type === 'school' ? activeLesson.schedule.classId : undefined
     );
   }, [activeLesson, data.calendars, data.events]);
+
+  // Voltar do celular: fecha a janela aberta e, depois, a aula aberta (hooks/useBackClose.ts)
+  useBackClose(!!activeLesson, () => handleBackFromLesson());
+  useBackClose(isAttendanceModalOpen, () => setIsAttendanceModalOpen(false));
+  useBackClose(copyData.isOpen, () => setCopyData(prev => ({ ...prev, isOpen: false, selectedSlots: [] })));
+  useBackClose(showDeleteOptionsModal, () => setShowDeleteOptionsModal(false));
+  useBackClose(isExtraLessonModalOpen, () => setIsExtraLessonModalOpen(false));
+  useBackClose(showCreateRegularModal, () => setShowCreateRegularModal(false));
 
   // Reset save status when form changes
   useEffect(() => {

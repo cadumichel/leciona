@@ -60,6 +60,9 @@ objetivo.
   (`components/MigrationWizard.tsx`). Nada antes da data da versão nem depois da versão seguinte
   muda; a correspondência é pela ordem das aulas da turma na semana (horários reais), nunca dois
   itens no mesmo horário; avaliações vão junto com o registro "Avaliação:".
+- **Lista de pendências do Diário** (`components/PendingLessonsPanel.tsx` + `utils/pendencies.ts`): por turma,
+  período atual de cada escola primeiro (anteriores recolhidos); "Selecionar" → "Não houve aula" marca várias
+  aulas como `status: 'removed'` (igual a Excluir aula), com Desfazer por 20 s. O número do aviso não muda.
 - **Aulas, pendências e bloqueios** (feriado, recesso, evento que suspende aula):
   `utils/lessonStats.ts` (`getLessonDisplayItems`, `isLessonBlocked`).
 - **Avaliações**: `events` com `type` `test`/`work`; `slotId` = a aula em que acontece. Sem

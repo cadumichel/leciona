@@ -281,6 +281,8 @@ const App: React.FC = () => {
 
   // Voltar do celular numa aba fora do Início volta para o Início (em vez de sair do app)
   useBackClose(activeTab !== 'dashboard' && !isOnboarding, () => setActiveTab('dashboard'));
+  // Voltar do celular com o menu "Mais" aberto: fecha só o menu
+  useBackClose(isMoreOpen && !isOnboarding, () => setIsMoreOpen(false));
 
   // Baixa as outras telas em segundo plano logo depois que o app abre
   useEffect(() => {

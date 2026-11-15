@@ -56,6 +56,7 @@ import { scheduleNotices, scheduleNoticeText } from '../utils/scheduleNotice';
 import { missingWorkAlerts, pendingDeliveriesForClass, worksAtLesson } from '../utils/works';
 import { WorkDeliveryModal } from './WorkDeliveries';
 import { todayLocal } from '../utils';
+import PendingLessonsPanel from './PendingLessonsPanel';
 import { useBackClose } from '../hooks/useBackClose';
 import { lessonDraftKey, loadDraft, saveDraft, removeDraft, pickText, sameText, DraftText } from '../utils/lessonDraft';
 import { useToast } from '../hooks/useToast';
@@ -732,6 +733,66 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       .filter(i => i.isPast && !i.hasContent)
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [data]);
+
+  /** Pendências marcadas como "não houve aula": mesmo efeito de "Excluir aula" (registro com status removed) */
+  const [noLessonUndo, setNoLessonUndo] = useState<{ prev: LessonLog[]; createdIds: string[]; count: number } | null>(null);
+  useEffect(() => {
+    if (!noLessonUndo) return;
+    const t = setTimeout(() => setNoLessonUndo(null), 20000);
+    return () => clearTimeout(t);
+  }, [noLessonUndo]);
+
+  const handleMarkNoLesson = (items: LessonDisplayItem[]) => {
+    let logs = [...data.logs];
+    let count = 0;
+    const prev: LessonLog[] = [];
+    const createdIds: string[] = [];
+    for (const item of items) {
+      if (item.isExtra || item.isSubstitution || item.schedule.shiftId === 'extra') continue;
+      const isPrivate = !('shifts' in item.institution);
+      const instId = item.institution.id;
+      const matching = logs.filter(l =>
+        l.date.startsWith(item.date) && l.slotId === item.schedule.slotId &&
+        (isPrivate ? l.studentId === instId : l.schoolId === instId)
+      );
+      if (matching.length > 0) {
+        const ids = new Set(matching.map(l => l.id));
+        prev.push(...matching);
+        logs = logs.map(l => ids.has(l.id)
+          ? { ...l, status: 'removed' as const, subject: '', homework: '', notes: '', occurrences: [], attendance: [] }
+          : l);
+      } else {
+        const id = crypto.randomUUID();
+        createdIds.push(id);
+        logs.push({
+          id,
+          date: toSafeISO(item.date),
+          schoolId: isPrivate ? '' : instId,
+          ...(isPrivate ? { studentId: instId } : {}),
+          classId: isPrivate ? item.institution.name : item.schedule.classId,
+          slotId: item.schedule.slotId,
+          subject: '', homework: '', notes: '', occurrences: [], attendance: [],
+          type: 'regular',
+          status: 'removed'
+        });
+      }
+      count++;
+    }
+    if (count === 0) return;
+    onUpdateData({ logs });
+    setNoLessonUndo({ prev, createdIds, count });
+    showSuccess(count === 1 ? 'Aula marcada como "não houve aula".' : `${count} aulas marcadas como "não houve aula".`);
+  };
+
+  /** Desfaz a última marcação em lote: devolve os registros como estavam e tira os criados */
+  const handleUndoNoLesson = () => {
+    if (!noLessonUndo) return;
+    const prevById = new Map(noLessonUndo.prev.map(l => [l.id, l]));
+    const created = new Set(noLessonUndo.createdIds);
+    onUpdateData({ logs: data.logs.filter(l => !created.has(l.id)).map(l => prevById.get(l.id) ?? l) });
+    showSuccess('Pronto: as aulas voltaram para as pendências.');
+    setNoLessonUndo(null);
+  };
 
   // Calculate Date Range for History View (Unified with Stats)
   const historyDateRange = useMemo(() => {
@@ -3018,21 +3079,15 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       )}
 
       {viewMode === 'day' && showPendencies && (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 animate-in slide-in-from-top-4">
-          {pendingLessons.map((item, idx) => (
-            <button key={idx} onClick={() => handleOpenLog(item.schedule, item.date)} className="flex items-center gap-3 md:gap-4 p-4 md:p-5 bg-white dark:bg-slate-900 border border-red-100 dark:border-red-900/30 rounded-xl text-left hover:border-red-200 transition-colors group">
-              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg flex flex-col items-center justify-center bg-red-50 text-red-600 shrink-0 group-hover:bg-red-100 transition-colors">
-                <span className="text-[10px] font-black">{new Date(item.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
-                <AlertCircle size={14} className="md:w-4 md:h-4" />
-              </div>
-              <div className="overflow-hidden">
-                <h4 className="text-xs font-black uppercase truncate text-slate-800 dark:text-white">{getClassName(data, item.schedule.schoolId, item.schedule.classId, '')}</h4>
-                <p className="text-[10px] text-slate-500 font-bold uppercase truncate">{item.institution.name}</p>
-                <p className="text-[10px] text-red-500 font-bold uppercase mt-1">Pendente</p>
-              </div>
-            </button>
-          ))}
-        </div>
+        <PendingLessonsPanel
+          data={data}
+          items={pendingLessons}
+          today={todayLocal()}
+          onOpen={item => handleOpenLog(item.schedule, item.date)}
+          onMarkNoLesson={handleMarkNoLesson}
+          undoCount={noLessonUndo?.count ?? 0}
+          onUndo={handleUndoNoLesson}
+        />
       )}
 
       {/* ... (Menu de Abas) ... */}

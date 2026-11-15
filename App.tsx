@@ -9,7 +9,8 @@ import {
   Cloud,
   CalendarRange,
   GraduationCap,
-  AlertTriangle
+  AlertTriangle,
+  MoreHorizontal
 } from 'lucide-react';
 import { ScheduleEntry, DayOfWeek } from './types';
 import { parseTimeToMinutes, getCurrentTimeInMinutes } from './utils';
@@ -77,6 +78,7 @@ const ScreenLoading: React.FC = () => (
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [preSelectedLesson, setPreSelectedLesson] = useState<{ schedule: ScheduleEntry; date: string } | null>(null);
   const [autoShowPendencies, setAutoShowPendencies] = useState(false);
   const [notificationPopup, setNotificationPopup] = useState<{ title: string; message: string; isOpen: boolean }>({ title: '', message: '', isOpen: false });
@@ -303,6 +305,16 @@ const App: React.FC = () => {
     { id: 'settings', label: 'Ajustes', icon: Settings },
   ];
 
+  // Celular: abas fixas na barra de baixo; as outras ficam no "Mais"
+  const MOBILE_MAIN = ['dashboard', 'lessons', 'assessments', 'agenda'];
+  const mobileMainItems = navItems.filter(i => MOBILE_MAIN.includes(i.id));
+  const mobileMoreItems = navItems.filter(i => !MOBILE_MAIN.includes(i.id));
+  const goToTab = (id: string) => {
+    setActiveTab(id);
+    if (id !== 'lessons') setPreSelectedLesson(null);
+    setIsMoreOpen(false);
+  };
+
   return (
     <div className={`flex flex-col lg:flex-row min-h-screen transition-colors duration-300 bg-slate-100 dark:bg-slate-950 w-full`}>
       <style>{`
@@ -319,16 +331,47 @@ const App: React.FC = () => {
       `}</style>
 
 
-      {/* Menu Mobile Compacto - Ocultar no Onboarding */}
+      {/* Menu do celular: 4 abas fixas com nome + "Mais" (Lembretes, Notas, Particulares, Ajustes) */}
       {!isOnboarding && (
-        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t dark:border-slate-800 z-50 flex justify-between px-4 py-2 safe-area-bottom shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] overflow-x-auto">
-          {navItems.map(item => (
-            <button key={item.id} onClick={() => { setActiveTab(item.id); if (item.id !== 'lessons') setPreSelectedLesson(null); }} className={`flex flex-col items-center justify-center p-1 min-w-[50px] rounded-xl transition-all ${activeTab === item.id ? 'text-primary' : 'text-slate-400 dark:text-slate-500'}`}>
-              <item.icon size={20} className={activeTab === item.id ? 'mb-0.5' : 'mb-0'} />
-              {activeTab === item.id && <span className="text-[9px] font-black tracking-tight">{item.label}</span>}
-            </button>
-          ))}
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t dark:border-slate-800 z-50 grid grid-cols-5 px-1 pt-1.5 pb-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
+          {mobileMainItems.map(item => {
+            const active = activeTab === item.id;
+            return (
+              <button key={item.id} onClick={() => goToTab(item.id)} aria-current={active ? 'page' : undefined} className={`flex flex-col items-center justify-center gap-0.5 min-h-[48px] rounded-xl transition-colors ${active ? 'text-primary' : 'text-slate-500 dark:text-slate-400'}`}>
+                <item.icon size={22} strokeWidth={active ? 2.4 : 2} />
+                <span className={`text-[11px] leading-tight tracking-tight ${active ? 'font-black' : 'font-semibold'}`}>{item.label}</span>
+              </button>
+            );
+          })}
+          {(() => {
+            const activeMore = mobileMoreItems.find(i => i.id === activeTab);
+            const highlighted = !!activeMore || isMoreOpen;
+            const Icon = activeMore ? activeMore.icon : MoreHorizontal;
+            return (
+              <button onClick={() => setIsMoreOpen(o => !o)} aria-expanded={isMoreOpen} className={`flex flex-col items-center justify-center gap-0.5 min-h-[48px] rounded-xl transition-colors ${highlighted ? 'text-primary' : 'text-slate-500 dark:text-slate-400'}`}>
+                <Icon size={22} strokeWidth={highlighted ? 2.4 : 2} />
+                <span className={`text-[11px] leading-tight tracking-tight ${highlighted ? 'font-black' : 'font-semibold'}`}>{activeMore ? activeMore.label : 'Mais'}</span>
+              </button>
+            );
+          })()}
         </nav>
+      )}
+
+      {/* Folha do "Mais" (celular) */}
+      {!isOnboarding && isMoreOpen && (
+        <div className="lg:hidden fixed inset-0 z-[45] bg-slate-900/30" onClick={() => setIsMoreOpen(false)}>
+          <div className="absolute left-2 right-2 bottom-[76px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 p-2 animate-in slide-in-from-bottom-4" onClick={e => e.stopPropagation()}>
+            {mobileMoreItems.map(item => {
+              const active = activeTab === item.id;
+              return (
+                <button key={item.id} onClick={() => goToTab(item.id)} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left transition-colors ${active ? 'bg-primary-light text-primary' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                  <item.icon size={20} />
+                  <span className="text-sm font-bold">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {!isOnboarding && (

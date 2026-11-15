@@ -22,6 +22,7 @@ import { getClassName, isSameClassRef } from '../utils/classRefs';
 import Toggle from './Toggle';
 import SortOrderButton, { byDate, useSortOrder } from './SortOrderButton';
 import { useBackClose } from '../hooks/useBackClose';
+import { notifyError } from '../utils/dialogs';
 
 interface AgendaManagementProps {
   data: AppData;
@@ -257,7 +258,7 @@ const AgendaManagement: React.FC<AgendaManagementProps> = ({ data, onUpdateData 
         return false;
       });
       if (logConflict) {
-        alert("ERRO: Não é possível cancelar aulas pois já existem conteúdos registrados no diário para este período. Por favor, remova os registros de aula antes de criar este evento.");
+        notifyError("ERRO: Não é possível cancelar aulas pois já existem conteúdos registrados no diário para este período. Por favor, remova os registros de aula antes de criar este evento.");
         return;
       }
     }

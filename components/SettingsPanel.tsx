@@ -30,6 +30,7 @@ import { STORAGE_KEY, PENDING_KEY } from '../hooks/useSyncedData';
 import { processStudentList, ProcessedStudent, FormatMode } from '../utils/studentListProcessor';
 import { parseHolidayList, ParsedHoliday } from '../utils/holidayParser';
 import { User as FirebaseUser } from 'firebase/auth';
+import { askConfirm, askText, notify, notifyError, notifySuccess, notifyWarning } from '../utils/dialogs';
 
 interface SettingsPanelProps {
    data: AppData;
@@ -253,13 +254,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       onUpdateData({ classRecords: [...otherRecords, updatedRecord] });
    };
 
-   const handleDeleteAllClassStudents = () => {
+   const handleDeleteAllClassStudents = async () => {
       if (!currentClassRecord) return;
 
       const studentCount = currentClassRecord.students.length;
 
       if (studentCount === 0) {
-         alert('Não há alunos nesta turma para excluir.');
+         notify('Não há alunos nesta turma para excluir.');
          return;
       }
 
@@ -276,7 +277,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          `Se apenas quer arquivar alunos, use o botão "Arquivar" individual.\n\n` +
          `Digite "EXCLUIR LISTA" para confirmar:`;
 
-      const userInput = prompt(confirmMessage);
+      const userInput = await askText({ title: 'Excluir lista de alunos', message: confirmMessage, placeholder: 'EXCLUIR LISTA', confirmLabel: 'Excluir', danger: true });
 
       if (userInput === 'EXCLUIR LISTA') {
          // Hard Delete: Remove the entire ClassRecord
@@ -286,22 +287,22 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          // Reset seleção
          setRosterClassId('');
 
-         alert(`Lista de ${studentCount} aluno(s) excluída com sucesso.`);
+         notifySuccess(`Lista de ${studentCount} aluno(s) excluída com sucesso.`);
       } else if (userInput !== null) {
-         alert('Texto de confirmação incorreto. Exclusão cancelada.');
+         notifyError('Texto de confirmação incorreto. Exclusão cancelada.');
       }
    };
 
    // --- IMPORTAÇÃO DE RECESSOS ---
    const handleParseHolidays = () => {
       if (!holidayImportText.trim()) {
-         alert('Cole a lista de recessos para processar.');
+         notifyWarning('Cole a lista de recessos para processar.');
          return;
       }
       const parsed = parseHolidayList(holidayImportText, calForm.year || new Date().getFullYear());
 
       if (parsed.length === 0) {
-         alert('Nenhum recesso válido encontrado.');
+         notify('Nenhum recesso válido encontrado.');
          return;
       }
 
@@ -336,7 +337,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       // Find the recess in the CURRENT local state (calForm) to get the latest edited values
       const currentRecess = calForm.extraRecesses?.find(r => r.id === copyingRecess.id);
       if (!currentRecess) {
-         alert('Recesso não encontrado no formulário atual.');
+         notifyWarning('Recesso não encontrado no formulário atual.');
          setCopyingRecess(null);
          return;
       }
@@ -377,13 +378,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
       onUpdateData({ calendars: newCalendars });
       setCopyingRecess(null);
-      alert(`Recesso "${currentRecess.name}" copiado para ${targetSchool.name} com sucesso!`);
+      notifySuccess(`Recesso "${currentRecess.name}" copiado para ${targetSchool.name} com sucesso!`);
    };
 
    // --- PROCESSAMENTO DE LISTA DE ALUNOS ---
    const handleProcessList = () => {
       if (!newStudentsText.trim()) {
-         alert('Cole a lista de alunos para processar.');
+         notifyWarning('Cole a lista de alunos para processar.');
          return;
       }
 
@@ -391,7 +392,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          const processed = processStudentList(newStudentsText, formatMode);
 
          if (processed.length === 0) {
-            alert('Nenhum nome válido encontrado na lista.');
+            notify('Nenhum nome válido encontrado na lista.');
             return;
          }
 
@@ -400,7 +401,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          setShowPreviewTable(true);
       } catch (error) {
          console.error('Erro ao processar lista:', error);
-         alert('Erro ao processar lista. Verifique o formato e tente novamente.');
+         notifyError('Erro ao processar lista. Verifique o formato e tente novamente.');
       }
    };
 
@@ -468,7 +469,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
    const handleFinishOnboarding = () => {
       const error = validateOnboarding();
       if (error) {
-         alert("Atenção: " + error);
+         notifyError("Atenção: " + error);
          return;
       }
       setShowSuccessModal(true);
@@ -481,7 +482,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
    };
 
    const handleHardReset = async () => {
-      if (!confirm('TEM CERTEZA? Isso apagará todas as escolas, turmas, alunos e diários permanentemente. Não há como desfazer.')) {
+      if (!(await askConfirm({ title: 'Apagar tudo', message: 'TEM CERTEZA? Isso apagará todas as escolas, turmas, alunos e diários permanentemente. Não há como desfazer.', confirmLabel: 'Apagar tudo', danger: true }))) {
          return;
       }
 
@@ -519,12 +520,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
             if (error.code === 'permission-denied') {
                userMessage = "❌ Permissão Negada. Verifique as Regras de Segurança do Firestore no Console Firebase.";
-               alert(userMessage + "\n\nDetalhes no Console do Navegador (F12).");
+               notifyWarning(userMessage + "\n\nDetalhes no Console do Navegador (F12).");
             } else if (error.code === 'unavailable') {
                userMessage = "❌ Firestore indisponível. Verifique sua conexão com a internet.";
-               alert(userMessage);
+               notifyWarning(userMessage);
             } else {
-               alert(userMessage + "\n\nDetalhes no Console do Navegador (F12).");
+               notifyWarning(userMessage + "\n\nDetalhes no Console do Navegador (F12).");
             }
 
             return; // Não prossegue com reload se falhar
@@ -579,7 +580,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
          // Aulas canceladas por evento entram também quando não têm registro no diário
          const logs = filterLogs([...data.logs, ...cancelledLessonsWithoutLog(data)]).sort(byDate);
 
-         if (logs.length === 0) return alert('Sem registros para exportar com os filtros atuais.');
+         if (logs.length === 0) return notify('Sem registros para exportar com os filtros atuais.');
 
          downloadCSV(buildLogRows(data, logs), `diario_aulas_${todayLocal()}`);
 
@@ -591,7 +592,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
             return true;
          });
 
-         if (privateLogs.length === 0) return alert('Sem registros de aulas particulares para exportar.');
+         if (privateLogs.length === 0) return notify('Sem registros de aulas particulares para exportar.');
 
          downloadCSV(privateLogs.map(l => {
             const student = data.students.find(s => s.id === l.studentId);
@@ -615,7 +616,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
             return isAssessment && instMatch && classMatch && periodMatch;
          });
 
-         if (assessments.length === 0) return alert('Sem avaliações para exportar com os filtros atuais.');
+         if (assessments.length === 0) return notify('Sem avaliações para exportar com os filtros atuais.');
 
          downloadCSV(buildAssessmentRows(data, assessments), `avaliacoes_${todayLocal()}`);
 
@@ -645,7 +646,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
             });
          });
 
-         if (allOccurrences.length === 0) return alert('Sem ocorrências para exportar com os filtros atuais.');
+         if (allOccurrences.length === 0) return notify('Sem ocorrências para exportar com os filtros atuais.');
          downloadCSV(allOccurrences, `ocorrencias_${todayLocal()}`);
 
       } else if (type === 'attendance') {
@@ -669,7 +670,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
             });
          });
 
-         if (attendanceRecords.length === 0) return alert('Sem registros de chamada para exportar.');
+         if (attendanceRecords.length === 0) return notify('Sem registros de chamada para exportar.');
          downloadCSV(attendanceRecords, `chamada_${todayLocal()}`);
 
       } else if (type === 'grades') {
@@ -681,7 +682,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
             return instMatch && classMatch && periodMatch;
          });
 
-         if (assessments.length === 0) return alert('Sem avaliações/notas configuradas para exportar.');
+         if (assessments.length === 0) return notify('Sem avaliações/notas configuradas para exportar.');
 
          const gradeRows: any[] = [];
 
@@ -709,7 +710,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
             }
          });
 
-         if (gradeRows.length === 0) return alert('Sem notas lançadas para exportar.');
+         if (gradeRows.length === 0) return notify('Sem notas lançadas para exportar.');
          downloadCSV(gradeRows, `notas_${todayLocal()}`);
 
       } else {
@@ -719,7 +720,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
             const periodMatch = isDateInSelectedPeriod(e.date);
             return instMatch && periodMatch;
          });
-         if (evs.length === 0) return alert('Sem eventos na agenda para exportar.');
+         if (evs.length === 0) return notify('Sem eventos na agenda para exportar.');
          downloadICS(evs.map(e => ({ uid: e.id, title: e.title, start: e.date, end: e.date, description: e.description || '' })), 'agenda_leciona');
       }
    };
@@ -746,12 +747,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       URL.revokeObjectURL(url);
    };
 
-   const handleRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
+   const handleRestore = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const input = event.target;
+      const file = input.files?.[0];
       if (!file) return;
 
-      if (!confirm('ATENÇÃO: A restauração substituirá TODOS os dados atuais do aplicativo.\n\nTem certeza que deseja continuar?')) {
-         event.target.value = ''; // Reset input
+      if (!(await askConfirm({ title: 'Restaurar backup', message: 'ATENÇÃO: A restauração substituirá TODOS os dados atuais do aplicativo.\n\nTem certeza que deseja continuar?', confirmLabel: 'Restaurar', danger: true }))) {
+         input.value = ''; // Reset input
          return;
       }
 
@@ -763,7 +765,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
             // Validação Básica
             if (!parsed.metadata || parsed.metadata.app !== "LecionaApp" || !parsed.data) {
-               alert('Arquivo de backup inválido ou incompatível.');
+               notifyError('Arquivo de backup inválido ou incompatível.');
                return;
             }
 
@@ -785,16 +787,16 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                onUpdateData(restoredData);
             }
 
-            alert('Dados restaurados com sucesso! O aplicativo será recarregado.');
-            window.location.reload();
+            notifySuccess('Dados restaurados com sucesso! O aplicativo será recarregado.');
+            setTimeout(() => window.location.reload(), 1800);
 
          } catch (error) {
             console.error('Erro ao restaurar backup:', error);
-            alert('Erro ao processar o arquivo de backup.');
+            notifyError('Erro ao processar o arquivo de backup.');
          }
       };
       reader.readAsText(file);
-      event.target.value = ''; // Reset input for next use
+      input.value = ''; // Reset input for next use
    };
 
    const handleCreateTermsSuggestion = () => {
@@ -990,8 +992,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
    ];
 
    // --- HARD DELETE / SANITIZE DATABASE TOOL ---
-   const handleSanitizeDatabase = () => {
-      if (!confirm('☢️ ATENÇÃO: ESTA AÇÃO É DESTRUTIVA! ☢️\n\nIsso apagará TODAS as escolas que contém "TESTE", "AAA", "NOVA ESCOLA" ou "ZXC" no nome.\nEscolas terminadas em "V1" SERÃO PRESERVADAS.\n\nTem certeza absoluta?')) {
+   const handleSanitizeDatabase = async () => {
+      if (!await askConfirm({ danger: true, confirmLabel: 'Apagar', message: '☢️ ATENÇÃO: ESTA AÇÃO É DESTRUTIVA! ☢️\n\nIsso apagará TODAS as escolas que contém "TESTE", "AAA", "NOVA ESCOLA" ou "ZXC" no nome.\nEscolas terminadas em "V1" SERÃO PRESERVADAS.\n\nTem certeza absoluta?' })) {
          return;
       }
 
@@ -1025,7 +1027,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       });
 
       if (schoolsToDelete.length === 0) {
-         alert("Nenhuma escola encontrada para exclusão com os critérios atuais.");
+         notify("Nenhuma escola encontrada para exclusão com os critérios atuais.");
          return;
       }
 
@@ -1096,9 +1098,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tracked));
       localStorage.setItem(PENDING_KEY, '1');
 
-      alert(`SUCESSO!\n\nForam removidas:\n- ${schoolsToDelete.length} Escolas\n- Dados vinculados limpos.\n\nO aplicativo será recarregado.`);
+      notifySuccess(`SUCESSO!\n\nForam removidas:\n- ${schoolsToDelete.length} Escolas\n- Dados vinculados limpos.\n\nO aplicativo será recarregado.`);
 
-      window.location.reload();
+      setTimeout(() => window.location.reload(), 2500);
    };
 
    return (
@@ -1645,7 +1647,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                  Limpeza de Integridade: Remove registros de aulas que apontam para escolas ou alunos particulares que não existem mais. Aulas de turmas excluídas são mantidas como histórico; turmas não encontradas devem ser reatribuídas no quadro acima.
                               </p>
                               <button
-                                 onClick={() => {
+                                 onClick={async () => {
                                     const orphans: any[] = [];
                                     const orphanIds = new Set<string>();
 
@@ -1664,7 +1666,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                     });
 
                                     if (orphans.length === 0) {
-                                       alert('Nenhum registro órfão encontrado. Seu banco de dados está saudável! ✅');
+                                       notify('Nenhum registro órfão encontrado. Seu banco de dados está saudável! ✅');
                                        return;
                                     }
 
@@ -1672,10 +1674,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                                        `Recomendado: faça um backup antes.\n` +
                                        `Deseja remover esses registros agora?`;
 
-                                    if (confirm(confirmMsg)) {
+                                    if (await askConfirm({ title: 'Remover registros órfãos', message: confirmMsg, confirmLabel: 'Remover', danger: true })) {
                                        const cleanLogs = data.logs.filter(l => !orphanIds.has(l.id));
                                        onUpdateData({ logs: cleanLogs });
-                                       alert(`Limpeza concluída! ${orphans.length} registros inválidos foram removidos.`);
+                                       notifySuccess(`Limpeza concluída! ${orphans.length} registros inválidos foram removidos.`);
                                     }
                                  }}
                                  className="w-full py-2.5 bg-white dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-300 rounded-lg font-black uppercase text-xs tracking-tight hover:bg-red-50 dark:hover:bg-red-900/40 transition-all flex items-center justify-center gap-2"

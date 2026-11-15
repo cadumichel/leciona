@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import {
   LayoutDashboard,
   BookOpen,
@@ -7,7 +7,6 @@ import {
   Users,
   Lightbulb,
   Cloud,
-  X,
   CalendarRange,
   GraduationCap,
   AlertTriangle
@@ -16,13 +15,22 @@ import { ScheduleEntry, DayOfWeek } from './types';
 import { parseTimeToMinutes, getCurrentTimeInMinutes } from './utils';
 import Dashboard from './components/Dashboard';
 import LessonLogger from './components/LessonLogger';
-import AssessmentManagement from './components/AssessmentManagement';
-import AgendaManagement from './components/AgendaManagement';
-import SettingsPanel from './components/SettingsPanel';
-import StudentManagement from './components/StudentManagement';
-import ReminderManagement from './components/ReminderManagement';
+import { QuickStartGuide } from './components/QuickStartGuide';
 
-import GradesManagement from './components/GradesManagement'; // Novo Componente
+// Telas carregadas só quando abertas (Início e Diário já vêm no primeiro carregamento).
+// Depois que o app abre, elas são baixadas em segundo plano, para o primeiro toque ser imediato.
+const loadAssessments = () => import('./components/AssessmentManagement');
+const loadAgenda = () => import('./components/AgendaManagement');
+const loadSettings = () => import('./components/SettingsPanel');
+const loadStudents = () => import('./components/StudentManagement');
+const loadReminders = () => import('./components/ReminderManagement');
+const loadGrades = () => import('./components/GradesManagement');
+const AssessmentManagement = lazy(loadAssessments);
+const AgendaManagement = lazy(loadAgenda);
+const SettingsPanel = lazy(loadSettings);
+const StudentManagement = lazy(loadStudents);
+const ReminderManagement = lazy(loadReminders);
+const GradesManagement = lazy(loadGrades);
 import SyncStatus from './components/SyncStatus'; // Componente de Status de Sync
 import { ConnectionBanner, DisconnectedPopup } from './components/ConnectionWarnings';
 import { ToastProvider, useToast } from './hooks/useToast';
@@ -36,24 +44,7 @@ import { auth, googleProvider } from './services/firebaseConnection';
 import { signInWithPopup } from 'firebase/auth';
 
 export { INITIAL_DATA } from './initialData';
-
-export const QuickStartGuide: React.FC<{ onDismiss: () => void; onNavigate: (tab: string) => void }> = ({ onDismiss, onNavigate }) => (
-  <div className="bg-primary text-white p-4 md:p-6 rounded-[24px] md:rounded-[32px] shadow-xl shadow-primary/20 mb-4 relative overflow-hidden animate-in fade-in zoom-in-95 duration-500">
-    <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none">
-      <Lightbulb size={60} className="md:w-[90px] md:h-[90px]" />
-    </div>
-    <button onClick={onDismiss} className="absolute top-3 right-3 p-1.5 hover:bg-white/20 rounded-full transition-colors z-20">
-      <X size={16} />
-    </button>
-    <div className="relative z-10">
-      <span className="text-[8px] md:text-[9px] font-black uppercase tracking-[0.2em] opacity-80">Bem-Vindo</span>
-      <h2 className="text-lg md:text-xl font-black mt-0.5 mb-1.5 tracking-tight">Vamos começar?</h2>
-      <p className="text-[10px] md:text-xs font-medium opacity-90 max-w-3xl leading-relaxed">
-        Para começar a usar o leciona cadastre seu perfil e as informações sobre as instituições em que trabalha. Para iniciar é necessário que pelo menos uma escola, um ano letivo e um horário de aula estejam cadastrados.
-      </p>
-    </div>
-  </div>
-);
+export { QuickStartGuide };
 
 /** Mostra notificação do sistema. No Android, `new Notification()` não funciona: usa o service worker. */
 /** O navegador permite mostrar notificações do sistema? */
@@ -75,6 +66,13 @@ const showSystemNotification = async (title: string, options: NotificationOption
     return false;
   }
 };
+
+/** Enquanto uma tela ainda está sendo baixada (só no primeiro toque, e raramente) */
+const ScreenLoading: React.FC = () => (
+  <div className="flex items-center justify-center py-24 text-slate-400" role="status" aria-label="Carregando">
+    <div className="w-6 h-6 border-2 border-slate-300 border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -278,6 +276,18 @@ const App: React.FC = () => {
     }
   }, [isOnboarding, activeTab]);
 
+  // Baixa as outras telas em segundo plano logo depois que o app abre
+  useEffect(() => {
+    const prefetch = () => {
+      [loadAssessments, loadAgenda, loadReminders, loadSettings, loadGrades, loadStudents].forEach(load => {
+        load().catch(() => { /* sem internet: a tela é baixada quando for aberta */ });
+      });
+    };
+    const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
+    if (w.requestIdleCallback) w.requestIdleCallback(prefetch);
+    else setTimeout(prefetch, 1500);
+  }, []);
+
   const navItems = [
     { id: 'dashboard', label: 'Início', icon: LayoutDashboard },
     { id: 'lessons', label: 'Diário', icon: BookOpen },
@@ -389,6 +399,7 @@ const App: React.FC = () => {
 
         {/* No computador, as telas (menos o Início) têm menos margem em cima */}
         <div className={`px-3 py-3 lg:px-8 ${activeTab === 'dashboard' ? 'lg:py-8' : 'lg:py-5'} max-w-6xl mx-auto w-full`}>
+          <Suspense fallback={<ScreenLoading />}>
           {activeTab === 'dashboard' && (
             <>
               {data.settings.showQuickStartGuide && (
@@ -449,6 +460,7 @@ const App: React.FC = () => {
               onNavigateToLesson={(s, d) => { setPreSelectedLesson({ schedule: s, date: d }); setActiveTab('lessons'); }}
             />
           )}
+          </Suspense>
           </div>
       </main>
 

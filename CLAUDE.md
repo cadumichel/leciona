@@ -112,6 +112,10 @@ objetivo.
 - **Rascunho do registro de aula** (`utils/lessonDraft.ts`): conteúdo, tarefa e notas digitados e ainda não
   salvos ficam no `localStorage` (`leciona-rascunhos`, só neste aparelho, 14 dias) e voltam ao reabrir a mesma
   aula, com o aviso "Rascunho não salvo" e o botão Descartar. Salvar ou limpar a aula apaga o rascunho.
+- **Usar o conteúdo de outra turma** (registro da aula no Diário): `utils/otherClassContent.ts`. Com o conteúdo vazio,
+  botão "Usar o conteúdo da 184 (ontem)" para turmas irmãs da mesma escola e série (`seriesKey`: 183/184 → "18",
+  "1ª Série A/B" → "1"), com registro dos últimos 21 dias e não anterior à aula anterior desta turma. Só preenche o
+  formulário (conteúdo e tarefa vazia); grava ao tocar em Salvar.
 - **Aulas que faltam no período**: `utils/remainingLessons.ts`. Linha "Cronograma" abaixo da retrospectiva
   no Diário ("Faltam N aulas até o fim do 3º TRI (data). Próx. Avaliação: …"; visível por padrão,
   olho em `settings.hideCronograma`) e ferramenta

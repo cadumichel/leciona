@@ -56,6 +56,7 @@ import { scheduleNotices, scheduleNoticeText } from '../utils/scheduleNotice';
 import { missingWorkAlerts, pendingDeliveriesForClass, worksAtLesson } from '../utils/works';
 import { WorkDeliveryModal } from './WorkDeliveries';
 import { todayLocal } from '../utils';
+import { suggestContentFromSiblings, relativeDayLabel, ContentSuggestion } from '../utils/otherClassContent';
 import PendingLessonsPanel from './PendingLessonsPanel';
 import { useBackClose } from '../hooks/useBackClose';
 import { lessonDraftKey, loadDraft, saveDraft, removeDraft, pickText, sameText, DraftText } from '../utils/lessonDraft';
@@ -912,6 +913,27 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       isPrivate: activeLesson.type !== 'school'
     });
   }, [activeLesson, data]);
+
+  // Usar o conteúdo de outra turma da mesma série (utils/otherClassContent.ts)
+  const siblingSuggestions = useMemo(() => {
+    if (!activeLesson || activeLesson.type !== 'school' || activeLesson.schedule.classId === 'window') return [];
+    return suggestContentFromSiblings(data, {
+      schoolId: activeLesson.institution.id,
+      classId: activeLesson.schedule.classId,
+      date: activeLesson.date,
+      previousDate: lastLessonInfo?.date,
+      previousSubject: lastLessonInfo?.subject
+    });
+  }, [activeLesson, data, lastLessonInfo]);
+
+  const applySiblingContent = (s: ContentSuggestion) => {
+    setLogForm(prev => ({
+      ...prev,
+      subject: s.subject,
+      homework: prev.homework.trim() ? prev.homework : s.homework
+    }));
+    showInfo(`Conteúdo da ${s.className} colocado. Confira e toque em Salvar.`);
+  };
 
   // Aulas que faltam até o fim do período (utils/remainingLessons.ts)
   const remainingInfo = useMemo(() => {
@@ -2536,6 +2558,22 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
               )}
               <div>
                 <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 lg:mb-1 ml-2">Conteúdo da Aula {isFutureDate && <span className="text-primary">(Planejamento)</span>}</label>
+                {!isReadOnlyRecess && !logForm.subject.trim() && siblingSuggestions.length > 0 && (
+                  <div className="mb-2 lg:mb-1 flex flex-wrap items-center gap-2">
+                    {siblingSuggestions.map(s => (
+                      <button
+                        key={s.logId}
+                        type="button"
+                        onClick={() => applySiblingContent(s)}
+                        title={s.subject}
+                        className="min-h-[36px] max-w-full flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-primary text-primary text-[11px] font-black uppercase hover:bg-primary-light transition-colors"
+                      >
+                        <Copy size={12} className="shrink-0" />
+                        <span className="truncate">Usar o conteúdo da {s.className} ({relativeDayLabel(s.date, todayLocal())})</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <textarea value={logForm.subject} onChange={e => setLogForm({ ...logForm, subject: e.target.value })} disabled={isReadOnlyRecess} readOnly={isReadOnlyRecess} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-lg p-4 md:p-5 lg:p-3 lg:h-24 font-bold dark:text-white focus:ring-2 focus:ring-primary outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed" placeholder={isFutureDate ? "Planeje o conteúdo desta aula..." : "O que foi trabalhado hoje?"} rows={4} />
               </div>
               <div className="grid md:grid-cols-2 gap-4 lg:gap-3">

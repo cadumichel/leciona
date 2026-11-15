@@ -5,6 +5,7 @@ import { checkTimeOverlap, getNearestClassDate, todayLocal } from '../utils';
 import { getSchedulesForDate } from '../utils/schedule';
 import { getClassName } from '../utils/classRefs';
 import { Plus, Trash2, Edit3, Save, X, Clock, User, GraduationCap, ChevronRight, Calendar, DollarSign, Download, CreditCard, FileText, BookText, History } from 'lucide-react';
+import { askConfirm, notify, notifyError, notifyWarning } from '../utils/dialogs';
 
 interface StudentManagementProps {
   data: AppData;
@@ -108,13 +109,13 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
       setIsModalOpen(true);
     } catch (error) {
       console.error('Error opening edit modal:', error);
-      alert('Erro ao abrir os detalhes do aluno. Tente excluir e recadastrar este aluno.');
+      notifyError('Erro ao abrir os detalhes do aluno. Tente excluir e recadastrar este aluno.');
     }
   };
 
   const handleSaveStudent = () => {
     if (!newStudent.name || !newStudent.subject) {
-      alert('Nome e Disciplina são obrigatórios.');
+      notifyWarning('Nome e Disciplina são obrigatórios.');
       return;
     }
 
@@ -133,7 +134,7 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
       });
 
       if (privateConflict) {
-        alert(`Conflito de horário detectado!\n\nO horário de ${DAYS_OF_WEEK_NAMES[day]} das ${schedule.startTime} às ${schedule.endTime} choca com uma aula de ${privateConflict.name}.`);
+        notifyError(`Conflito de horário detectado!\n\nO horário de ${DAYS_OF_WEEK_NAMES[day]} das ${schedule.startTime} às ${schedule.endTime} choca com uma aula de ${privateConflict.name}.`);
         return;
       }
 
@@ -156,7 +157,7 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
 
       if (schoolConflict) {
         const school = data.schools.find(s => s.id === schoolConflict.schoolId);
-        alert(`Conflito de horário detectado!\n\nO horário de ${DAYS_OF_WEEK_NAMES[day]} das ${schedule.startTime} às ${schedule.endTime} choca com uma aula na escola ${school?.name} (Turma: ${getClassName(data, schoolConflict.schoolId, schoolConflict.classId)}).`);
+        notifyError(`Conflito de horário detectado!\n\nO horário de ${DAYS_OF_WEEK_NAMES[day]} das ${schedule.startTime} às ${schedule.endTime} choca com uma aula na escola ${school?.name} (Turma: ${getClassName(data, schoolConflict.schoolId, schoolConflict.classId)}).`);
         return;
       }
     }
@@ -182,7 +183,7 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
 
   const handleExportPayments = () => {
     if (!newStudent.payments || newStudent.payments.length === 0) {
-      alert("Não há pagamentos registrados para exportar.");
+      notify("Não há pagamentos registrados para exportar.");
       return;
     }
 
@@ -211,12 +212,12 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
   const addPayment = () => {
     const amount = parseFloat(paymentForm.amount.replace(',', '.'));
     if (!amount || isNaN(amount) || amount <= 0) {
-      alert("Por favor, insira um valor válido.");
+      notifyWarning("Por favor, insira um valor válido.");
       return;
     }
 
     if (!paymentForm.date) {
-      alert("Por favor, selecione uma data.");
+      notifyWarning("Por favor, selecione uma data.");
       return;
     }
 
@@ -241,8 +242,8 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
     }));
   };
 
-  const removePayment = (id: string) => {
-    if (confirm("Remover este registro de pagamento?")) {
+  const removePayment = async (id: string) => {
+    if (await askConfirm({ message: 'Remover este registro de pagamento?', confirmLabel: 'Remover', danger: true })) {
       setNewStudent({
         ...newStudent,
         payments: (newStudent.payments || []).filter(p => p.id !== id)
@@ -270,7 +271,7 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
       console.log('Schedule added successfully');
     } catch (error) {
       console.error('Error adding schedule:', error);
-      alert('Erro ao adicionar horário. Tente novamente.');
+      notifyError('Erro ao adicionar horário. Tente novamente.');
     }
   };
 
@@ -381,7 +382,7 @@ export default function StudentManagement({ data, onUpdateData, onNavigateToLess
                     };
                     onNavigateToLesson(targetSchedule, nearestDate);
                   } else {
-                    alert("Este aluno não possui horários cadastrados.");
+                    notify("Este aluno não possui horários cadastrados.");
                   }
                 }}
                 className="flex items-center justify-center gap-2 py-2 rounded-lg bg-indigo-50 text-indigo-700 font-black uppercase text-[10px] tracking-wide hover:bg-indigo-100 transition"

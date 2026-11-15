@@ -1,5 +1,6 @@
 import { BRAZIL_HOLIDAYS } from './constants';
 import { AcademicCalendar, Term, DayOfWeek, PrivateSchedule } from './types';
+import { notify } from './utils/dialogs';
 
 export const isWeekend = (date: Date): boolean => {
   const day = date.getDay();
@@ -148,7 +149,7 @@ export const getDayMonth = (dateStr: string): string => {
 
 export const downloadCSV = (data: any[], filename: string) => {
   if (data.length === 0) {
-    alert('Nenhum dado encontrado para exportar.');
+    notify('Nenhum dado encontrado para exportar.');
     return;
   }
 
@@ -230,7 +231,7 @@ export const buildICS = (events: { title: string; start: string; end: string; de
 
 export const downloadICS = (events: { title: string; start: string; end: string; description: string; uid?: string }[], filename: string) => {
   if (events.length === 0) {
-    alert('Nenhum evento encontrado para exportar.');
+    notify('Nenhum evento encontrado para exportar.');
     return;
   }
 

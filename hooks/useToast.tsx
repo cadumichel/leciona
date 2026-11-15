@@ -1,4 +1,5 @@
-import React, { useState, useCallback, createContext, useContext } from 'react';
+import React, { useState, useCallback, createContext, useContext, useEffect } from 'react';
+import { setNoticeListener } from '../utils/dialogs';
 import { AlertCircle, CheckCircle2, X } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -17,19 +18,27 @@ interface ToastContextType {
 }
 
 const ToastContext = createContext<ToastContextType | null>(null);
+let toastSeq = 0;
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [toasts, setToasts] = useState<Toast[]>([]);
 
     const addToast = useCallback((type: ToastType, message: string) => {
-        const id = Date.now();
+        const id = ++toastSeq;
         setToasts(prev => [...prev, { id, type, message }]);
 
-        // Auto-remover após 5 segundos
+        // Some sozinho: 5 s, mais tempo para textos longos (até 12 s)
+        const duration = Math.min(12000, Math.max(5000, message.length * 70));
         setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id));
-        }, 5000);
+        }, duration);
     }, []);
+
+    // notify() de utils/dialogs.ts mostra o aviso aqui
+    useEffect(() => {
+        setNoticeListener((message, type) => addToast(type, message));
+        return () => setNoticeListener(null);
+    }, [addToast]);
 
     const removeToast = useCallback((id: number) => {
         setToasts(prev => prev.filter(t => t.id !== id));
@@ -47,7 +56,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             {children}
 
             {/* Container de Toasts */}
-            <div className="fixed top-4 right-4 z-[9999] space-y-2">
+            <div className="fixed top-4 right-4 left-4 sm:left-auto z-[9999] space-y-2 flex flex-col items-end">
                 {toasts.map(toast => (
                     <ToastItem key={toast.id} toast={toast} onClose={() => removeToast(toast.id)} />
                 ))}
@@ -67,9 +76,9 @@ const ToastItem: React.FC<{ toast: Toast; onClose: () => void }> = ({ toast, onC
     const { bg, icon: Icon } = config[toast.type];
 
     return (
-        <div className={`${bg} text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 min-w-[300px] max-w-md animate-in slide-in-from-right-full`}>
+        <div className={`${bg} text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 w-full sm:w-auto sm:min-w-[300px] max-w-md animate-in slide-in-from-right-full`}>
             <Icon size={20} />
-            <p className="flex-1 text-sm font-bold">{toast.message}</p>
+            <p className="flex-1 text-sm font-bold whitespace-pre-line break-words">{toast.message}</p>
             <button onClick={onClose} className="hover:bg-white/20 rounded p-1 transition-colors">
                 <X size={16} />
             </button>

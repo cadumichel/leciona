@@ -4,6 +4,7 @@ import { AppData } from '../types';
 import { resolveClass, SPECIAL_CLASS_REFS, looksLikeClassCode } from '../utils/classRefs';
 import { getSchedulesForDate } from '../utils/schedule';
 import { formatDateBR, getDayOfWeekFromDate } from '../utils';
+import { askConfirm } from '../utils/dialogs';
 
 interface ClassRefRepairProps {
   data: AppData;
@@ -212,10 +213,10 @@ const ClassRefRepair: React.FC<ClassRefRepairProps> = ({ data, onUpdateData }) =
                   </select>
                   <button
                     disabled={!selected}
-                    onClick={() => {
+                    onClick={async () => {
                       const target = classes.find(c => c.id === selected);
                       if (!target) return;
-                      if (!confirm(`Reatribuir ${describe(g)} para a turma "${target.name}"?`)) return;
+                      if (!(await askConfirm({ message: `Reatribuir ${describe(g)} para a turma "${target.name}"?`, confirmLabel: 'Reatribuir' }))) return;
                       onUpdateData(reassignClassRef(data, g.schoolId, g.ref, target.id));
                       setDone(`Registros reatribuídos para ${target.name}.`);
                     }}

@@ -133,6 +133,10 @@ conector: `https://leciona.vercel.app/api/mcp`.
   personalizado). O retorno do login do Gemini é um endereço próprio da conta do Cadu; só ele é
   aceito, e o código guarda apenas o SHA-256 dele (`RETORNOS_DO_GEMINI` em `connector/oauth.ts`).
   Se o login recusar, a mensagem mostra o endereço recusado.
+- Também funciona no ChatGPT (modo desenvolvedor; chatgpt.com → Configurações → Apps → criar app com o
+  endereço do conector e login OAuth). Retornos aceitos: `https://chatgpt.com/connector_platform_oauth_redirect`
+  e `https://chatgpt.com/connector/oauth/<código>`. O ChatGPT pede confirmação antes de cada ferramenta sem
+  `readOnlyHint` (só `confirmar_gravacao` e `desfazer_gravacao`); as `preparar_...` são só leitura.
 - `api/*.ts`: funções da Vercel; `vercel.json`: `/.well-known/*` → metadados OAuth.
 - Testes: `tests/connector*.test.ts` e `tests/conectorPacote.test.ts`.
 

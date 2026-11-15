@@ -112,9 +112,10 @@ button:disabled{opacity:.6}.erro{color:#b91c1c}
 const paginaDeLogin = (pedido: Record<string, string>) => {
   const campos = Object.entries(pedido)
     .map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`).join('');
-  return pagina('Conectar o Claude ao Leciona', `
-<h1>Conectar o Claude ao Leciona</h1>
-<p>O Claude vai poder <b>ler</b> suas avaliações, o conteúdo do diário, turmas, grade e calendário.
+  return pagina('Conectar ao Leciona', `
+<h1>Conectar a IA ao Leciona</h1>
+<p>O assistente (Claude, Gemini ou ChatGPT) vai poder <b>ler</b> suas avaliações, o conteúdo do diário,
+turmas, grade e calendário, e <b>gravar</b> mudanças depois que você aprovar a prévia.
 Nomes de alunos, notas e chamada não são compartilhados.</p>
 <form id="f" method="post">${campos}<input type="hidden" name="id_token" id="t">
 <button type="button" id="b">Entrar com Google e autorizar</button></form>

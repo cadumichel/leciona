@@ -3,3 +3,4 @@
  * Cada PR aberto pelo Claude atualiza este número (e o "version" do package.json).
  */
 export const APP_VERSION = '1.1.49';
+export const APP_VERSION = '1.1.49';

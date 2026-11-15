@@ -87,6 +87,9 @@ objetivo.
   Pronta; 2ª chamada fora). Prazo = 7 dias antes; aula-limite = última aula real da turma até o prazo (sem
   feriado/recesso/evento); aviso no Início e no Diário da turma a partir de 7 dias antes da aula-limite, com
   botão "Marquei com a turma" (vira Agendada). Sem aula até o prazo = "fora do prazo".
+- **Botão voltar do celular** (`hooks/useBackClose.ts`): aba fora do Início, aula aberta no Diário e janelas
+  usam `useBackClose(aberto, fechar)`; voltar fecha a camada de cima em vez de sair do app. Janela nova = mais
+  uma linha `useBackClose`.
 - **Início**: `components/Dashboard.tsx` + `utils/dashboardWeb.ts` (linha do dia e grade semanal).
 - **Virada do ano letivo**: `utils/newSchoolYear.ts` + `components/NewSchoolYearWizard.tsx`.
 - **Planilhas exportadas**: `utils/exportRows.ts`. Coluna `Situacao` = "Aula cancelada: {evento}" para o

@@ -2,6 +2,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import tailwindcss from 'tailwindcss';
 
 export default defineConfig({
   plugins: [
@@ -74,6 +75,10 @@ export default defineConfig({
       }
     })
   ],
+  // Tailwind compilado no build (tailwind.config.js); antes vinha do CDN a cada abertura
+  css: {
+    postcss: { plugins: [tailwindcss()] },
+  },
   resolve: {
     // Garante que o Vite encontre os arquivos mesmo sem a extensão no import
     extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json']

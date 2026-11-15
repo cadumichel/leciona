@@ -4,6 +4,7 @@ import { CheckCircle2, PackageX, Plus, Trash2, Users, X } from 'lucide-react';
 import { formatDateBR, todayLocal } from '../utils';
 import { getClassName } from '../utils/classRefs';
 import { classStudents } from '../utils/works';
+import { useBackClose } from '../hooks/useBackClose';
 
 const newId = () => crypto.randomUUID();
 const fmt = (d: string) => formatDateBR(d).slice(0, 5);
@@ -102,6 +103,7 @@ interface Candidate { key: string; name: string; studentId?: string; groupId?: s
  * Lista: grupos cadastrados (trabalho em grupo) ou alunos da lista da turma; nomes digitados também valem.
  */
 export const WorkDeliveryModal: React.FC<WorkDeliveryModalProps> = ({ data, event, onUpdateData, onClose, date }) => {
+  useBackClose(true, onClose);
   const registerDay = date || todayLocal();
   const [missing, setMissing] = useState<MissingDelivery[]>(event.missingDeliveries || []);
   const [typed, setTyped] = useState('');

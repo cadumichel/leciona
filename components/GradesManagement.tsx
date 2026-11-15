@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { useBackClose } from '../hooks/useBackClose';
 import { AppData, CustomAssessment, GradeEntry, SchoolEvent, GradingConfig } from '../types';
 import { buildGradeColumns, calculateStudentResult, columnNumbers, frozenColumnOrder, latestGrade, setGrade } from '../utils/grades';
 
@@ -30,6 +31,8 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
 
    const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
    const [isAddColumnModalOpen, setIsAddColumnModalOpen] = useState(false);
+   useBackClose(isConfigModalOpen, () => setIsConfigModalOpen(false));
+   useBackClose(isAddColumnModalOpen, () => setIsAddColumnModalOpen(false));
 
    // Inclui data no formulário de nova coluna
    const [newColumnForm, setNewColumnForm] = useState({ title: '', weight: 1, maxGrade: 10, date: todayLocal() });

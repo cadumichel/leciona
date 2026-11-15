@@ -18,6 +18,7 @@ import {
    FileCheck,
    Calendar
 } from 'lucide-react';
+import { askConfirm, notifyWarning } from '../utils/dialogs';
 
 interface GradesManagementProps {
    data: AppData;
@@ -139,7 +140,7 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
       const max = col?.maxGrade ?? 10;
 
       if (!isNaN(value) && value > max) {
-         alert(`A nota máxima para esta avaliação é ${max}`);
+         notifyWarning(`A nota máxima para esta avaliação é ${max}`);
          return;
       }
 
@@ -208,8 +209,8 @@ export default function GradesManagement({ data, onUpdateData }: GradesManagemen
    };
 
 
-   const handleDeleteColumn = (id: string) => {
-      if (confirm('Tem certeza que deseja remover esta coluna de notas? Todas as notas lançadas nela serão perdidas.')) {
+   const handleDeleteColumn = async (id: string) => {
+      if (await askConfirm({ title: 'Remover coluna de notas', message: 'Tem certeza que deseja remover esta coluna de notas? Todas as notas lançadas nela serão perdidas.', confirmLabel: 'Remover', danger: true })) {
          onUpdateData({
             customAssessments: data.customAssessments.filter(c => c.id !== id),
             grades: data.grades.filter(g => g.assessmentId !== id)

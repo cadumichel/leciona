@@ -4,6 +4,7 @@ import { COLORS } from '../constants';
 import { Plus, Trash2, Edit3, Save, X, Clock, Coffee, ArrowRight, Wand2, ChevronUp, ChevronDown, Palette, MoreHorizontal, School as SchoolIcon, LayoutList } from 'lucide-react';
 import { addMinutesToTime, parseTimeToMinutes } from '../utils';
 import { migrateClassData } from '../utils/classMigration';
+import { askConfirm, notifyWarning } from '../utils/dialogs';
 
 interface SchoolManagementProps {
   data: AppData;
@@ -38,7 +39,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
     setTempEditingName(cName);
   };
 
-  const handleConfirmRenameClass = (originalClass: any) => {
+  const handleConfirmRenameClass = async (originalClass: any) => {
     if (!tempEditingName.trim()) return;
 
     const oldName = typeof originalClass === 'string' ? originalClass : originalClass.name;
@@ -53,13 +54,13 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
       const name = typeof c === 'string' ? c : c.name;
       return !isDeleted && name === tempEditingName;
     })) {
-      alert('Já existe uma turma com este nome nesta escola.');
+      notifyWarning('Já existe uma turma com este nome nesta escola.');
       return;
     }
 
     // Se estamos editando uma escola EXISTENTE, precisamos migrar os dados
     if (editingSchoolId) {
-      if (confirm(`Ao renomear a turma para "${tempEditingName}", todos os alunos, notas, diários e horários serão atualizados para o novo nome. Confirmar?`)) {
+      if (await askConfirm({ title: 'Renomear turma', message: `Ao renomear a turma para "${tempEditingName}", todos os alunos, notas, diários e horários serão atualizados para o novo nome. Confirmar?`, confirmLabel: 'Renomear' })) {
         const migrationUpdates = migrateClassData(data, editingSchoolId, oldName, tempEditingName);
 
         // Atualiza os dados globais
@@ -111,7 +112,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
 
   const handleSaveSchool = () => {
     if (!newSchool.name || (newSchool.shifts && newSchool.shifts.length === 0)) {
-      alert('Por favor, preencha o nome da escola e adicione pelo menos um turno.');
+      notifyWarning('Por favor, preencha o nome da escola e adicione pelo menos um turno.');
       return;
     }
 
@@ -209,7 +210,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
 
     // 1. Validação de Nome Duplicado
     if (newSchool.shifts?.some(s => s.name === name)) {
-      alert(`Já existe um turno com o nome "${name}".`);
+      notifyWarning(`Já existe um turno com o nome "${name}".`);
       return;
     }
 
@@ -245,7 +246,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
     });
 
     if (overlappingShift) {
-      alert(`O novo turno conflita com os horários do turno "${overlappingShift.name}".`);
+      notifyWarning(`O novo turno conflita com os horários do turno "${overlappingShift.name}".`);
       return;
     }
 
@@ -291,7 +292,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
 
     // Validação de Nome Duplicado (Ignorando maiúsculas/minúsculas)
     if (newSchool.shifts?.some(s => s.name.toLowerCase() === tempShiftName.toLowerCase())) {
-      alert(`Já existe um turno com o nome "${tempShiftName}".`);
+      notifyWarning(`Já existe um turno com o nome "${tempShiftName}".`);
       return;
     }
 
@@ -758,7 +759,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                               const name = typeof c === 'string' ? c : c.name;
                               return !isDeleted && name === tempClass;
                             })) {
-                              alert('Esta turma já foi adicionada.');
+                              notifyWarning('Esta turma já foi adicionada.');
                               return;
                             }
                             const newClassObj: SchoolClass = { id: crypto.randomUUID(), name: tempClass };
@@ -802,14 +803,14 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                                   <Edit3 size={10} />
                                 </button>
 
-                                <button onClick={() => {
+                                <button onClick={async () => {
                                   const updatedClasses = newSchool.classes ? [...newSchool.classes] : [];
                                   const actualIndex = newSchool.classes?.findIndex(cls => cls === c);
                                   if (actualIndex !== undefined && actualIndex !== -1) {
                                     const classToDelete = updatedClasses[actualIndex];
                                     const className = typeof classToDelete === 'string' ? classToDelete : classToDelete.name;
 
-                                    if (confirm(`Tem certeza que deseja remover a turma "${className}"?`)) {
+                                    if (await askConfirm({ message: `Tem certeza que deseja remover a turma "${className}"?`, confirmLabel: 'Remover', danger: true })) {
                                       if (typeof updatedClasses[actualIndex] === 'string') {
                                         // Se for string, remove do array (não suporta soft delete)
                                         updatedClasses.splice(actualIndex, 1);
@@ -1046,7 +1047,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                       </p>
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
 
                             // Coletar todos os IDs de assessments relacionados à escola
@@ -1078,7 +1079,7 @@ const SchoolManagement: React.FC<SchoolManagementProps> = ({ data, onUpdateData 
                               `🔔 ${relatedReminders} lembrete(s)\n\n` +
                               `Esta ação NÃO pode ser desfeita. Confirmar?`;
 
-                            if (!confirm(confirmMessage)) {
+                            if (!(await askConfirm({ title: 'Excluir escola', message: confirmMessage, confirmLabel: 'Excluir', danger: true }))) {
                               setDeletingSchoolId(null);
                               return;
                             }

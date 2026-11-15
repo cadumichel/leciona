@@ -6,6 +6,7 @@ import { MigrationWizard, MigrationDecision } from './MigrationWizard';
 import { checkTimeOverlap, formatDateBR, todayLocal } from '../utils';
 import { getClassName } from '../utils/classRefs';
 import { ScheduleChangePlan, applyScheduleDecisions, nextVersionStart, planScheduleChange } from '../utils/scheduleChange';
+import { askConfirm, notify, notifyError, notifyWarning } from '../utils/dialogs';
 
 interface ScheduleManagementProps {
   data: AppData;
@@ -185,12 +186,12 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
 
   const handleCreateVersion = () => {
     if (!newVersionDate) {
-      alert("Selecione uma data para a nova versão.");
+      notifyWarning("Selecione uma data para a nova versão.");
       return;
     }
 
     if (data.scheduleVersions?.some(v => v.activeFrom === newVersionDate)) {
-      alert("Já existe uma versão para esta data.");
+      notifyWarning("Já existe uma versão para esta data.");
       return;
     }
 
@@ -301,7 +302,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
       onUpdateData({ scheduleVersions: updatedVersions });
       setHasChanges(false);
     } catch (err: any) {
-      alert("Erro ao salvar: " + err.message);
+      notifyError("Erro ao salvar: " + err.message);
       console.error(err);
     }
   };
@@ -322,7 +323,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
     const classId = isActivity ? 'window' : value;
     if (!activeInstitution || activeInstitution.type === 'student') return;
     if (!currentVersion) {
-      alert("Nenhuma versão de grade selecionada. Crie uma versão primeiro.");
+      notify("Nenhuma versão de grade selecionada. Crie uma versão primeiro.");
       return;
     }
 
@@ -363,7 +364,7 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
 
         if (schoolConflict || privateConflict) {
           const conflictName = schoolConflict ? getClassName(data, schoolConflict.schoolId, schoolConflict.classId) : privateConflict?.studentName;
-          alert(`CONFLITO DE HORÁRIO!\nVocê já tem uma aula (${conflictName}) agendada neste mesmo horário.`);
+          notifyError(`CONFLITO DE HORÁRIO!\nVocê já tem uma aula (${conflictName}) agendada neste mesmo horário.`);
           return;
         }
       }
@@ -507,8 +508,8 @@ const ScheduleManagement: React.FC<ScheduleManagementProps> = ({ data, onUpdateD
         <div className="flex gap-2">
           {selectedVersionId && sortedVersions.length > 1 && (
             <button
-              onClick={() => {
-                if (confirm('Tem certeza que deseja excluir esta versão da grade?\n\nA partir da data dela, volta a valer a grade da versão anterior.')) {
+              onClick={async () => {
+                if (await askConfirm({ title: 'Excluir versão da grade', message: 'Tem certeza que deseja excluir esta versão da grade?\n\nA partir da data dela, volta a valer a grade da versão anterior.', confirmLabel: 'Excluir', danger: true })) {
                   const versionToDelete = data.scheduleVersions.find(v => v.id === selectedVersionId);
                   if (!versionToDelete) return;
                   const previous = [...data.scheduleVersions]

@@ -60,6 +60,7 @@ import PendingLessonsPanel from './PendingLessonsPanel';
 import { useBackClose } from '../hooks/useBackClose';
 import { lessonDraftKey, loadDraft, saveDraft, removeDraft, pickText, sameText, DraftText } from '../utils/lessonDraft';
 import { useToast } from '../hooks/useToast';
+import { notify, notifySuccess } from '../utils/dialogs';
 
 interface LessonLoggerProps {
   data: AppData;
@@ -1276,7 +1277,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     if (targetIndex >= 0 && targetIndex < lessonsForDay.length) {
       handleOpenLog(lessonsForDay[targetIndex].schedule, activeLesson.date);
     } else {
-      alert(direction === 'next' ? 'Esta é a última aula deste dia.' : 'Esta é a primeira aula deste dia.');
+      notify(direction === 'next' ? 'Esta é a última aula deste dia.' : 'Esta é a primeira aula deste dia.');
     }
   };
 
@@ -1338,7 +1339,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     }
 
     if (!found) {
-      alert(`Não foi encontrada aula para ${getClassName(data, schoolId, classId)} nos próximos/anteriores 60 dias.`);
+      notify(`Não foi encontrada aula para ${getClassName(data, schoolId, classId)} nos próximos/anteriores 60 dias.`);
     }
   };
 
@@ -1396,7 +1397,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     }
 
     if (!found) {
-      alert(`Não foi encontrada aula para ${student.name} nos próximos/anteriores 60 dias.`);
+      notify(`Não foi encontrada aula para ${student.name} nos próximos/anteriores 60 dias.`);
     }
   };
 
@@ -1512,7 +1513,7 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
     onUpdateData({ logs: [...updatedLogsRaw, ...newLogs] });
     setCopyData(prev => ({ ...prev, isOpen: false, selectedSlots: [] }));
     // Maybe show a toast/alert?
-    alert('Aula copiada com sucesso!');
+    notifySuccess('Aula copiada com sucesso!');
   };
 
   const handleAttendanceChange = (studentId: string, status: 'present' | 'absent' | 'justified') => {

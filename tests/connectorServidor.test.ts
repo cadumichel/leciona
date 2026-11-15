@@ -107,6 +107,16 @@ describe('conector: endereços de retorno', () => {
     expect(redirecionamentoPermitido('https://oauth-redirect.googleusercontent.com/r/qualquer-coisa')).toBe(false);
     expect(redirecionamentoPermitido('https://sites.googleusercontent.com/r/user_bound_custom-mcp-1-leciona_vercel_app')).toBe(false);
   });
+
+  it('ChatGPT: endereço fixo e endereço com o código da conexão; outros caminhos e domínios, não', () => {
+    expect(redirecionamentoPermitido('https://chatgpt.com/connector_platform_oauth_redirect')).toBe(true);
+    expect(redirecionamentoPermitido('https://chatgpt.com/connector/oauth/abc_123-XYZ')).toBe(true);
+    expect(redirecionamentoPermitido('https://chatgpt.com/connector/oauth/abc/outra')).toBe(false);
+    expect(redirecionamentoPermitido('https://chatgpt.com/outra-coisa')).toBe(false);
+    expect(redirecionamentoPermitido('http://chatgpt.com/connector_platform_oauth_redirect')).toBe(false);
+    expect(redirecionamentoPermitido('https://chatgpt.com.golpe.com/connector_platform_oauth_redirect')).toBe(false);
+    expect(redirecionamentoPermitido('https://chatgpt.com:8443/connector_platform_oauth_redirect')).toBe(false);
+  });
 });
 
 describe('conector: metadados e registro', () => {

@@ -24,7 +24,15 @@ const RETORNOS_DO_GEMINI = new Set([
   '12625a335778f09ebafa53a60f24618d9d2deec9b84d835fc34f4332367cbcf1'
 ]);
 
-/** Para onde o login pode voltar: o Claude (web/app), o chat do Gemini do Cadu e o próprio computador (Claude Code). */
+/**
+ * Retornos do ChatGPT (chatgpt.com → Apps → app personalizado com servidor MCP): o endereço fixo e o
+ * endereço com o código da conexão (`/connector/oauth/<código>`). Só a conta em LECIONA_EMAIL entra,
+ * então liberar o endereço não abre o Leciona para outras pessoas.
+ */
+const retornoDoChatGPT = (url: URL) =>
+  url.pathname === '/connector_platform_oauth_redirect' || /^\/connector\/oauth\/[A-Za-z0-9_-]+$/.test(url.pathname);
+
+/** Para onde o login pode voltar: o Claude (web/app), o chat do Gemini do Cadu, o ChatGPT e o próprio computador (Claude Code). */
 export const redirecionamentoPermitido = (uri: string): boolean => {
   let url: URL;
   try { url = new URL(uri); } catch { return false; }
@@ -36,6 +44,10 @@ export const redirecionamentoPermitido = (uri: string): boolean => {
   }
   if (url.protocol === 'https:' && ['claude.ai', 'claude.com'].includes(url.hostname)) {
     return url.pathname === '/api/mcp/auth_callback';
+  }
+  if (url.protocol === 'https:' && url.hostname === 'chatgpt.com') {
+    if (url.username || url.password || url.port) return false;
+    return retornoDoChatGPT(url);
   }
   return url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
 };

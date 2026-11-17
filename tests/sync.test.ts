@@ -143,3 +143,29 @@ describe('removeUndefined', () => {
     expect(removeUndefined({ a: 1, b: undefined, c: [1, undefined, { d: undefined }] })).toEqual({ a: 1, c: [1, {}] });
   });
 });
+
+describe('virada do ano letivo: o ano anterior nunca é juntado com o novo', () => {
+  const aula = (id: string) => ({ id, date: '2026-10-16T00:00:00.000Z', schoolId: 'S1', classId: 'C1', slotId: 's', subject: 'x', homework: '', notes: '', _m: 5 }) as any;
+  const novoAno = base({ logs: [], _schoolYear: 2027, _yearResetAt: '2026-12-20T15:00:00.000Z' } as any);
+  const anoAntigo = base({ logs: [aula('L1'), aula('L2')] });
+
+  it('aparelho já no novo ano + nuvem ainda no ano anterior: vale o novo ano inteiro', () => {
+    const r = mergeAppData(anoAntigo, novoAno);
+    expect(r.logs).toEqual([]);
+    expect(r._schoolYear).toBe(2027);
+    expect(r._yearResetAt).toBe('2026-12-20T15:00:00.000Z');
+  });
+
+  it('nuvem já no novo ano + aparelho no ano anterior: vale a nuvem inteira', () => {
+    const r = mergeAppData(novoAno, anoAntigo);
+    expect(r.logs).toEqual([]);
+    expect(r._schoolYear).toBe(2027);
+  });
+
+  it('os dois no mesmo ano: junção normal, mantendo a marca', () => {
+    const outro = { ...novoAno, logs: [aula('L2027')] } as SyncedData;
+    const r = mergeAppData(novoAno, outro);
+    expect(r.logs.map(l => l.id)).toEqual(['L2027']);
+    expect(r._yearResetAt).toBe('2026-12-20T15:00:00.000Z');
+  });
+});

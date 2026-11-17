@@ -6,6 +6,7 @@ import {
   SyncedData,
   trackChanges,
   mergeAppData,
+  yearResetWinner,
   prepareRestore,
   removeUndefined,
   normalizeForCompare,
@@ -436,7 +437,8 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
 
         // Virada do ano letivo feita em outro aparelho: aplica uma vez, sem juntar com o ano anterior
         const yearMark = cloud._yearResetAt;
-        if (yearMark && localStorage.getItem(YEAR_RESET_SEEN_KEY) !== yearMark) {
+        // (só quando a marca da nuvem é mais nova que a deste aparelho; uma marca antiga nunca desfaz a virada)
+        if (yearMark && yearResetWinner(cloud, dataRef.current) === 'cloud') {
           console.log(`📅 Virada para ${cloud._schoolYear || 'o novo ano letivo'} detectada. Aplicando neste aparelho.`);
           const newYearData = { ...cloud, settings: { ...cloud.settings, googleSyncEnabled: true } } as SyncedData;
           pendingRef.current = false;
@@ -448,6 +450,17 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
             localStorage.setItem(PENDING_KEY, '0');
           } catch { /* ignora */ }
           setData(newYearData);
+          return;
+        }
+
+        // Este aparelho já está no novo ano e a nuvem voltou para o ano anterior (um aparelho com
+        // dados antigos gravou por cima): a nuvem está desatualizada. Mantém o novo ano e reenvia.
+        if (yearResetWinner(cloud, dataRef.current) === 'local') {
+          console.log('📅 A nuvem está com o ano letivo anterior. Mantendo o novo ano e reenviando.');
+          cloudReadyRef.current = true;
+          lastCloudRef.current = normalizeForCompare(cloud);
+          markPending();
+          setSyncTick(t => t + 1);
           return;
         }
 
@@ -531,6 +544,16 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
   /** Restaurar backup: grava no aparelho e na nuvem ANTES de recarregar (antes recarregava sem salvar). */
   const restoreData = useCallback(async (backup: AppData) => {
     const restored = prepareRestore(dataRef.current, applyDefaultsAndMigrations(backup));
+    // O backup substitui tudo, também nos outros aparelhos: ganha uma marca nova (a mesma da virada do
+    // ano), senão um aparelho já no novo ano trataria o backup de outro ano como nuvem desatualizada.
+    if (dataRef.current._yearResetAt || restored._yearResetAt) {
+      // Sempre mais nova que a marca atual (mesmo com o relógio do aparelho atrasado)
+      const anterior = [dataRef.current._yearResetAt, restored._yearResetAt].filter(Boolean).sort().pop()!;
+      const agora = new Date().toISOString();
+      restored._yearResetAt = agora > anterior ? agora : new Date(new Date(anterior).getTime() + 1).toISOString();
+      restored._schoolYear = restored._schoolYear ?? dataRef.current._schoolYear;
+      try { localStorage.setItem(YEAR_RESET_SEEN_KEY, restored._yearResetAt); } catch { /* ignora */ }
+    }
     pendingRef.current = true;
     dataRef.current = restored;
     persistLocal(restored);

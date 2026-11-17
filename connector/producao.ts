@@ -4,6 +4,7 @@ import { Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { AppData } from '../types';
 import { estimateDocBytes, FIRESTORE_DOC_LIMIT, removeUndefined } from '../utils/sync';
 import { ConsultaError } from './consultas';
+import { CAMPO_ARQUIVO, InfoDoAno } from './arquivo';
 import { CAMPO_COPIA, InfoDaCopia } from './copias';
 import { derivarChave } from './oauth';
 import { criarRotas } from './servidor';
@@ -29,6 +30,7 @@ const montar = async () => {
   const db = getFirestore(app);
   const usuario = (uid: string) => db.collection('users').doc(uid);
   const copias = (uid: string) => usuario(uid).collection('backups');
+  const anos = (uid: string) => usuario(uid).collection('anos');
   let uidCache: string | undefined;
 
   return criarRotas({
@@ -84,6 +86,16 @@ const montar = async () => {
         ids.forEach(id => lote.delete(copias(uid).doc(id)));
         await lote.commit();
       }
+    },
+    anos: {
+      listar: async uid => (await anos(uid).select(CAMPO_ARQUIVO).get()).docs
+        .map(d => d.get(CAMPO_ARQUIVO) as InfoDoAno)
+        .filter(a => a && a.ano && a.guardadoEm),
+      ler: async (uid, ano) => {
+        const d = await anos(uid).doc(String(ano)).get();
+        return d.exists ? d.data() : null;
+      },
+      gravar: async (uid, ano, dados) => { await anos(uid).doc(String(ano)).set(removeUndefined(dados)); }
     },
     uidDoProfessor: async () => (uidCache ??= (await getAuth(app).getUserByEmail(emailPermitido)).uid),
     segredoDoCron: process.env.CRON_SECRET || undefined

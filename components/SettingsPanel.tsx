@@ -26,6 +26,7 @@ import ScheduleManagement from './ScheduleManagement';
 import StudentManagement from './StudentManagement';
 import ClassRefRepair from './ClassRefRepair';
 import NewSchoolYearWizard from './NewSchoolYearWizard';
+import ArchivedYears from './ArchivedYears';
 import { trackChanges, SyncedData } from '../utils/sync';
 import { STORAGE_KEY, PENDING_KEY } from '../hooks/useSyncedData';
 import { processStudentList, ProcessedStudent, FormatMode } from '../utils/studentListProcessor';
@@ -1642,7 +1643,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                               <Archive className="text-primary" size={18} /> Ano letivo {(data as SyncedData)._schoolYear || Math.max(...data.calendars.map(c => Number(c.year) || 0), new Date().getFullYear())}
                            </h3>
                            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
-                              Ao terminar o ano, arquive os registros (backup e planilhas) e comece o próximo mantendo escolas, turnos, turmas e a grade como rascunho.
+                              Ao terminar o ano, guarde os registros na nuvem do Leciona (para consultar depois) e comece o próximo mantendo escolas, turnos, turmas e a grade como rascunho.
                            </p>
                         </div>
                         <button
@@ -1657,6 +1658,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                {showNewYearWizard && onStartNewYear && (
                   <NewSchoolYearWizard data={data} onClose={() => setShowNewYearWizard(false)} onStartNewYear={onStartNewYear} />
                )}
+
+               {/* ANOS ANTERIORES (só aparece quando há algum ano guardado na nuvem) */}
+               {!isOnboarding && !showNewYearWizard && <ArchivedYears conectado={!!user} />}
 
                {/* REPARO DE TURMAS NÃO ENCONTRADAS */}
                {!isOnboarding && <ClassRefRepair data={data} onUpdateData={onUpdateData} />}

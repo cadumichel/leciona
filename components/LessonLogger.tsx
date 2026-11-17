@@ -1547,9 +1547,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
 
   const handleSaveLog = async () => {
     if (!activeLesson) return;
-    setSaveStatus('loading');
 
-    // Validações de segurança
+    // Validações antes de mostrar "carregando" (senão o botão Salvar ficava travado após o erro)
     if (!logForm.subject.trim()) {
       showError('O campo "Conteúdo" é obrigatório.');
       return;
@@ -1559,6 +1558,8 @@ const LessonLogger: React.FC<LessonLoggerProps> = ({
       showError(`O conteúdo deve ter no máximo ${LIMITS.MAX_SUBJECT_LENGTH} caracteres.`);
       return;
     }
+
+    setSaveStatus('loading');
 
     // Sanitização de dados
     const sanitizedLogForm = {

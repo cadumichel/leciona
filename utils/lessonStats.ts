@@ -105,12 +105,29 @@ export const getLessonDisplayItems = (data: AppData, filters: LessonFilters): Le
     const todayStr = now.toLocaleDateString('en-CA'); // YYYY-MM-DD
     const currentMins = now.getHours() * 60 + now.getMinutes();
 
+    // Registros do diário agrupados por dia, uma vez só (na ordem original). Antes, cada aula de
+    // cada dia percorria a lista inteira de registros; com um ano de diário isso pesava no celular.
+    const logsByDay = new Map<string, LessonLog[]>();
+    for (const l of data.logs) {
+        const day = typeof l.date === 'string' ? l.date.slice(0, 10) : '';
+        const list = logsByDay.get(day);
+        if (list) list.push(l); else logsByDay.set(day, [l]);
+    }
+    const NO_LOGS: LessonLog[] = [];
+    // Registros que já viraram item (para não repetir nos registros manuais)
+    const usedLogIds = new Set<string>();
+    const pushItem = (item: LessonDisplayItem) => {
+        items.push(item);
+        if (item.log) usedLogIds.add(item.log.id);
+    };
+
     // 1. Iterate dates
     const cursor = new Date(startDate);
     // Ensure we don't loop endlessly if dates are swapped, but usually start <= end
     while (cursor <= endDate) {
         const dateStr = cursor.toLocaleDateString('en-CA');
         const dayOfWeek = cursor.getDay() as DayOfWeek;
+        const dayLogs = logsByDay.get(dateStr) || NO_LOGS;
 
         // Only process if not holiday (unless it has a log? usually logs on holidays are rare but possible if extra. 
         // But original logic skips holidays for planned lessons.)
@@ -157,12 +174,11 @@ export const getLessonDisplayItems = (data: AppData, filters: LessonFilters): Le
                 }
 
                 // Check Log
-                let log = data.logs.find(l => l.date.startsWith(dateStr) && l.slotId === s.slotId && l.schoolId === s.schoolId);
+                let log = dayLogs.find(l => l.slotId === s.slotId && l.schoolId === s.schoolId);
 
                 // FALLBACK: If Strict Slot ID match fails, try finding by Time/Class Match
                 if (!log) {
-                    log = data.logs.find(l => {
-                        if (!l.date.startsWith(dateStr)) return false;
+                    log = dayLogs.find(l => {
                         if (l.schoolId !== s.schoolId) return false;
                         if (l.startTime !== slot!.startTime) return false;
 
@@ -206,7 +222,7 @@ export const getLessonDisplayItems = (data: AppData, filters: LessonFilters): Le
                 if (dateStr < todayStr) isPast = true;
                 else if (dateStr === todayStr) isPast = currentMins >= parseTimeToMinutes(slot.endTime);
 
-                items.push({
+                pushItem({
                     id: `${dateStr}-${s.schoolId}-${s.slotId}`,
                     schedule: s,
                     log,
@@ -230,7 +246,7 @@ export const getLessonDisplayItems = (data: AppData, filters: LessonFilters): Le
                     if (isLessonBlocked(data, dateStr, st.id)) return;
 
                     st.schedules.filter(ps => Number(ps.dayOfWeek) === dayOfWeek).forEach(ps => {
-                        const log = data.logs.find(l => l.date.startsWith(dateStr) && l.slotId === ps.id && l.studentId === st.id);
+                        const log = dayLogs.find(l => l.slotId === ps.id && l.studentId === st.id);
                         if (log && log.status === 'removed') return;
 
                         const hasContent = !!(log && (log.subject || log.homework || log.notes));
@@ -246,7 +262,7 @@ export const getLessonDisplayItems = (data: AppData, filters: LessonFilters): Le
                         if (dateStr < todayStr) isPast = true;
                         else if (dateStr === todayStr) isPast = currentMins >= parseTimeToMinutes(ps.endTime);
 
-                        items.push({
+                        pushItem({
                             id: `${dateStr}-${st.id}-${ps.id}`,
                             schedule: { dayOfWeek, schoolId: st.id, shiftId: 'private', slotId: ps.id, classId: st.name } as any,
                             log,
@@ -270,8 +286,7 @@ export const getLessonDisplayItems = (data: AppData, filters: LessonFilters): Le
         // Better: Filter logs for the date range ONCE, then iterate.
         // OR just iterate logic inside the date loop as original code does.
 
-        const manualLogs = data.logs.filter(l =>
-            l.date.startsWith(dateStr) &&
+        const manualLogs = dayLogs.filter(l =>
             (l.type === 'extra' || l.type === 'substitution' || l.type === 'regular') &&
             (filterInstId === 'all' || l.schoolId === filterInstId) &&
             (filterClassId === 'all' || l.classId === filterClassId)
@@ -282,7 +297,7 @@ export const getLessonDisplayItems = (data: AppData, filters: LessonFilters): Le
             // Actually original code:  !combinedLogIds.has(l.id).
             // So we need to track processed log IDs.
             // Let's implement that tracking.
-            const alreadyProcessed = items.some(i => i.log?.id === l.id);
+            const alreadyProcessed = usedLogIds.has(l.id);
             if (alreadyProcessed) return;
 
             const school = data.schools.find(sc => sc.id === l.schoolId);
@@ -314,7 +329,7 @@ export const getLessonDisplayItems = (data: AppData, filters: LessonFilters): Le
                 if (found) slot = found;
             }
 
-            items.push({
+            pushItem({
                 id: l.id,
                 schedule: { dayOfWeek, schoolId: l.schoolId, shiftId: l.type || 'extra', slotId: l.slotId, classId: l.classId } as any,
                 log: l,

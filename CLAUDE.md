@@ -101,6 +101,9 @@ objetivo.
   (o teste `tamanhoLetras` avisa). "Normal" é o app como sempre foi; o Cadu não quer letras maiores por padrão.
 - **Início**: `components/Dashboard.tsx` + `utils/dashboardWeb.ts` (linha do dia e grade semanal).
 - **Virada do ano letivo**: `utils/newSchoolYear.ts` + `components/NewSchoolYearWizard.tsx`.
+- **Manutenção** (fim de Ajustes → Geral): `components/MaintenanceSection.tsx`, recolhida por padrão (registros órfãos
+  e "Excluir todos os dados", que exige digitar APAGAR TUDO). O quadro "Turmas não encontradas"
+  (`components/ClassRefRepair.tsx`) só aparece quando há registro para corrigir.
 - **Planilhas exportadas**: `utils/exportRows.ts`. Coluna `Situacao` = "Aula cancelada: {evento}" para o
   registro automático "Evento: X" e para aulas canceladas por evento sem registro (`cancelledLessonsWithoutLog`).
 - **Aulas canceladas por evento no Histórico do Diário**: `getLessonDisplayItems` com

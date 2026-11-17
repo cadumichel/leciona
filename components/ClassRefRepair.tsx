@@ -158,6 +158,9 @@ const ClassRefRepair: React.FC<ClassRefRepairProps> = ({ data, onUpdateData }) =
     return parts.join(' • ');
   };
 
+  // Sem nada para corrigir o quadro não aparece (fica visível logo depois de uma correção, com a confirmação)
+  if (broken.length === 0 && !done) return null;
+
   return (
     <section className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
       <h3 className="text-[13px] font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-1">

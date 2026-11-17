@@ -25,6 +25,7 @@ import SchoolManagement from './SchoolManagement';
 import ScheduleManagement from './ScheduleManagement';
 import StudentManagement from './StudentManagement';
 import ClassRefRepair from './ClassRefRepair';
+import MaintenanceSection from './MaintenanceSection';
 import NewSchoolYearWizard from './NewSchoolYearWizard';
 import { trackChanges, SyncedData } from '../utils/sync';
 import { STORAGE_KEY, PENDING_KEY } from '../hooks/useSyncedData';
@@ -485,7 +486,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
    };
 
    const handleHardReset = async () => {
-      if (!(await askConfirm({ title: 'Apagar tudo', message: 'TEM CERTEZA? Isso apagará todas as escolas, turmas, alunos e diários permanentemente. Não há como desfazer.', confirmLabel: 'Apagar tudo', danger: true }))) {
+      // Confirmação digitada: um toque errado não pode apagar tudo em todos os aparelhos
+      const typed = await askText({
+         title: 'Excluir todos os dados',
+         message: 'Isso apaga todas as escolas, turmas, alunos, diários e avaliações, em todos os seus aparelhos. Não há como desfazer pelo app.\n\nDigite "APAGAR TUDO" para confirmar:',
+         placeholder: 'APAGAR TUDO', confirmLabel: 'Apagar tudo', danger: true
+      });
+      if (typed === null) return;
+      if (typed.trim().toUpperCase() !== 'APAGAR TUDO') {
+         notifyError('Texto de confirmação incorreto. Nada foi apagado.');
          return;
       }
 
@@ -1658,78 +1667,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                   <NewSchoolYearWizard data={data} onClose={() => setShowNewYearWizard(false)} onStartNewYear={onStartNewYear} />
                )}
 
-               {/* REPARO DE TURMAS NÃO ENCONTRADAS */}
+               {/* REPARO DE TURMAS NÃO ENCONTRADAS (só aparece quando há algo para corrigir) */}
                {!isOnboarding && <ClassRefRepair data={data} onUpdateData={onUpdateData} />}
 
-               {/* HARD RESET - APENAS DEV/TESTES */}
-
-               {
-                  !isOnboarding && (
-                     <section className="bg-red-50 dark:bg-red-900/10 p-4 md:p-5 rounded-xl shadow-sm border border-red-100 dark:border-red-900/30">
-                        <h3 className="text-[13px] font-black text-red-700 dark:text-red-400 uppercase tracking-tight flex items-center gap-2 mb-3">
-                           <AlertTriangle className="text-red-500" size={18} /> Zona de Perigo
-                        </h3>
-
-                        <div className="space-y-4">
-                           <div>
-                              <p className="text-[10px] font-bold text-red-600 dark:text-red-300 leading-relaxed mb-2">
-                                 Limpeza de Integridade: Remove registros de aulas que apontam para escolas ou alunos particulares que não existem mais. Aulas de turmas excluídas são mantidas como histórico; turmas não encontradas devem ser reatribuídas no quadro acima.
-                              </p>
-                              <button
-                                 onClick={async () => {
-                                    const orphans: any[] = [];
-                                    const orphanIds = new Set<string>();
-
-                                    // Só remove aulas cuja ESCOLA ou ALUNO PARTICULAR não existe mais.
-                                    // Aulas de turma excluída são histórico; turma não encontrada se resolve
-                                    // reatribuindo no quadro "Turmas não encontradas" (antes eram apagadas aqui).
-                                    data.logs.forEach(log => {
-                                       if (!log.schoolId && !log.studentId) return;
-                                       const missing = log.schoolId
-                                          ? !data.schools.some(s => s.id === log.schoolId)
-                                          : !data.students.some(s => s.id === log.studentId);
-                                       if (missing) {
-                                          orphans.push(log);
-                                          orphanIds.add(log.id);
-                                       }
-                                    });
-
-                                    if (orphans.length === 0) {
-                                       notify('Nenhum registro órfão encontrado. Seu banco de dados está saudável! ✅');
-                                       return;
-                                    }
-
-                                    const confirmMsg = `Encontramos ${orphans.length} registro(s) de aula de escolas ou alunos particulares que não existem mais.\n\n` +
-                                       `Recomendado: faça um backup antes.\n` +
-                                       `Deseja remover esses registros agora?`;
-
-                                    if (await askConfirm({ title: 'Remover registros órfãos', message: confirmMsg, confirmLabel: 'Remover', danger: true })) {
-                                       const cleanLogs = data.logs.filter(l => !orphanIds.has(l.id));
-                                       onUpdateData({ logs: cleanLogs });
-                                       notifySuccess(`Limpeza concluída! ${orphans.length} registros inválidos foram removidos.`);
-                                    }
-                                 }}
-                                 className="w-full py-2.5 bg-white dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-300 rounded-lg font-black uppercase text-xs tracking-tight hover:bg-red-50 dark:hover:bg-red-900/40 transition-all flex items-center justify-center gap-2"
-                              >
-                                 <ShieldCheck size={16} /> Sanear Banco de Dados ({data.logs.length} registros)
-                              </button>
-                           </div>
-
-                           <div className="pt-4 border-t border-red-200 dark:border-red-800/50">
-                              <p className="text-[10px] font-bold text-red-600 dark:text-red-300 leading-relaxed mb-2">
-                                 Hard Reset: Apaga TUDO e restaura o aplicativo para o estado inicial.
-                              </p>
-                              <button
-                                 onClick={handleHardReset}
-                                 className="w-full py-2.5 bg-red-600 text-white rounded-lg font-black uppercase text-xs tracking-tight hover:bg-red-700 transition-all flex items-center justify-center gap-2"
-                              >
-                                 <Trash2 size={18} /> Excluir Todos os Dados (Reset)
-                              </button>
-                           </div>
-                        </div>
-                     </section>
-                  )
-               }
+               {/* MANUTENÇÃO (recolhida): registros órfãos e excluir todos os dados */}
+               {!isOnboarding && <MaintenanceSection data={data} onUpdateData={onUpdateData} onHardReset={handleHardReset} />}
             </div >
          )
          }

@@ -46,6 +46,12 @@ objetivo.
   `_m`; exclusões viram lápides em `_deleted` (180 dias); perfil e ajustes usam `_fieldM`. A nuvem
   vence, a não ser que haja alterações locais pendentes; nesse caso as duas versões são juntadas item
   a item. Qualquer coisa que grave nesse documento precisa respeitar essas regras.
+  O envio para a nuvem é uma **transação** (`pushSafely`): só grava se a nuvem for a que o aparelho
+  já conhece; senão junta primeiro. **Sem internet nada é enviado nem fica na fila** (envia ao voltar
+  a conexão). Nunca use `setDoc` do documento inteiro fora de restaurar backup/virada de ano.
+- **Sair da conta** tira os dados do aparelho (depois de enviar). O aparelho guarda de qual conta são
+  os dados (`leciona-owner-uid`) e nunca os envia para outra conta. Alterações que não chegaram à
+  nuvem ficam em `leciona-guardado-{uid}` e voltam quando a mesma conta entra.
 - **Turmas**: a grade (`scheduleVersions[].schedules`) guarda o **nome** da turma; diário (`logs`),
   avaliações/eventos (`events`) e listas (`classRecords`) guardam o **código (id)**. Use sempre
   `utils/classRefs.ts` (`getClassName`, `isSameClassRef`, `resolveClass`). Nunca mostre o código ao

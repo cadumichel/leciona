@@ -14,8 +14,8 @@ import {
 } from '../utils/sync';
 import { auth, db } from '../services/firebaseConnection';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { doc, setDoc, getDocFromServer, onSnapshot, Timestamp } from 'firebase/firestore';
-import { notifyWarning } from '../utils/dialogs';
+import { doc, setDoc, runTransaction, onSnapshot, Timestamp } from 'firebase/firestore';
+import { askConfirm } from '../utils/dialogs';
 
 export const STORAGE_KEY = 'leciona-data-v1';
 /** '1' = há alterações locais que ainda não chegaram à nuvem */
@@ -24,6 +24,10 @@ export const PENDING_KEY = 'leciona-pending-sync';
 export const WIPE_SEEN_KEY = 'leciona-wipe-seen';
 /** Última virada de ano letivo já aplicada neste aparelho */
 export const YEAR_RESET_SEEN_KEY = 'leciona-year-reset-seen';
+/** Conta (uid) dona dos dados guardados neste aparelho: eles nunca são enviados para outra conta */
+export const OWNER_KEY = 'leciona-owner-uid';
+/** Alterações que não chegaram à nuvem antes de sair da conta, guardadas até a mesma conta voltar */
+export const stashKey = (uid: string) => `leciona-guardado-${uid}`;
 
 export type SaveStatus = 'saved' | 'pending' | 'saving' | 'error';
 
@@ -147,6 +151,33 @@ const hasContent = (d: Partial<AppData>) =>
 const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> =>
   Promise.race([promise, new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
 
+/** Registro criado sozinho pelo app (avaliação, evento, trabalho em sala): não tem texto do professor. */
+const isAutomaticText = (subject?: string) => /^(Avaliação|Evento|Trabalho em sala): /.test(subject || '');
+
+const joinText = (a?: string, b?: string): string | undefined => {
+  const x = (a || '').trim();
+  const y = (b || '').trim();
+  if (!y || x.includes(y)) return a;
+  if (!x || y.includes(x)) return b;
+  return `${x}\n${y}`;
+};
+
+/**
+ * Mesma aula registrada em dois aparelhos com textos diferentes: o registro que fica recebe também
+ * o texto do outro (conteúdo, tarefa e observações), para nada escrito pelo professor se perder.
+ * O texto de um registro automático ("Avaliação: X") não é juntado ao que o professor escreveu.
+ */
+export const joinLogTexts = <T extends { subject?: string; homework?: string; notes?: string }>(winner: T, loser: T): T => {
+  const subject = isAutomaticText(loser.subject) && !isAutomaticText(winner.subject)
+    ? winner.subject
+    : joinText(winner.subject, loser.subject);
+  const homework = joinText(winner.homework, loser.homework);
+  const notes = joinText(winner.notes, loser.notes);
+  if (subject === winner.subject && homework === winner.homework && notes === winner.notes) return winner;
+  // Carimbo novo: a versão juntada vence as cópias antigas nos outros aparelhos
+  return { ...winner, subject, homework, notes, _m: Date.now() };
+};
+
 // Função Auxiliar para Deduplicar Logs por (data, escola/aluno, slotId)
 // Resolve o problema de aulas duplicadas criadas em dispositivos diferentes antes do sync
 export const deduplicateLogs = <T extends { id: string; date: string; schoolId?: string; studentId?: string; slotId?: string; subject?: string; homework?: string; notes?: string; deleted?: boolean; type?: string }>(logs: T[]): T[] => {
@@ -166,24 +197,65 @@ export const deduplicateLogs = <T extends { id: string; date: string; schoolId?:
     if (!existing) {
       seen.set(key, log);
     } else {
-      // Pontuar pelo conteúdo: preferir o log com mais dados
+      // Pontuar pelo conteúdo: fica o log com mais dados, e o texto do outro é juntado a ele
+      // (antes o texto do outro era descartado sem aviso)
       const scoreOf = (l: typeof log) =>
         (l.subject ? 2 : 0) + (l.homework ? 1 : 0) + (l.notes ? 1 : 0);
 
-      if (scoreOf(log) > scoreOf(existing)) {
-        duplicateIds.add(existing.id);
-        seen.set(key, log);
-      } else {
-        duplicateIds.add(log.id);
-      }
+      const [winner, loser] = scoreOf(log) > scoreOf(existing) ? [log, existing] : [existing, log];
+      duplicateIds.add(loser.id);
+      seen.set(key, joinLogTexts(winner, loser));
     }
   }
 
   if (duplicateIds.size === 0) return logs;
 
-  console.log(`🧹 [DEDUP] Removendo ${duplicateIds.size} log(s) duplicado(s) criados em dispositivos diferentes.`);
-  return logs.filter(l => !duplicateIds.has(l.id));
+  console.log(`🧹 [DEDUP] Juntando ${duplicateIds.size} log(s) duplicado(s) criados em dispositivos diferentes.`);
+  return logs.filter(l => !duplicateIds.has(l.id)).map(l => {
+    if (l.deleted || l.type === 'extra' || l.type === 'substitution' || !l.slotId) return l;
+    const kept = seen.get(`${l.date ? l.date.split('T')[0] : ''}-${l.schoolId || l.studentId || ''}-${l.slotId}`);
+    return kept && kept.id === l.id ? kept : l;
+  });
 };
+
+/** Junta os dados da nuvem com os deste aparelho (item a item) e une aulas registradas em dobro. */
+const mergeWithCloud = (cloud: SyncedData, local: SyncedData): SyncedData => {
+  const merged = mergeAppData(cloud, local);
+  return {
+    ...merged,
+    logs: deduplicateLogs(merged.logs as LessonLog[]),
+    settings: { ...merged.settings, googleSyncEnabled: true }
+  } as SyncedData;
+};
+
+type PushResult =
+  | { kind: 'saved' }
+  | { kind: 'merge'; cloud: SyncedData; normalizedCloud: any }
+  | { kind: 'defer' };
+
+/**
+ * Grava o documento inteiro na nuvem numa transação: lê o que está no servidor e só grava se for
+ * o que este aparelho já conhece. Se outro aparelho ou o conector gravou algo que ainda não vimos,
+ * nada é gravado e os dados da nuvem são devolvidos para juntar primeiro ("merge"). Se alguém
+ * gravar no meio, o Firestore refaz a transação. Sem conexão a transação falha (não fica na fila).
+ */
+const pushSafely = (uid: string, payloadData: any, normalized: any, lastCloud: any): Promise<PushResult> =>
+  runTransaction(db, async (tx): Promise<PushResult> => {
+    const docRef = doc(db, 'users', uid);
+    const server = await tx.get(docRef);
+    if (server.exists()) {
+      const raw = server.data();
+      const cloud = prepareCloudData(raw);
+      const wipeMark = cloud._wipedAt || (raw.wiped ? String(raw.wipedAt || 'wiped') : undefined);
+      if (wipeMark && localStorage.getItem(WIPE_SEEN_KEY) !== wipeMark) return { kind: 'defer' };
+      if (cloud._yearResetAt && localStorage.getItem(YEAR_RESET_SEEN_KEY) !== cloud._yearResetAt) return { kind: 'defer' };
+      const normalizedCloud = normalizeForCompare(cloud);
+      const known = !!lastCloud && deepEqual(normalizedCloud, lastCloud);
+      if (!known && !deepEqual(normalizedCloud, normalized)) return { kind: 'merge', cloud, normalizedCloud };
+    }
+    tx.set(docRef, { ...payloadData, updatedAt: Timestamp.now() });
+    return { kind: 'saved' };
+  });
 
 interface SyncOptions {
   showError: (message: string) => void;
@@ -244,6 +316,21 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
     try { localStorage.setItem(PENDING_KEY, '0'); } catch { /* ignora */ }
   }, []);
 
+  /** Tira os dados deste aparelho (a tela volta ao estado inicial). Só o que já está na nuvem ou guardado. */
+  const resetLocal = useCallback(() => {
+    pendingRef.current = false;
+    cloudReadyRef.current = false;
+    lastCloudRef.current = null;
+    const empty = INITIAL_DATA as SyncedData;
+    dataRef.current = empty;
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.setItem(PENDING_KEY, '0');
+      localStorage.removeItem(OWNER_KEY);
+    } catch { /* ignora */ }
+    setData(empty);
+  }, []);
+
   // --- CÓPIA LOCAL: salva sempre, com ou sem internet ---
   const persistLocal = useCallback((d: SyncedData) => {
     try {
@@ -277,7 +364,7 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
     const currentUser = userRef.current;
     if (!currentUser || !cloudReadyRef.current || !pendingRef.current) return;
     if (saveInFlightRef.current) {
-      // Sem internet o envio anterior fica esperando; não empilha cópias na memória
+      // Um envio de cada vez; o próximo sai quando este terminar
       saveQueuedRef.current = true;
       return;
     }
@@ -302,50 +389,36 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
       showWarning(`Seus dados ocupam ${(bytes / 1048576).toFixed(2)} MB de 1 MB disponível na nuvem.`);
     }
 
-    saveInFlightRef.current = true;
-    setSaveStatus(navigator.onLine === false ? 'pending' : 'saving');
-    const normalized = normalizeForCompare(payloadData);
-    const docRef = doc(db, 'users', currentUser.uid);
-
-    // Antes de gravar (o documento inteiro), confere se alguém gravou na nuvem algo que este
-    // aparelho ainda não viu (outro aparelho ou o conector do Claude, ex.: o celular voltando do
-    // segundo plano). Se sim, junta primeiro e grava na próxima tentativa, sem apagar nada.
-    // Sem internet a consulta falha e o envio segue como antes (fica na fila do Firestore).
-    if (navigator.onLine !== false) {
-      try {
-        const server = await withTimeout(getDocFromServer(docRef), 5000);
-        if (server.exists()) {
-          const cloud = prepareCloudData(server.data());
-          const normalizedCloud = normalizeForCompare(cloud);
-          const novidade = lastCloudRef.current && !deepEqual(normalizedCloud, lastCloudRef.current) && !deepEqual(normalizedCloud, normalized);
-          if (novidade) {
-            console.log('🔀 [SYNC] A nuvem mudou desde a última leitura: juntando antes de enviar.');
-            lastCloudRef.current = normalizedCloud;
-            setData(prev => {
-              const merged = mergeAppData(cloud, prev);
-              return {
-                ...merged,
-                logs: deduplicateLogs(merged.logs as LessonLog[]),
-                settings: { ...merged.settings, googleSyncEnabled: true }
-              } as SyncedData;
-            });
-            saveInFlightRef.current = false;
-            setSaveStatus('pending');
-            setSyncTick(t => t + 1);
-            return;
-          }
-        }
-      } catch {
-        // Sem conexão com o servidor: segue para o envio normal
-      }
+    // Sem internet nada é enviado nem fica na fila do Firestore: os dados continuam salvos no
+    // aparelho e o envio acontece quando a conexão voltar (evento "online"). Antes, a gravação do
+    // documento inteiro ficava na fila e, ao reconectar, passava por cima do que outro aparelho
+    // ou o conector tivesse gravado nesse meio-tempo.
+    if (navigator.onLine === false) {
+      setSaveStatus('pending');
+      return;
     }
 
+    saveInFlightRef.current = true;
+    setSaveStatus('saving');
+    const normalized = normalizeForCompare(payloadData);
+
     try {
-      await setDoc(docRef, { ...payloadData, updatedAt: Timestamp.now() });
-      lastCloudRef.current = normalized;
-      if (dataRef.current === snapshot) clearPending();
-      setLastSavedTime(new Date().toLocaleTimeString());
-      setSaveStatus(pendingRef.current ? 'pending' : 'saved');
+      const result = await withTimeout(pushSafely(currentUser.uid, payloadData, normalized, lastCloudRef.current), 20000);
+      if (result.kind === 'merge') {
+        console.log('🔀 [SYNC] A nuvem mudou desde a última leitura: juntando antes de enviar.');
+        lastCloudRef.current = result.normalizedCloud;
+        setData(prev => mergeWithCloud(result.cloud, prev));
+        setSaveStatus('pending');
+        setSyncTick(t => t + 1);
+      } else if (result.kind === 'defer') {
+        // Exclusão total ou virada de ano feita em outro aparelho: quem aplica é o recebimento
+        setSaveStatus('pending');
+      } else {
+        lastCloudRef.current = normalized;
+        if (dataRef.current === snapshot) clearPending();
+        setLastSavedTime(new Date().toLocaleTimeString());
+        setSaveStatus(pendingRef.current ? 'pending' : 'saved');
+      }
     } catch (error: any) {
       console.error('❌ Erro ao salvar no Firestore:', { code: error?.code, message: error?.message });
       setSaveStatus('error');
@@ -395,6 +468,32 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
         setData(prev => ({ ...prev, settings: { ...prev.settings, googleSyncEnabled: false } }));
         setSaveStatus('saved');
         return;
+      }
+
+      // Os dados guardados neste aparelho pertencem a uma conta. Se quem entrou é outra conta,
+      // eles não são mostrados nem enviados para ela (antes eram copiados para a conta nova).
+      try {
+        const owner = localStorage.getItem(OWNER_KEY);
+        if (owner && owner !== currentUser.uid) {
+          console.log('👤 Outra conta entrou neste aparelho: os dados da conta anterior não são usados.');
+          if (pendingRef.current && hasContent(dataRef.current)) {
+            localStorage.setItem(stashKey(owner), JSON.stringify(dataRef.current));
+          }
+          resetLocal();
+        }
+        // Alterações desta conta que não tinham chegado à nuvem quando ela saiu: voltam agora
+        const stashed = localStorage.getItem(stashKey(currentUser.uid));
+        if (stashed) {
+          const restored = applyDefaultsAndMigrations(JSON.parse(stashed));
+          dataRef.current = restored;
+          setData(restored);
+          markPending();
+          localStorage.setItem(STORAGE_KEY, stashed);
+          localStorage.removeItem(stashKey(currentUser.uid));
+        }
+        localStorage.setItem(OWNER_KEY, currentUser.uid);
+      } catch (error) {
+        console.error('Erro ao conferir a conta dona dos dados locais:', error);
       }
 
       const docRef = doc(db, 'users', currentUser.uid);
@@ -467,14 +566,7 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
         if (pendingRef.current) {
           // Há alterações deste aparelho que a nuvem não tem: junta item a item
           console.log('🔀 [SYNC] Juntando dados da nuvem com alterações deste aparelho.');
-          setData(prev => {
-            const merged = mergeAppData(cloud, prev);
-            return {
-              ...merged,
-              logs: deduplicateLogs(merged.logs as LessonLog[]),
-              settings: { ...merged.settings, googleSyncEnabled: true }
-            } as SyncedData;
-          });
+          setData(prev => mergeWithCloud(cloud, prev));
           setSyncTick(t => t + 1);
         } else {
           // Nada pendente aqui: a nuvem é a versão mais nova
@@ -495,7 +587,7 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
       unsubscribeAuth();
       if (unsubscribeSnapshot) unsubscribeSnapshot();
     };
-  }, [markPending]);
+  }, [markPending, resetLocal]);
 
   /** Alteração feita no app: marca o que mudou (para a junção entre aparelhos) e agenda o envio. */
   const updateData = useCallback((newData: Partial<AppData>) => {
@@ -503,21 +595,67 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
     setData(prev => trackChanges(prev, { ...prev, ...newData } as SyncedData));
   }, [markPending]);
 
-  /** Sair da conta: envia o que estiver pendente antes. */
+  /**
+   * Sair da conta: envia o que estiver pendente e depois tira os dados deste aparelho, para quem
+   * usar o navegador em seguida não ver nem receber os dados (nomes de alunos). Se a nuvem não
+   * recebeu tudo, pergunta antes; ao confirmar, as alterações ficam guardadas só para esta conta
+   * e voltam quando ela entrar de novo.
+   */
   const logout = useCallback(async () => {
     const currentUser = userRef.current;
     persistLocal(dataRef.current);
-    if (currentUser && pendingRef.current && cloudReadyRef.current) {
+    if (!currentUser) {
+      try { await signOut(auth); } catch (error) { console.error("Erro no logout:", error); }
+      return;
+    }
+
+    let sent = !pendingRef.current;
+    if (!sent && cloudReadyRef.current && navigator.onLine !== false) {
       try {
-        const payload = removeUndefined({
-          ...dataRef.current,
-          settings: { ...dataRef.current.settings, lastSyncAt: new Date().toISOString(), googleSyncEnabled: true }
-        });
-        await withTimeout(setDoc(doc(db, 'users', currentUser.uid), { ...payload, updatedAt: Timestamp.now() }), 8000);
-        clearPending();
+        // Até 3 tentativas: se a nuvem tiver novidade, junta e envia de novo
+        for (let i = 0; i < 3 && !sent; i++) {
+          const snapshot = dataRef.current;
+          const payload = removeUndefined({
+            ...snapshot,
+            settings: { ...snapshot.settings, lastSyncAt: new Date().toISOString(), googleSyncEnabled: true }
+          });
+          const normalized = normalizeForCompare(payload);
+          const result = await withTimeout(pushSafely(currentUser.uid, payload, normalized, lastCloudRef.current), 8000);
+          if (result.kind === 'saved') {
+            lastCloudRef.current = normalized;
+            sent = dataRef.current === snapshot;
+          } else if (result.kind === 'merge') {
+            lastCloudRef.current = result.normalizedCloud;
+            dataRef.current = mergeWithCloud(result.cloud, dataRef.current);
+          } else {
+            break;
+          }
+        }
       } catch (error) {
         console.error("Erro ao salvar antes do logout:", error);
-        notifyWarning("Aviso: Não foi possível enviar seus dados para a nuvem antes de sair. Eles continuam salvos neste aparelho.");
+      }
+    }
+
+    if (!sent) {
+      const leave = await askConfirm({
+        title: 'Alterações ainda não enviadas',
+        message: 'Não foi possível enviar suas últimas alterações para a nuvem. Se sair agora, elas ficam guardadas neste aparelho e voltam quando você entrar de novo com esta conta. Sair mesmo assim?',
+        confirmLabel: 'Sair',
+        cancelLabel: 'Continuar conectado'
+      });
+      if (!leave) {
+        // Continua conectado: o que foi juntado nas tentativas aparece na tela e segue pendente
+        setData(dataRef.current);
+        persistLocal(dataRef.current);
+        setSyncTick(t => t + 1);
+        return;
+      }
+      try {
+        localStorage.setItem(stashKey(currentUser.uid), JSON.stringify(dataRef.current));
+      } catch (error) {
+        console.error('Erro ao guardar as alterações pendentes:', error);
+        showError('Não foi possível guardar as alterações neste aparelho. Você continua conectado.');
+        return;
       }
     }
 
@@ -525,8 +663,10 @@ export const useSyncedData = ({ showError, showWarning, cloudDelayMs = 2000, loc
       await signOut(auth);
     } catch (error) {
       console.error("Erro no logout:", error);
+      return;
     }
-  }, [persistLocal, clearPending]);
+    resetLocal();
+  }, [persistLocal, resetLocal, showError]);
 
   /** Restaurar backup: grava no aparelho e na nuvem ANTES de recarregar (antes recarregava sem salvar). */
   const restoreData = useCallback(async (backup: AppData) => {

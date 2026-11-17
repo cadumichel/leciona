@@ -184,8 +184,30 @@ conector: `https://leciona.vercel.app/api/mcp`.
 `vercel.json`). Uma cópia por dia em `users/{uid}/backups/{AAAA-MM-DD}`, guardadas por 30 dias; só o
 servidor acessa (as regras do Firestore bloqueiam o app). O Claude lista e restaura
 (`listar_copias`, `preparar_restauracao`, com prévia só em números); antes de restaurar guarda o
-estado atual (`antes-de-restaurar-…`), e desfazer volta a ele. `CRON_SECRET` (opcional, na Vercel)
-protege a rota da cópia.
+estado atual (`antes-de-restaurar-…`), e desfazer volta a ele. `CRON_SECRET` (na Vercel)
+protege a rota da cópia e é obrigatório para os avisos no celular.
 
 **Alertas**: tarefas agendadas no app do Claude (domingo 10h, segunda 6h30, terça 12h45, sexta
 12h30) que usam `avaliacoes_proximas` com 7 dias. O texto delas fica no próprio app do Claude.
+
+## Avisos no celular (notificações com o app fechado)
+- **Regra dos avisos**: `utils/avisos.ts` (`calcularAvisos`), a mesma no servidor e no app. Fim de turno (último
+  horário do professor no turno + `alertAfterShiftDelay`, se ficou aula sem registro), resumo do dia
+  (`alertDailySummary`, `alertDailySummaryTime`, padrão 18:00) e lembretes com alarme. Usa `getLessonDisplayItems`:
+  feriado, recesso, aula cancelada por evento e "Não houve aula" não geram aviso. Cada aviso tem uma chave e vale
+  por 2 horas depois do horário (`JANELA_MINUTOS`).
+- **Servidor**: `connector/avisosPush.ts` + rota `avisos` em `connector/servidor.ts` + `api/avisos.ts`. Um agendador
+  externo (cron-job.org, a cada 5 min) chama `GET /api/avisos?acao=conferir` com `Authorization: Bearer CRON_SECRET`
+  (o cron da Vercel gratuita só roda 1 vez por dia). Sem `CRON_SECRET` na Vercel a conferência não roda (503).
+  Envio por Web Push (pacote `web-push`); as chaves VAPID são derivadas da credencial do Firebase Admin
+  (`derivarChavesPush`), sem variável nova. Aparelhos e estado ficam em `users/{uid}/avisos/{aparelhos,estado}`
+  (só o servidor acessa). Para poupar a cota do Firestore, o documento do professor só é lido quando o `updatedAt`
+  mudou ou chegou a hora de algum aviso (`estado.proximo`).
+- **App**: Ajustes → Avisos (`components/AvisosSettings.tsx`, `utils/avisosAparelho.ts`): cada aparelho ativa os
+  seus, com botão "Enviar teste" e a hora da última conferência do servidor. O service worker gerado no build carrega
+  `public/sw-avisos.js` (mostra a notificação e, ao tocar, abre pendências/lembretes: mensagem `leciona-abrir` ou
+  `/?abrir=pendencias`). Num aparelho sem avisos ativados, o mesmo aviso aparece na tela com o app aberto (`App.tsx`).
+- Não existe mais o aviso "antes do fim de cada aula" nem as opções Sonoro/Vibração/Popup (campos antigos
+  `alertAfterLesson`, `alertBeforeMinutes`, `alertType`, `alertNotificationStyle` ficaram sem uso).
+- Testes: `tests/avisos.test.ts` e `tests/avisosServidor.test.ts`. O envio real pelo serviço de notificações do
+  navegador não dá para testar no ambiente do Claude: confira com "Enviar teste" em produção.

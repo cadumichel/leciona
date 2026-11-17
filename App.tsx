@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import {
   LayoutDashboard,
   BookOpen,
@@ -13,7 +13,7 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 import { ScheduleEntry, DayOfWeek } from './types';
-import { parseTimeToMinutes, getCurrentTimeInMinutes } from './utils';
+import { todayLocal } from './utils';
 import Dashboard from './components/Dashboard';
 import LessonLogger from './components/LessonLogger';
 import { QuickStartGuide } from './components/QuickStartGuide';
@@ -40,7 +40,8 @@ import { useSyncedData } from './hooks/useSyncedData';
 import { useBackClose } from './hooks/useBackClose';
 import { useAsyncLock } from './utils/validation';
 import { getSchedulesForDate } from './utils/schedule';
-import { getClassName } from './utils/classRefs';
+import { calcularAvisos, momentoEmBrasilia } from './utils/avisos';
+import { avisosAtivosNesteAparelho, avisosNaoVistos, manterAvisos, marcarAvisosVistos } from './utils/avisosAparelho';
 
 // Firebase Imports
 import { auth, googleProvider } from './services/firebaseConnection';
@@ -48,27 +49,6 @@ import { signInWithPopup } from 'firebase/auth';
 
 export { INITIAL_DATA } from './initialData';
 export { QuickStartGuide };
-
-/** Mostra notificação do sistema. No Android, `new Notification()` não funciona: usa o service worker. */
-/** O navegador permite mostrar notificações do sistema? */
-const canNotify = () => typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
-
-const showSystemNotification = async (title: string, options: NotificationOptions): Promise<boolean> => {
-  try {
-    if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.getRegistration();
-      if (registration) {
-        await registration.showNotification(title, options);
-        return true;
-      }
-    }
-    new Notification(title, options);
-    return true;
-  } catch (error) {
-    console.warn('Não foi possível mostrar a notificação:', error);
-    return false;
-  }
-};
 
 /** Enquanto uma tela ainda está sendo baixada (só no primeiro toque, e raramente) */
 const ScreenLoading: React.FC = () => (
@@ -82,8 +62,7 @@ const App: React.FC = () => {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [preSelectedLesson, setPreSelectedLesson] = useState<{ schedule: ScheduleEntry; date: string } | null>(null);
   const [autoShowPendencies, setAutoShowPendencies] = useState(false);
-  const [notificationPopup, setNotificationPopup] = useState<{ title: string; message: string; isOpen: boolean }>({ title: '', message: '', isOpen: false });
-  const lastNotifiedSlot = useRef<string>('');
+  const [notificationPopup, setNotificationPopup] = useState<{ title: string; message: string; isOpen: boolean; destino?: string }>({ title: '', message: '', isOpen: false });
 
   const { showError, showSuccess, showWarning } = useToast();
   const { runWithLock } = useAsyncLock();
@@ -135,134 +114,61 @@ const App: React.FC = () => {
     setActiveTab('lessons');
   };
 
-  // --- SISTEMA DE ALERTAS & NOTIFICAÇÕES ---
+  // --- AVISOS ---
+  // As notificações no celular são enviadas pelo servidor (Ajustes → Avisos; connector/avisosPush.ts).
+  // Aqui: (1) num aparelho sem notificações ativas, o mesmo aviso aparece na tela enquanto o app
+  // está aberto; (2) tocar na notificação abre a tela certa.
+  const abrirDestino = useCallback((destino: string | null | undefined) => {
+    if (destino === 'pendencias') { setAutoShowPendencies(true); setActiveTab('lessons'); }
+    else if (destino === 'lembretes') setActiveTab('reminders');
+    else if (destino === 'ajustes') setActiveTab('settings');
+  }, []);
+
   useEffect(() => {
-    const checkContentAlerts = () => {
-      const nowMins = getCurrentTimeInMinutes();
-      const today = new Date().getDay() as DayOfWeek;
-      const todayStr = new Date().toLocaleDateString('en-CA');
+    const params = new URLSearchParams(window.location.search);
+    const destino = params.get('abrir');
+    if (destino) {
+      abrirDestino(destino);
+      params.delete('abrir');
+      const resto = params.toString();
+      window.history.replaceState(window.history.state, '', window.location.pathname + (resto ? `?${resto}` : ''));
+    }
+    if (!('serviceWorker' in navigator)) return;
+    const aoReceber = (e: MessageEvent) => { if (e.data?.tipo === 'leciona-abrir') abrirDestino(e.data.destino); };
+    navigator.serviceWorker.addEventListener('message', aoReceber);
+    return () => navigator.serviceWorker.removeEventListener('message', aoReceber);
+  }, [abrirDestino]);
 
-      // 1. Verificação de Alertas de Aula (Fim de Aula / Fim de Turno)
-      if (data.settings.alertAfterLesson || data.settings.alertAfterShift) {
-        // Grade em vigor hoje (versões de horário). Antes usava a grade antiga, que não acompanhava as mudanças.
-        const todaySchedules = getSchedulesForDate(data, todayStr).filter(s =>
-          Number(s.dayOfWeek) === today && s.classId && s.classId !== 'window'
-        );
+  // Confirma no servidor o cadastro deste aparelho (uma vez por dia)
+  useEffect(() => { if (user) void manterAvisos(); }, [user]);
 
-        const hasLogFor = (schoolId: string, slotId: string) => data.logs.some(l =>
-          l.date.startsWith(todayStr) && l.slotId === slotId && l.schoolId === schoolId && l.status !== 'removed'
-        );
+  useEffect(() => {
+    const conferirAvisos = () => {
+      const agoraLocal = `${todayLocal()}T${new Date().toTimeString().slice(0, 5)}`;
+      // Lembretes cujo alarme já passou ficam marcados como avisados (o sino para de piscar)
+      const vencidos = data.reminders.filter(r => r.alarmTime && !r.alarmTriggered && r.alarmTime.slice(0, 16) <= agoraLocal);
 
-        todaySchedules.forEach(s => {
-          const school = data.schools.find(sc => sc.id === s.schoolId);
-          if (!school || school.deleted) return;
-          const shift = school.shifts.find(sh => sh.id === s.shiftId);
-          const slot = shift?.slots.find(sl => sl.id === s.slotId);
-          if (!slot || !shift) return;
-
-          // Só os horários em que o professor tem aula hoje neste turno
-          const myShiftSlots = shift.slots.filter(sl =>
-            sl.type === 'class' && todaySchedules.some(ts => ts.schoolId === s.schoolId && ts.shiftId === shift.id && ts.slotId === sl.id)
-          );
-          const lastSlotOfShift = myShiftSlots.length > 0
-            ? myShiftSlots.reduce((a, b) => parseTimeToMinutes(a.endTime) >= parseTimeToMinutes(b.endTime) ? a : b)
-            : null;
-          const isLastLesson = lastSlotOfShift?.id === s.slotId;
-
-          const endMins = parseTimeToMinutes(slot.endTime);
-
-          let triggerMins = endMins - data.settings.alertBeforeMinutes;
-          // Se for a última aula E alerta de turno estiver ativo, usa o delay configurado
-          if (isLastLesson && data.settings.alertAfterShift) {
-            triggerMins = endMins + (data.settings.alertAfterShiftDelay || 0);
-          }
-
-          // Se "Alerta por Aula" estiver OFF, mas "Alerta por Turno" estiver ON -> Dispara APENAS na última.
-          const shouldAlert = data.settings.alertAfterLesson || (data.settings.alertAfterShift && isLastLesson);
-
-          // Verifica se está no momento do disparo (com janela de 5 min)
-          if (shouldAlert && nowMins >= triggerMins && nowMins < triggerMins + 5) {
-            const slotKey = `${todayStr}-${s.schoolId}-${s.slotId}`;
-            if (lastNotifiedSlot.current === slotKey) return;
-
-            const hasLog = hasLogFor(s.schoolId, s.slotId);
-            const className = getClassName(data, s.schoolId, s.classId);
-
-            let pendingCount = 0;
-            if (isLastLesson && data.settings.alertAfterShift) {
-              // Pendências do turno: só aulas do professor que já terminaram e não têm registro
-              pendingCount = myShiftSlots.filter(sl =>
-                parseTimeToMinutes(sl.endTime) <= endMins && !hasLogFor(s.schoolId, sl.id)
-              ).length;
-              if (pendingCount === 0 && hasLog) return;
-            } else if (hasLog) {
-              return;
-            }
-
-            let msg = '';
-            if (isLastLesson && data.settings.alertAfterShift && pendingCount > 0) {
-              msg = `O turno na ${school.name} acabou. Você tem ${pendingCount} aula(s) sem registro!`;
-            } else if (!hasLog) {
-              msg = `A aula do ${className} está terminando. Registre o conteúdo!`;
-            }
-            if (!msg) return;
-
-            lastNotifiedSlot.current = slotKey;
-            const title = isLastLesson && data.settings.alertAfterShift ? 'Fim de Turno' : 'Fim de Aula';
-
-            if (data.settings.alertType === 'popup' || !canNotify()) {
-              // Sem permissão de notificação, o aviso aparece na tela (antes se perdia)
-              setNotificationPopup({ title, message: msg, isOpen: true });
-            } else {
-              const style = data.settings.alertNotificationStyle || 'sound';
-              const options: NotificationOptions = { body: msg, silent: style !== 'sound', tag: slotKey };
-              if (style === 'vibration' && navigator.vibrate) navigator.vibrate([200, 100, 200]);
-              void showSystemNotification('Leciona: Lembrete de Registro', options).then(ok => {
-                if (!ok) setNotificationPopup({ title, message: msg, isOpen: true });
-              });
-            }
-          }
-        });
-      }
-
-      // 2. Verificação de Alarmes de Lembretes
-      const dueReminders = data.reminders.filter(reminder => {
-        if (!reminder.alarmTime || reminder.alarmTriggered) return false;
-        const diffMs = new Date(reminder.alarmTime).getTime() - Date.now();
-        // Dispara se já passou da hora e ainda não disparou (até 24h de atraso)
-        return diffMs <= 0 && diffMs > -86400000;
-      });
-      if (dueReminders.length > 0) {
-        // Modo "popup" ou notificações bloqueadas: mostra na tela. Antes o lembrete era marcado
-        // como avisado mesmo sem aparecer nada.
-        const showOnScreen = (list: typeof dueReminders) => {
-          if (!list.length) return;
+      // Com as notificações ativas neste aparelho, o aviso chega pelo servidor: não repete na tela
+      if (!avisosAtivosNesteAparelho() && data.profile.setupCompleted) {
+        const novos = avisosNaoVistos(calcularAvisos(data, momentoEmBrasilia()).avisos);
+        if (novos.length) {
+          marcarAvisosVistos(novos.map(a => a.chave));
           setNotificationPopup({
-            title: list.length === 1 ? `Lembrete: ${list[0].title}` : `${list.length} lembretes`,
-            message: list.map(r => (list.length === 1 ? r.content : `• ${r.title}${r.content ? `: ${r.content}` : ''}`)).join('\n'),
+            title: novos.length === 1 ? novos[0].titulo : `${novos.length} avisos`,
+            message: novos.length === 1 ? novos[0].texto.replace(' Toque para abrir as pendências.', '') : novos.map(a => `• ${a.titulo}`).join('\n'),
+            destino: novos.some(a => a.destino === 'pendencias') ? 'pendencias' : novos[0].destino,
             isOpen: true
           });
-        };
-        if (data.settings.alertType === 'popup' || !canNotify()) {
-          showOnScreen(dueReminders);
-        } else {
-          void Promise.all(dueReminders.map(reminder =>
-            showSystemNotification(`Lembrete: ${reminder.title}`, { body: reminder.content, tag: `reminder-${reminder.id}` })
-          )).then(results => showOnScreen(dueReminders.filter((_, i) => !results[i])));
         }
-        const dueIds = new Set(dueReminders.map(r => r.id));
-        updateData({
-          reminders: data.reminders.map(r => dueIds.has(r.id) ? { ...r, alarmTriggered: true } : r)
-        });
+      }
+
+      if (vencidos.length) {
+        const ids = new Set(vencidos.map(r => r.id));
+        updateData({ reminders: data.reminders.map(r => (ids.has(r.id) ? { ...r, alarmTriggered: true } : r)) });
       }
     };
 
-    // Solicita permissão ao carregar se necessário
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
-
-    const interval = setInterval(checkContentAlerts, 30000); // Verifica a cada 30s
+    const interval = setInterval(conferirAvisos, 30000); // Verifica a cada 30s
     return () => clearInterval(interval);
   }, [data, updateData]);
 
@@ -526,12 +432,29 @@ const App: React.FC = () => {
               </div>
               <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">{notificationPopup.title}</h3>
               <p className="text-sm font-medium text-slate-500 mb-6 whitespace-pre-line">{notificationPopup.message}</p>
-              <button
-                onClick={() => setNotificationPopup(prev => ({ ...prev, isOpen: false }))}
-                className="w-full py-3 bg-primary text-white rounded-xl font-black uppercase tracking-wider hover:bg-primary-dark transition-colors"
-              >
-                Entendido
-              </button>
+              {notificationPopup.destino === 'pendencias' || notificationPopup.destino === 'lembretes' ? (
+                <div className="w-full flex flex-col gap-2">
+                  <button
+                    onClick={() => { abrirDestino(notificationPopup.destino); setNotificationPopup(prev => ({ ...prev, isOpen: false })); }}
+                    className="w-full py-3 bg-primary text-white rounded-xl font-black uppercase tracking-wider transition-colors"
+                  >
+                    {notificationPopup.destino === 'pendencias' ? 'Abrir pendências' : 'Abrir lembretes'}
+                  </button>
+                  <button
+                    onClick={() => setNotificationPopup(prev => ({ ...prev, isOpen: false }))}
+                    className="w-full py-2.5 text-slate-500 dark:text-slate-400 rounded-xl font-black uppercase tracking-wider text-xs"
+                  >
+                    Agora não
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setNotificationPopup(prev => ({ ...prev, isOpen: false }))}
+                  className="w-full py-3 bg-primary text-white rounded-xl font-black uppercase tracking-wider hover:bg-primary-dark transition-colors"
+                >
+                  Entendido
+                </button>
+              )}
             </div>
           </div>
         </div>

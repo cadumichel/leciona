@@ -19,12 +19,19 @@ vi.mock('firebase/auth', () => ({
 vi.mock('firebase/firestore', () => ({
   doc: (_db: any, ...path: string[]) => ({ path: path.join('/') }),
   setDoc: (...args: any[]) => fb.setDoc(...args),
-  getDocFromServer: (...args: any[]) => fb.getDocFromServer(...args),
+  // Transação: lê o servidor (fb.getDocFromServer) e grava (fb.setDoc); falha de um dos dois = falha do envio
+  runTransaction: async (_db: any, fn: any) => {
+    const writes: any[][] = [];
+    const result = await fn({ get: (ref: any) => fb.getDocFromServer(ref), set: (...args: any[]) => { writes.push(args); } });
+    for (const w of writes) await fb.setDoc(...w);
+    return result;
+  },
   onSnapshot: (_ref: any, cb: any) => { fb.snapCb = cb; return () => {}; },
   Timestamp: { now: () => ({ toDate: () => new Date('2026-10-17T12:00:00Z') }) }
 }));
 
-import { useSyncedData, STORAGE_KEY, PENDING_KEY } from '../hooks/useSyncedData';
+import { useSyncedData, deduplicateLogs, STORAGE_KEY, PENDING_KEY, OWNER_KEY, stashKey } from '../hooks/useSyncedData';
+import { setDialogListener } from '../utils/dialogs';
 import { INITIAL_DATA } from '../initialData';
 
 const USER = { uid: 'cadu', email: 'cadu@example.com' };
@@ -40,6 +47,8 @@ const lastSetDocPayload = () => fb.setDoc.mock.calls[fb.setDoc.mock.calls.length
 
 const opts = { showError: vi.fn(), showWarning: vi.fn(), cloudDelayMs: 10, localDelayMs: 5, retryDelayMs: 40 };
 
+const setOnline = (on: boolean) => Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => on });
+
 const login = async () => {
   await waitFor(() => expect(fb.authCb).toBeTruthy());
   act(() => fb.authCb!(USER));
@@ -52,33 +61,36 @@ beforeEach(() => {
   fb.snapCb = null;
   fb.setDoc.mockReset();
   fb.setDoc.mockImplementation(async () => {});
-  // Padrão: sem resposta do servidor (como sem internet), o envio segue direto
+  // Padrão: o servidor ainda não tem o documento, então o envio grava direto
   fb.getDocFromServer.mockReset();
-  fb.getDocFromServer.mockImplementation(async () => { throw new Error('offline'); });
+  fb.getDocFromServer.mockImplementation(async () => snap(null));
+  fb.signOut.mockClear();
+  setOnline(true);
 });
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); setOnline(true); });
 
 describe('sincronização (hooks/useSyncedData)', () => {
-  it('SEM INTERNET: continua gravando no aparelho e nada se perde ao fechar e reabrir o app', async () => {
-    fb.setDoc.mockImplementation(() => new Promise(() => {})); // offline: o envio nunca termina
+  it('SEM INTERNET: continua gravando no aparelho, nada vai para a fila e nada se perde ao reabrir o app', async () => {
+    setOnline(false);
     const first = renderHook(() => useSyncedData(opts));
     await login();
     act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L0')] }))));
 
     act(() => first.result.current.updateData({ logs: [...first.result.current.data.logs, log('A')] }));
-    await waitFor(() => expect(fb.setDoc).toHaveBeenCalledTimes(1));
     act(() => first.result.current.updateData({ logs: [...first.result.current.data.logs, log('B')] }));
     act(() => first.result.current.updateData({ logs: [...first.result.current.data.logs, log('C')] }));
 
-    // Antes da correção, A ficava "travado" no envio e B e C não eram salvos em lugar nenhum
     await waitFor(() => expect(savedLocal().logs.map((l: any) => l.id)).toEqual(['L0', 'A', 'B', 'C']));
+    await new Promise(r => setTimeout(r, 60));
     expect(localStorage.getItem(PENDING_KEY)).toBe('1');
-    expect(fb.setDoc).toHaveBeenCalledTimes(1); // não empilha envios na memória
+    // Nenhuma gravação fica esperando a conexão (era ela que passava por cima dos outros aparelhos)
+    expect(fb.getDocFromServer).not.toHaveBeenCalled();
+    expect(fb.setDoc).not.toHaveBeenCalled();
+    expect(first.result.current.saveStatus).toBe('pending');
     first.unmount();
 
     // Reabre o app com internet: a nuvem ainda tem só L0
-    fb.setDoc.mockReset();
-    fb.setDoc.mockImplementation(async () => {});
+    setOnline(true);
     const second = renderHook(() => useSyncedData(opts));
     await login();
     act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L0')] }))));
@@ -86,6 +98,32 @@ describe('sincronização (hooks/useSyncedData)', () => {
     expect(lastSetDocPayload().logs.map((l: any) => l.id).sort()).toEqual(['A', 'B', 'C', 'L0']);
     await waitFor(() => expect(localStorage.getItem(PENDING_KEY)).toBe('0'));
     expect(second.result.current.data.logs).toHaveLength(4);
+  });
+
+  it('SEM INTERNET e outro aparelho gravou no meio: ao voltar a conexão junta, sem apagar nada', async () => {
+    const hook = renderHook(() => useSyncedData(opts));
+    await login();
+    act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L0')] }))));
+
+    // Celular sem sinal: o professor registra uma aula
+    setOnline(false);
+    act(() => hook.result.current.updateData({ logs: [...hook.result.current.data.logs, log('CELULAR')] }));
+    await new Promise(r => setTimeout(r, 60));
+    expect(fb.setDoc).not.toHaveBeenCalled();
+
+    // Enquanto isso, uma prova é cadastrada pelo computador (o celular não ficou sabendo)
+    const comProva = cloudDoc({
+      logs: [log('L0')],
+      events: [{ id: 'prova-do-pc', type: 'test', schoolId: 'S1', classId: 'C1', date: '2026-10-20T00:00:00.000Z', title: 'P3', _m: 5 }]
+    });
+    fb.getDocFromServer.mockImplementation(async () => snap(comProva));
+
+    // Voltou o sinal
+    setOnline(true);
+    act(() => { window.dispatchEvent(new Event('online')); });
+    await waitFor(() => expect(fb.setDoc).toHaveBeenCalled());
+    for (const call of fb.setDoc.mock.calls) expect(call[1].events.map((e: any) => e.id)).toEqual(['prova-do-pc']);
+    expect(lastSetDocPayload().logs.map((l: any) => l.id).sort()).toEqual(['CELULAR', 'L0']);
   });
 
   it('item apagado em outro aparelho não volta', async () => {
@@ -272,5 +310,153 @@ describe('gravação do app não apaga o que outro aparelho ou o conector gravou
     act(() => hook.result.current.updateData({ logs: [...hook.result.current.data.logs, log('A')] }));
     await waitFor(() => expect(fb.setDoc).toHaveBeenCalledTimes(1));
     expect(lastSetDocPayload().logs.map((l: any) => l.id)).toEqual(['L0', 'A']);
+  });
+});
+
+describe('sair da conta e troca de conta no mesmo aparelho', () => {
+  const OUTRO = { uid: 'colega', email: 'colega@example.com' };
+  afterEach(() => setDialogListener(null));
+  const answer = (ok: boolean) => setDialogListener(req => { if (req.kind === 'confirm') req.resolve(ok); });
+
+  it('sair com tudo enviado: os dados saem do aparelho', async () => {
+    const { result } = renderHook(() => useSyncedData(opts));
+    await login();
+    act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L0')] }))));
+    await waitFor(() => expect(result.current.data.logs).toHaveLength(1));
+    expect(localStorage.getItem(OWNER_KEY)).toBe('cadu');
+
+    await act(async () => { await result.current.logout(); });
+    expect(fb.signOut).toHaveBeenCalledTimes(1);
+    expect(result.current.data.logs).toHaveLength(0);
+    expect(result.current.data.profile.setupCompleted).toBeFalsy();
+    await new Promise(r => setTimeout(r, 30));
+    expect(JSON.stringify(localStorage)).not.toContain('"L0"');
+    expect(localStorage.getItem(OWNER_KEY)).toBeNull();
+  });
+
+  it('sair com alteração pendente: envia antes e só então limpa', async () => {
+    const { result } = renderHook(() => useSyncedData({ ...opts, cloudDelayMs: 5000 }));
+    await login();
+    const nuvem = cloudDoc({ logs: [log('L0')] });
+    act(() => fb.snapCb!(snap(nuvem)));
+    fb.getDocFromServer.mockImplementation(async () => snap(nuvem));
+    act(() => result.current.updateData({ logs: [...result.current.data.logs, log('A')] }));
+
+    await act(async () => { await result.current.logout(); });
+    expect(lastSetDocPayload().logs.map((l: any) => l.id)).toEqual(['L0', 'A']);
+    expect(fb.signOut).toHaveBeenCalledTimes(1);
+    expect(result.current.data.logs).toHaveLength(0);
+  });
+
+  it('sair sem conseguir enviar: pergunta; cancelando, continua conectado com os dados', async () => {
+    setOnline(false);
+    answer(false);
+    const { result } = renderHook(() => useSyncedData(opts));
+    await login();
+    act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L0')] }))));
+    act(() => result.current.updateData({ logs: [...result.current.data.logs, log('A')] }));
+
+    await act(async () => { await result.current.logout(); });
+    expect(fb.signOut).not.toHaveBeenCalled();
+    expect(result.current.data.logs.map((l: any) => l.id)).toEqual(['L0', 'A']);
+  });
+
+  it('sair sem conseguir enviar e confirmar: fica guardado e volta quando a mesma conta entra', async () => {
+    setOnline(false);
+    answer(true);
+    const { result } = renderHook(() => useSyncedData(opts));
+    await login();
+    act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L0')] }))));
+    act(() => result.current.updateData({ logs: [...result.current.data.logs, log('A')] }));
+
+    await act(async () => { await result.current.logout(); });
+    expect(fb.signOut).toHaveBeenCalledTimes(1);
+    expect(result.current.data.logs).toHaveLength(0); // nada na tela para quem usar depois
+    expect(localStorage.getItem(stashKey('cadu'))).toContain('"A"');
+
+    // Um colega entra no meio: não vê nem recebe nada
+    setOnline(true);
+    act(() => fb.authCb!(OUTRO));
+    act(() => fb.snapCb!(snap(null)));
+    await new Promise(r => setTimeout(r, 60));
+    for (const call of fb.setDoc.mock.calls) expect(call[1].logs).toEqual([]);
+    expect(result.current.data.logs).toHaveLength(0);
+    await act(async () => { await result.current.logout(); });
+    fb.setDoc.mockClear();
+
+    // O dono volta: a alteração guardada reaparece e é enviada
+    act(() => fb.authCb!(USER));
+    await waitFor(() => expect(result.current.data.logs.map((l: any) => l.id)).toEqual(['L0', 'A']));
+    expect(localStorage.getItem(stashKey('cadu'))).toBeNull();
+    act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L0')] }))));
+    await waitFor(() => expect(fb.setDoc).toHaveBeenCalled());
+    expect(fb.setDoc.mock.calls[0][0].path).toBe('users/cadu');
+    expect(lastSetDocPayload().logs.map((l: any) => l.id).sort()).toEqual(['A', 'L0']);
+  });
+
+  it('outra conta entra num aparelho com dados de alguém: os dados não vão para a conta nova', async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudDoc({ logs: [log('DO-CADU')], students: [{ id: 'al1', name: 'Aluno Inventado' }] })));
+    localStorage.setItem(PENDING_KEY, '0');
+    localStorage.setItem(OWNER_KEY, 'cadu');
+    const { result } = renderHook(() => useSyncedData(opts));
+    await waitFor(() => expect(fb.authCb).toBeTruthy());
+    act(() => fb.authCb!(OUTRO));
+    expect(result.current.data.logs).toHaveLength(0);
+    expect(result.current.data.students).toHaveLength(0);
+
+    // Primeiro uso da conta nova: o documento criado não leva nada do dono anterior
+    act(() => fb.snapCb!(snap(null)));
+    await waitFor(() => expect(fb.setDoc).toHaveBeenCalled());
+    expect(fb.setDoc.mock.calls[0][0].path).toBe('users/colega');
+    expect(JSON.stringify(lastSetDocPayload())).not.toContain('DO-CADU');
+    expect(JSON.stringify(lastSetDocPayload())).not.toContain('Aluno Inventado');
+    expect(localStorage.getItem(OWNER_KEY)).toBe('colega');
+  });
+
+  it('aparelho sem dono marcado (instalação antiga ou uso antes de entrar): a conta que entra fica com os dados', async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudDoc({ logs: [log('L1')] })));
+    const { result } = renderHook(() => useSyncedData(opts));
+    await login();
+    act(() => fb.snapCb!(snap(null)));
+    await waitFor(() => expect(fb.setDoc).toHaveBeenCalled());
+    expect(lastSetDocPayload().logs.map((l: any) => l.id)).toEqual(['L1']);
+    expect(result.current.data.logs).toHaveLength(1);
+  });
+});
+
+describe('mesma aula registrada em dois aparelhos', () => {
+  const dup = (id: string, over: any) => ({ id, date: '2026-10-16T00:00:00.000Z', schoolId: 'S1', classId: 'C1', slotId: 's1', subject: '', homework: '', notes: '', ...over });
+
+  it('os textos diferentes são juntados no registro que fica', () => {
+    const out = deduplicateLogs([
+      dup('a', { subject: 'Revolução Francesa', homework: 'Ler p. 40' }),
+      dup('b', { subject: 'Queda da Bastilha', notes: 'Turma agitada' })
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe('a');
+    expect(out[0].subject).toBe('Revolução Francesa\nQueda da Bastilha');
+    expect(out[0].homework).toBe('Ler p. 40');
+    expect(out[0].notes).toBe('Turma agitada');
+  });
+
+  it('texto igual ou já contido não é repetido, e juntar de novo não muda nada', () => {
+    const once = deduplicateLogs([dup('a', { subject: 'Revolução Francesa: causas' }), dup('b', { subject: 'Revolução Francesa' })]);
+    expect(once).toHaveLength(1);
+    expect(once[0].subject).toBe('Revolução Francesa: causas');
+    const joined = deduplicateLogs([dup('a', { subject: 'Iluminismo', homework: 'x' }), dup('b', { subject: 'Voltaire' })]);
+    const again = deduplicateLogs([joined[0], dup('b', { subject: 'Voltaire' })]);
+    expect(again[0].subject).toBe('Iluminismo\nVoltaire');
+  });
+
+  it('o registro automático "Avaliação: X" não é misturado ao texto do professor', () => {
+    const out = deduplicateLogs([dup('a', { subject: 'Avaliação: P3' }), dup('b', { subject: 'Correção da prova', homework: 'Refazer a 5' })]);
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe('b');
+    expect(out[0].subject).toBe('Correção da prova');
+  });
+
+  it('aulas diferentes não são tocadas', () => {
+    const logs = [dup('a', { subject: 'x' }), dup('b', { subject: 'y', slotId: 's2' })];
+    expect(deduplicateLogs(logs)).toBe(logs);
   });
 });

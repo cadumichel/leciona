@@ -839,6 +839,17 @@ var documentoRestaurado = (atual, copia, agora = Date.now()) => {
 };
 var listarParaOClaude = (copias) => [...copias].sort((a, b) => b.criadaEm.localeCompare(a.criadaEm)).map((c) => ({ id: c.id, descricao: descreverCopia(c), resumo: c.resumo }));
 
+// connector/arquivo.ts
+var CAMPO_ARQUIVO = "_arquivo";
+var anoValido = (ano) => typeof ano === "number" && Number.isInteger(ano) && ano >= 2e3 && ano <= 2100;
+var dadosDoArquivo = (raw, ano, guardadoEm) => {
+  const { updatedAt, _deleted, _fieldM, [CAMPO_ARQUIVO]: _antigo, ...dados } = raw || {};
+  return { ...dados, [CAMPO_ARQUIVO]: { ano, guardadoEm, resumo: resumoDosDados(dados) } };
+};
+var pareceDadosDoLeciona = (dados) => !!dados && typeof dados === "object" && !Array.isArray(dados) && Array.isArray(dados.schools) && Array.isArray(dados.logs);
+var cabeNoArquivo = (dados) => estimateDocBytes(dados) <= FIRESTORE_DOC_LIMIT * 0.98;
+var ordenarAnos = (anos) => [...anos].sort((a, b) => b.ano - a.ano);
+
 // connector/oauth.ts
 import { createHash } from "node:crypto";
 import { SignJWT, jwtVerify, base64url } from "jose";
@@ -2546,6 +2557,51 @@ var criarRotas = (deps) => {
       if (vencidas.length) await deps.copias.apagar(uid, vencidas);
       return json({ ok: true, copia: id, feita, apagadas: vencidas.length });
     },
+    /**
+     * Anos anteriores (api/arquivo.ts), com o login do app (Firebase):
+     * listar os anos guardados, guardar o ano na virada e ler um ano para consulta.
+     */
+    arquivo: async (req) => {
+      const anos = deps.anos;
+      if (!anos) return json({ error: "not_configured" }, 503);
+      if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405, { Allow: "POST" });
+      let uid;
+      try {
+        const login = await deps.verificarLogin((req.headers.get("authorization") || "").replace(/^Bearer /, ""));
+        if (!login.email || !login.email_verified || login.email.toLowerCase() !== deps.emailPermitido.trim().toLowerCase()) {
+          return json({ error: "forbidden", error_description: "Esta conta Google n\xE3o tem acesso aos anos anteriores." }, 403);
+        }
+        uid = login.uid;
+      } catch {
+        return json({ error: "unauthorized", error_description: "N\xE3o foi poss\xEDvel confirmar o login." }, 401);
+      }
+      const corpo = await req.json().catch(() => null);
+      const acao = corpo?.acao;
+      if (acao === "listar") return json({ anos: ordenarAnos(await anos.listar(uid)) });
+      if (!anoValido(corpo?.ano)) return json({ error: "invalid_request", error_description: "Informe o ano." }, 400);
+      const ano = corpo.ano;
+      if (acao === "ler") {
+        const dados = await anos.ler(uid, ano);
+        return dados ? json({ ano, dados }) : json({ error: "not_found", error_description: `O ano ${ano} n\xE3o est\xE1 guardado.` }, 404);
+      }
+      if (acao === "guardar") {
+        if (!pareceDadosDoLeciona(corpo.dados)) {
+          return json({ error: "invalid_request", error_description: "Os dados do ano n\xE3o chegaram completos." }, 400);
+        }
+        const existente = (await anos.listar(uid)).find((a) => a.ano === ano);
+        if (existente && !corpo.substituir) return json({ error: "exists", existente }, 409);
+        const guardadoEm = (deps.agora?.() ?? /* @__PURE__ */ new Date()).toISOString();
+        const arquivo = dadosDoArquivo(corpo.dados, ano, guardadoEm);
+        if (!cabeNoArquivo(arquivo)) {
+          return json({ error: "too_large", error_description: "Os dados do ano passam do limite da nuvem (1 MB)." }, 413);
+        }
+        await anos.gravar(uid, ano, arquivo);
+        const conferido = (await anos.listar(uid)).find((a) => a.ano === ano && a.guardadoEm === guardadoEm);
+        if (!conferido) return json({ error: "server_error", error_description: "N\xE3o foi poss\xEDvel conferir o arquivo. Tente de novo." }, 500);
+        return json({ ok: true, guardado: conferido });
+      }
+      return json({ error: "invalid_request", error_description: "A\xE7\xE3o desconhecida." }, 400);
+    },
     mcp: async (req) => {
       const conta = await verificarAcesso(assinatura(req), deps.emailPermitido, req.headers.get("authorization"));
       if (!conta) return naoAutorizado(req);
@@ -2586,6 +2642,7 @@ var montar = async () => {
   const db = getFirestore(app);
   const usuario = (uid) => db.collection("users").doc(uid);
   const copias = (uid) => usuario(uid).collection("backups");
+  const anos = (uid) => usuario(uid).collection("anos");
   let uidCache;
   return criarRotas({
     chave: await derivarChave(credencial.private_key),
@@ -2638,6 +2695,16 @@ var montar = async () => {
         const lote = db.batch();
         ids.forEach((id) => lote.delete(copias(uid).doc(id)));
         await lote.commit();
+      }
+    },
+    anos: {
+      listar: async (uid) => (await anos(uid).select(CAMPO_ARQUIVO).get()).docs.map((d) => d.get(CAMPO_ARQUIVO)).filter((a) => a && a.ano && a.guardadoEm),
+      ler: async (uid, ano) => {
+        const d = await anos(uid).doc(String(ano)).get();
+        return d.exists ? d.data() : null;
+      },
+      gravar: async (uid, ano, dados) => {
+        await anos(uid).doc(String(ano)).set(removeUndefined(dados));
       }
     },
     uidDoProfessor: async () => uidCache ??= (await getAuth(app).getUserByEmail(emailPermitido)).uid,

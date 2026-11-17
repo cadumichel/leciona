@@ -33,6 +33,8 @@ export interface NewYearPlan {
   year: number;
   schools: SchoolPlan[];
   keepSchedule: boolean;
+  /** Mantém as listas de alunos das turmas que seguem (só os alunos ativos). Padrão: não. */
+  keepRosters?: boolean;
 }
 
 const classObj = (c: SchoolClass | string): SchoolClass =>
@@ -124,6 +126,33 @@ export const withYear = (data: AppData, plan: NewYearPlan, year: number): NewYea
   schools: plan.schools.map(sp => ({ ...sp, calendar: suggestCalendar(data, sp.schoolId, year) }))
 });
 
+const dayOf = (date?: string) => (date || '').split('T')[0];
+
+/**
+ * O que já foi lançado com data do novo ano (planejamento adiantado) e segue na virada:
+ * avaliações e eventos, aulas e colunas de nota avulsas das escolas e turmas mantidas.
+ */
+export const itemsOfNewYear = (data: AppData, plan: NewYearPlan) => {
+  const yearStart = `${plan.year}-01-01`;
+  const kept = new Map(plan.schools.filter(sp => sp.keep).map(sp => [sp.schoolId, new Set(sp.classes.filter(c => c.keep).map(c => c.id))]));
+  const studentIds = new Set((data.students || []).map(st => st.id));
+  // Turma mantida (ou item da escola toda, sem turma)
+  const fits = (schoolId: string | undefined, classId: string | undefined) => {
+    const classes = schoolId ? kept.get(schoolId) : undefined;
+    if (!classes) return false;
+    return !classId || classId === 'window' || classes.has(classId);
+  };
+  const events = (data.events || []).filter(e => dayOf(e.date) >= yearStart && fits(e.schoolId, e.classId));
+  const eventIds = new Set(events.map(e => e.id));
+  return {
+    // REC ou 2ª chamada só segue se a avaliação original também seguir
+    events: events.filter(e => !e.parentId || eventIds.has(e.parentId)),
+    logs: (data.logs || []).filter(l => dayOf(l.date) >= yearStart && l.status !== 'removed' &&
+      (l.studentId ? studentIds.has(l.studentId) : fits(l.schoolId, l.classId))),
+    customAssessments: (data.customAssessments || []).filter(a => dayOf(a.date) >= yearStart && fits(a.schoolId, a.classId))
+  };
+};
+
 /** Quantos registros do ano atual serão arquivados (para mostrar no assistente). */
 export const summarizeCurrentYear = (data: AppData) => ({
   logs: (data.logs || []).filter(l => l.status !== 'removed').length,
@@ -136,9 +165,10 @@ export const summarizeCurrentYear = (data: AppData) => ({
 /**
  * Monta os dados do novo ano a partir do plano.
  * Mantém: perfil, configurações, escolas e turnos escolhidos, turmas escolhidas (com o novo nome),
- * alunos particulares (sem o histórico de pagamentos), grade horária como rascunho e lembretes
- * já marcados para o novo ano.
- * Começa do zero: aulas, avaliações e eventos, notas, listas de alunos, lembretes antigos.
+ * alunos particulares (sem o histórico de pagamentos), grade horária como rascunho, a fórmula de
+ * notas de cada turma mantida, tudo o que já tem data no novo ano (avaliações, eventos, aulas,
+ * lembretes) e, se o professor pedir (`keepRosters`), as listas de alunos das turmas mantidas.
+ * Começa do zero: aulas, avaliações e eventos do ano que termina, notas e lembretes antigos.
  */
 export const buildNewSchoolYear = (data: SyncedData, plan: NewYearPlan, now: Date = new Date()): SyncedData => {
   const year = plan.year;
@@ -209,23 +239,42 @@ export const buildNewSchoolYear = (data: SyncedData, plan: NewYearPlan, now: Dat
     extraRecesses: []
   }));
 
+  // A marca da virada precisa ser mais nova que a anterior (relógio atrasado não pode perder para o ano antigo)
+  const previousMark = Date.parse(data._yearResetAt || '') || 0;
+  const resetMark = new Date(Math.max(now.getTime(), previousMark + 1)).toISOString();
+  const carried = itemsOfNewYear(data, plan);
+  const isKeptClass = (schoolId: string, classId: string) => !!keptClassIdsBySchool.get(schoolId)?.has(classId);
+
+  // Fórmula de notas das turmas mantidas (a numeração das colunas N1, N2… recomeça com as avaliações novas)
+  const gradingConfigs = (data.gradingConfigs || [])
+    .filter(g => isKeptClass(g.schoolId, g.classId))
+    .map(({ columnOrder, ...rest }) => rest);
+
+  // Listas de alunos: só se pedido, só turmas mantidas e só alunos ativos
+  const classRecords = plan.keepRosters
+    ? (data.classRecords || [])
+      .filter(r => isKeptClass(r.schoolId, r.classId))
+      .map(r => ({ ...r, students: (r.students || []).filter(st => st.active !== false) }))
+      .filter(r => r.students.length > 0)
+    : [];
+
   const result: SyncedData = {
     profile: data.profile,
     settings: { ...data.settings, showQuickStartGuide: false },
     schools,
     students: (data.students || []).map(st => ({ ...st, payments: [] })),
-    classRecords: [],
+    classRecords,
     schedules: [],
     scheduleVersions,
-    logs: [],
-    events: [],
+    logs: carried.logs,
+    events: carried.events,
     calendars,
     reminders: (data.reminders || []).filter(r => (r.date || '').split('T')[0] >= yearStart),
     grades: [],
-    customAssessments: [],
-    gradingConfigs: [],
+    customAssessments: carried.customAssessments,
+    gradingConfigs,
     _schoolYear: year,
-    _yearResetAt: now.toISOString()
+    _yearResetAt: resetMark
   } as SyncedData;
   if (data._wipedAt) result._wipedAt = data._wipedAt;
   return result;

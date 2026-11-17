@@ -167,7 +167,22 @@ export const mergeCollection = <T extends Item>(cloudArr: T[] = [], localArr: T[
 };
 
 /** Junta os dados completos da nuvem com os locais. */
+/**
+ * Virada do ano letivo (ou backup restaurado): os dois lados têm marcas diferentes?
+ * Devolve o lado mais novo, que vale inteiro: os dados do ano anterior nunca são juntados com os do
+ * novo ano (senão as aulas antigas voltariam todas). Marcas iguais: null (junção normal).
+ */
+export const yearResetWinner = (cloud: Pick<SyncedData, '_yearResetAt'>, local: Pick<SyncedData, '_yearResetAt'>): 'cloud' | 'local' | null => {
+  const c = cloud._yearResetAt || '';
+  const l = local._yearResetAt || '';
+  if (c === l) return null;
+  return c > l ? 'cloud' : 'local';
+};
+
 export const mergeAppData = (cloud: SyncedData, local: SyncedData, now: number = Date.now()): SyncedData => {
+  const winner = yearResetWinner(cloud, local);
+  if (winner) return winner === 'cloud' ? cloud : local;
+
   const tombstones = mergeTombstones(cloud._deleted, local._deleted, now);
   const merged: any = { ...cloud };
 

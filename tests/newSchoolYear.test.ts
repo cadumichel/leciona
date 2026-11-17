@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  shiftDateToYear, splitTerms, suggestNextYear, defaultPlan, buildNewSchoolYear, withYear, summarizeCurrentYear
+  shiftDateToYear, splitTerms, suggestNextYear, defaultPlan, buildNewSchoolYear, withYear, summarizeCurrentYear, itemsOfNewYear
 } from '../utils/newSchoolYear';
 
 const C183 = 'c183-0000-4000-8000-000000000000';
@@ -132,5 +132,75 @@ describe('buildNewSchoolYear', () => {
   it('sem copiar a grade: começa em branco', () => {
     const p = { ...defaultPlan(data2026), keepSchedule: false };
     expect(buildNewSchoolYear(data2026, p, now).scheduleVersions).toEqual([]);
+  });
+});
+
+describe('o que já é do novo ano segue na virada', () => {
+  // Planejamento adiantado: itens lançados em 2026 com data de 2027
+  const adiantado = (): any => ({
+    ...data2026,
+    events: [
+      ...data2026.events,
+      { id: 'P27', date: '2027-03-10T00:00:00.000Z', schoolId: 'S1', classId: C183, slotId: 's1', type: 'test', title: 'Prova 1', description: '', blocksClasses: false },
+      { id: 'REC27', date: '2027-03-25T00:00:00.000Z', schoolId: 'S1', classId: C183, type: 'test', title: 'REC Prova 1', kind: 'recovery', parentId: 'P27', description: '', blocksClasses: false },
+      { id: 'REC-orfa', date: '2027-02-10T00:00:00.000Z', schoolId: 'S1', classId: C183, type: 'test', title: 'REC de 2026', kind: 'recovery', parentId: 'P', description: '', blocksClasses: false },
+      { id: 'REUNIAO', date: '2027-02-03T00:00:00.000Z', schoolId: 'S1', type: 'meeting', title: 'Reunião pedagógica', description: '', blocksClasses: true },
+      { id: 'SAIU', date: '2027-03-01T00:00:00.000Z', schoolId: 'S2', classId: 'x', type: 'test', title: 'Escola que saiu', description: '', blocksClasses: false }
+    ],
+    logs: [
+      ...data2026.logs,
+      { id: 'L27', date: '2027-03-10T00:00:00.000Z', schoolId: 'S1', classId: C183, slotId: 's1', subject: 'Avaliação: Prova 1', homework: '', notes: '' },
+      { id: 'L27-part', date: '2027-02-15T00:00:00.000Z', schoolId: '', studentId: 'P1', classId: '', slotId: 'ps', subject: 'Plano', homework: '', notes: '' },
+      { id: 'L27-removida', date: '2027-03-11T00:00:00.000Z', schoolId: 'S1', classId: C183, slotId: 's1', subject: '', homework: '', notes: '', status: 'removed' }
+    ],
+    customAssessments: [
+      { id: 'CA26', schoolId: 'S1', classId: C183, termIndex: 2, title: 'Caderno', date: '2026-09-01', weight: 1 },
+      { id: 'CA27', schoolId: 'S1', classId: C183, termIndex: 0, title: 'Caderno', date: '2027-03-01', weight: 1 }
+    ],
+    gradingConfigs: [
+      { id: 'G1', schoolId: 'S1', classId: C183, termIndex: 0, formula: 'custom', customFormula: '(N1 + N2) / 2', columnOrder: ['P', 'CA26'] },
+      { id: 'G2', schoolId: 'S2', classId: 'x', termIndex: 0, formula: 'sum' }
+    ],
+    classRecords: [
+      { id: 'r', schoolId: 'S1', classId: C183, students: [{ id: 'a', name: 'Ana' }, { id: 'b', name: 'Bia', active: false, disabledAt: '2026-06-01' }] },
+      { id: 'r2', schoolId: 'S2', classId: 'x', students: [{ id: 'c', name: 'Caio' }] }
+    ]
+  });
+  const plano = (d: any) => {
+    const p = defaultPlan(d);
+    p.schools.find(s => s.schoolId === 'S2')!.keep = false;
+    return p;
+  };
+
+  it('avaliações, eventos, aulas e colunas de nota com data do novo ano continuam', () => {
+    const d = adiantado();
+    const out = buildNewSchoolYear(d, plano(d), new Date('2026-12-20T12:00:00'));
+    // A REC cuja prova original ficou em 2026 e o item da escola que saiu não seguem
+    expect(out.events.map(e => e.id).sort()).toEqual(['P27', 'REC27', 'REUNIAO']);
+    expect(out.logs.map(l => l.id).sort()).toEqual(['L27', 'L27-part']);
+    expect(out.customAssessments.map(a => a.id)).toEqual(['CA27']);
+    expect(out.grades).toEqual([]);
+  });
+
+  it('a fórmula de notas das turmas mantidas continua, sem a numeração das colunas antigas', () => {
+    const d = adiantado();
+    const out = buildNewSchoolYear(d, plano(d), new Date('2026-12-20T12:00:00'));
+    expect(out.gradingConfigs).toEqual([{ id: 'G1', schoolId: 'S1', classId: C183, termIndex: 0, formula: 'custom', customFormula: '(N1 + N2) / 2' }]);
+  });
+
+  it('listas de alunos: só seguem se pedido, só turmas mantidas e alunos ativos', () => {
+    const d = adiantado();
+    expect(buildNewSchoolYear(d, plano(d), new Date('2026-12-20T12:00:00')).classRecords).toEqual([]);
+    const out = buildNewSchoolYear(d, { ...plano(d), keepRosters: true }, new Date('2026-12-20T12:00:00'));
+    expect(out.classRecords).toEqual([{ id: 'r', schoolId: 'S1', classId: C183, students: [{ id: 'a', name: 'Ana' }] }]);
+  });
+
+  it('turma que não segue leva junto o que era dela', () => {
+    const d = adiantado();
+    const p = plano(d);
+    p.schools[0].classes.find(c => c.id === C183)!.keep = false;
+    const levado = itemsOfNewYear(d, p);
+    expect(levado.events.map(e => e.id)).toEqual(['REUNIAO']);
+    expect(levado.logs.map(l => l.id)).toEqual(['L27-part']);
   });
 });

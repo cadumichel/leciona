@@ -9,6 +9,7 @@ import {
   CAMPO_COPIA, InfoDaCopia, copiasVencidas, dadosDaCopia, documentoRestaurado, idAntesDeRestaurar, idDaCopiaDiaria,
   listarParaOClaude, previaDaRestauracao
 } from './copias';
+import { ArmazemDeAnos, anoValido, cabeNoArquivo, dadosDoArquivo, ordenarAnos, pareceDadosDoLeciona } from './arquivo';
 import { Alteracoes, Lote, Plano, SITUACOES, aplicarPlano, desfazerLote, prepararAlteracoes, prepararAvaliacoes, prepararCalendarios, prepararConteudos, prepararEventos, prepararRecessos, prepararSituacoes } from './escrita';
 import {
   Assinatura, Conta, ErroOAuth, assinarLote, assinarPlano, emitirCodigo, lerLote, lerPlano, metadadosDoRecurso, metadadosDoServidor, registrarCliente, trocarToken,
@@ -43,6 +44,8 @@ export interface Dependencias {
     gravar: (uid: string, id: string, dados: any) => Promise<void>;
     apagar: (uid: string, ids: string[]) => Promise<void>;
   };
+  /** Anos anteriores em users/{uid}/anos (connector/arquivo.ts) */
+  anos?: ArmazemDeAnos;
   /** uid da conta em LECIONA_EMAIL (para a cópia diária, que roda sem login) */
   uidDoProfessor: () => Promise<string>;
   /** CRON_SECRET da Vercel: se existir, a cópia diária só roda com ele */
@@ -603,6 +606,59 @@ export const criarRotas = (deps: Dependencias) => {
       const vencidas = copiasVencidas(copias, hoje);
       if (vencidas.length) await deps.copias.apagar(uid, vencidas);
       return json({ ok: true, copia: id, feita, apagadas: vencidas.length });
+    },
+
+    /**
+     * Anos anteriores (api/arquivo.ts), com o login do app (Firebase):
+     * listar os anos guardados, guardar o ano na virada e ler um ano para consulta.
+     */
+    arquivo: async (req: Request) => {
+      const anos = deps.anos;
+      if (!anos) return json({ error: 'not_configured' }, 503);
+      if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { Allow: 'POST' });
+
+      let uid: string;
+      try {
+        const login = await deps.verificarLogin((req.headers.get('authorization') || '').replace(/^Bearer /, ''));
+        if (!login.email || !login.email_verified || login.email.toLowerCase() !== deps.emailPermitido.trim().toLowerCase()) {
+          return json({ error: 'forbidden', error_description: 'Esta conta Google não tem acesso aos anos anteriores.' }, 403);
+        }
+        uid = login.uid;
+      } catch {
+        return json({ error: 'unauthorized', error_description: 'Não foi possível confirmar o login.' }, 401);
+      }
+
+      const corpo = await req.json().catch(() => null);
+      const acao = corpo?.acao;
+      if (acao === 'listar') return json({ anos: ordenarAnos(await anos.listar(uid)) });
+
+      if (!anoValido(corpo?.ano)) return json({ error: 'invalid_request', error_description: 'Informe o ano.' }, 400);
+      const ano: number = corpo.ano;
+
+      if (acao === 'ler') {
+        const dados = await anos.ler(uid, ano);
+        return dados ? json({ ano, dados }) : json({ error: 'not_found', error_description: `O ano ${ano} não está guardado.` }, 404);
+      }
+
+      if (acao === 'guardar') {
+        if (!pareceDadosDoLeciona(corpo.dados)) {
+          return json({ error: 'invalid_request', error_description: 'Os dados do ano não chegaram completos.' }, 400);
+        }
+        const existente = (await anos.listar(uid)).find(a => a.ano === ano);
+        if (existente && !corpo.substituir) return json({ error: 'exists', existente }, 409);
+        const guardadoEm = (deps.agora?.() ?? new Date()).toISOString();
+        const arquivo = dadosDoArquivo(corpo.dados, ano, guardadoEm);
+        if (!cabeNoArquivo(arquivo)) {
+          return json({ error: 'too_large', error_description: 'Os dados do ano passam do limite da nuvem (1 MB).' }, 413);
+        }
+        await anos.gravar(uid, ano, arquivo);
+        // Confere lendo de volta: só diz que guardou se o arquivo está mesmo lá
+        const conferido = (await anos.listar(uid)).find(a => a.ano === ano && a.guardadoEm === guardadoEm);
+        if (!conferido) return json({ error: 'server_error', error_description: 'Não foi possível conferir o arquivo. Tente de novo.' }, 500);
+        return json({ ok: true, guardado: conferido });
+      }
+
+      return json({ error: 'invalid_request', error_description: 'Ação desconhecida.' }, 400);
     },
 
     mcp: async (req: Request) => {

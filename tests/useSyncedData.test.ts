@@ -240,6 +240,64 @@ describe('virada do ano letivo entre aparelhos', () => {
   });
 });
 
+describe('virada do ano letivo: o ano anterior não volta', () => {
+  const mark = '2026-12-20T15:00:00.000Z';
+
+  it('nuvem regravada com o ano anterior por um aparelho antigo: mantém o novo ano e reenvia', async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudDoc({ logs: [log('L2027')], _schoolYear: 2027, _yearResetAt: mark })));
+    localStorage.setItem('leciona-year-reset-seen', mark);
+    const { result } = renderHook(() => useSyncedData(opts));
+    await login();
+    // Um aparelho que ainda não tinha recebido a virada gravou o documento de 2026 por cima
+    act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L2026a'), log('L2026b')] }))));
+    await waitFor(() => expect(fb.setDoc).toHaveBeenCalled());
+    expect(result.current.data.logs.map((l: any) => l.id)).toEqual(['L2027']);
+    expect(lastSetDocPayload()._yearResetAt).toBe(mark);
+    expect(lastSetDocPayload().logs.map((l: any) => l.id)).toEqual(['L2027']);
+  });
+
+  it('virada ainda não enviada + nuvem mudou no ano anterior: não junta as aulas antigas', async () => {
+    const { result } = renderHook(() => useSyncedData(opts));
+    await login();
+    act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L2026')] }))));
+    await waitFor(() => expect(result.current.data.logs).toHaveLength(1));
+    // A virada fica só no aparelho (falha no envio)
+    fb.setDoc.mockImplementationOnce(async () => { throw new Error('sem internet'); });
+    const newYear = { ...cloudDoc(), logs: [], _schoolYear: 2027, _yearResetAt: mark } as any;
+    await act(async () => { await result.current.startNewSchoolYear(newYear); });
+    // Enquanto isso o conector grava mais uma aula no documento de 2026
+    act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L2026'), log('L2026-conector')] }))));
+    await waitFor(() => expect(lastSetDocPayload()._yearResetAt).toBe(mark));
+    expect(lastSetDocPayload().logs).toEqual([]);
+    expect(result.current.data.logs).toEqual([]);
+  });
+
+  it('marca mais antiga na nuvem não desfaz uma virada mais nova', async () => {
+    const nova = '2027-12-18T15:00:00.000Z';
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudDoc({ logs: [log('L2028')], _schoolYear: 2028, _yearResetAt: nova })));
+    localStorage.setItem('leciona-year-reset-seen', nova);
+    const { result } = renderHook(() => useSyncedData(opts));
+    await login();
+    act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L2027')], _schoolYear: 2027, _yearResetAt: mark }))));
+    await waitFor(() => expect(fb.setDoc).toHaveBeenCalled());
+    expect(result.current.data._schoolYear).toBe(2028);
+    expect(lastSetDocPayload()._schoolYear).toBe(2028);
+  });
+
+  it('restaurar um backup depois da virada vale inteiro (marca nova) e não é tratado como nuvem antiga', async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudDoc({ logs: [log('L2027')], _schoolYear: 2027, _yearResetAt: mark })));
+    localStorage.setItem('leciona-year-reset-seen', mark);
+    const { result } = renderHook(() => useSyncedData(opts));
+    await login();
+    act(() => fb.snapCb!(snap(cloudDoc({ logs: [log('L2027')], _schoolYear: 2027, _yearResetAt: mark }))));
+    await act(async () => { await result.current.restoreData(cloudDoc({ logs: [log('L2026')] }) as any); });
+    const enviado = lastSetDocPayload();
+    expect(enviado.logs.map((l: any) => l.id)).toEqual(['L2026']);
+    expect(enviado._yearResetAt > mark).toBe(true);
+    expect(localStorage.getItem('leciona-year-reset-seen')).toBe(enviado._yearResetAt);
+  });
+});
+
 describe('gravação do app não apaga o que outro aparelho ou o conector gravou', () => {
   it('se a nuvem mudou e o app ainda não viu, junta antes de enviar', async () => {
     const hook = renderHook(() => useSyncedData(opts));

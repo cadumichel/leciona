@@ -100,7 +100,15 @@ objetivo.
   `scripts/gerarTamanhoLetras.mjs` em `styles/tamanhoLetras.css`; tamanho de letra novo nas telas = rode o script
   (o teste `tamanhoLetras` avisa). "Normal" é o app como sempre foi; o Cadu não quer letras maiores por padrão.
 - **Início**: `components/Dashboard.tsx` + `utils/dashboardWeb.ts` (linha do dia e grade semanal).
-- **Virada do ano letivo**: `utils/newSchoolYear.ts` + `components/NewSchoolYearWizard.tsx`.
+- **Virada do ano letivo**: `utils/newSchoolYear.ts` + `components/NewSchoolYearWizard.tsx`. Seguem para o novo ano:
+  escolas/turmas escolhidas, grade como rascunho, fórmula de notas das turmas mantidas, tudo o que já tem data no
+  novo ano (`itemsOfNewYear`: avaliações, eventos, aulas, lembretes) e, se marcado, as listas de alunos (`keepRosters`).
+  A marca `_yearResetAt` manda na sincronização: o lado com a marca mais nova vale inteiro, sem juntar com o ano antigo
+  (`yearResetWinner` em `utils/sync.ts`; restaurar backup gera marca nova).
+- **Anos anteriores**: na virada o app guarda o ano em `users/{uid}/anos/{ano}` pela rota `/api/arquivo`
+  (`connector/arquivo.ts`, login do app; só o servidor acessa, sem prazo para apagar). Consulta só leitura em
+  Ajustes → Anos anteriores (`components/ArchivedYears.tsx`, `utils/archivedYear.ts`, `utils/arquivoAnos.ts`);
+  o quadro só aparece quando há ano guardado. Nada do arquivo volta para os dados em uso.
 - **Planilhas exportadas**: `utils/exportRows.ts`. Coluna `Situacao` = "Aula cancelada: {evento}" para o
   registro automático "Evento: X" e para aulas canceladas por evento sem registro (`cancelledLessonsWithoutLog`).
 - **Aulas canceladas por evento no Histórico do Diário**: `getLessonDisplayItems` com

@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { X, Archive, FileDown, CheckCircle2, CalendarRange, School as SchoolIcon, ArrowRight, ArrowLeft, Sparkles, AlertTriangle } from 'lucide-react';
+import { X, Archive, FileDown, CheckCircle2, CalendarRange, School as SchoolIcon, ArrowRight, ArrowLeft, Sparkles, AlertTriangle, CloudUpload, Loader2 } from 'lucide-react';
 import { AppData } from '../types';
 import { downloadCSV, formatDateBR } from '../utils';
 import { buildLogRows, buildAssessmentRows, byDate, cancelledLessonsWithoutLog } from '../utils/exportRows';
 import { SyncedData } from '../utils/sync';
 import {
-  NewYearPlan, defaultPlan, withYear, splitTerms, summarizeCurrentYear, buildNewSchoolYear
+  NewYearPlan, defaultPlan, withYear, splitTerms, summarizeCurrentYear, buildNewSchoolYear, itemsOfNewYear
 } from '../utils/newSchoolYear';
+import { ErroDoArquivo, guardarAno } from '../utils/arquivoAnos';
+import { askConfirm } from '../utils/dialogs';
 
 interface NewSchoolYearWizardProps {
   data: AppData;
@@ -25,6 +27,7 @@ const NewSchoolYearWizard: React.FC<NewSchoolYearWizardProps> = ({ data, onClose
   const [plan, setPlan] = useState<NewYearPlan>(() => defaultPlan(data));
   const [downloaded, setDownloaded] = useState<{ json?: boolean; logs?: boolean; events?: boolean }>({});
   const [archiveConfirmed, setArchiveConfirmed] = useState(false);
+  const [cloud, setCloud] = useState<{ state: 'idle' | 'saving' | 'saved' | 'error'; message?: string }>({ state: 'idle' });
   const [finalConfirmed, setFinalConfirmed] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<null | { synced: boolean }>(null);
@@ -34,7 +37,30 @@ const NewSchoolYearWizard: React.FC<NewSchoolYearWizardProps> = ({ data, onClose
   const schoolName = (id: string) => data.schools.find(s => s.id === id)?.name || 'Escola';
   const backupFileName = `leciona_arquivo_${currentYear}.json`;
 
+  // O que já tem data no novo ano e segue junto (avaliações, eventos e aulas já lançados)
+  const carried = useMemo(() => itemsOfNewYear(data, plan), [data, plan]);
+  const carriedCount = carried.events.length + carried.logs.length;
+  const hasRosters = counts.rosters > 0;
+
   // ── Etapa 1: arquivos ────────────────────────────────────────────────────
+  const saveToCloud = async (replace = false) => {
+    setCloud({ state: 'saving' });
+    try {
+      await guardarAno(currentYear, data, replace);
+      setCloud({ state: 'saved' });
+    } catch (e) {
+      if (e instanceof ErroDoArquivo && e.codigo === 'existe') {
+        const when = e.existente ? ` em ${formatDateBR(e.existente.guardadoEm.slice(0, 10))}` : '';
+        setCloud({ state: 'idle' });
+        if (await askConfirm({ message: `O ano ${currentYear} já foi guardado na nuvem${when}. Substituir pelos dados de agora?`, confirmLabel: 'Substituir' })) {
+          return saveToCloud(true);
+        }
+        return;
+      }
+      setCloud({ state: 'error', message: e instanceof Error ? e.message : 'Não foi possível guardar na nuvem.' });
+    }
+  };
+
   const downloadBackup = () => {
     const backup = {
       metadata: { version: '1.0', timestamp: new Date().toISOString(), app: 'LecionaApp', schoolYear: currentYear },
@@ -83,7 +109,7 @@ const NewSchoolYearWizard: React.FC<NewSchoolYearWizardProps> = ({ data, onClose
   });
 
   const canAdvance = [
-    !!downloaded.json && archiveConfirmed,
+    cloud.state === 'saved' || (!!downloaded.json && archiveConfirmed),
     keptSchools.length > 0 && keptSchools.every(sp => sp.classes.some(c => c.keep && c.name.trim())),
     calendarProblems.length === 0,
     finalConfirmed && !running
@@ -121,24 +147,40 @@ const NewSchoolYearWizard: React.FC<NewSchoolYearWizardProps> = ({ data, onClose
           Antes de começar <strong>{plan.year}</strong>, guarde os registros de <strong>{currentYear}</strong>: {counts.logs} aulas
           e {counts.events} avaliações e eventos{counts.grades ? `, ${counts.grades} notas` : ''}{counts.rosters ? `, ${counts.rosters} alunos em listas` : ''}.
         </p>
-        {fileButton(`Backup completo (${backupFileName})`, downloaded.json, downloadBackup, true)}
+        <button
+          onClick={() => saveToCloud()}
+          disabled={cloud.state === 'saving' || cloud.state === 'saved'}
+          className={`w-full flex items-center justify-between gap-2 p-3 rounded-lg border-2 text-left transition-all ${cloud.state === 'saved' ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'border-primary'}`}
+        >
+          <span className="flex items-center gap-2 text-xs font-black text-slate-700 dark:text-white">
+            {cloud.state === 'saving' ? <Loader2 size={16} className="text-primary animate-spin" /> : <CloudUpload size={16} className={cloud.state === 'saved' ? 'text-emerald-600' : 'text-primary'} />}
+            {cloud.state === 'saved' ? `${currentYear} guardado na nuvem do Leciona` : cloud.state === 'saving' ? 'Guardando…' : `Guardar ${currentYear} na nuvem do Leciona`}
+          </span>
+          {cloud.state === 'saved' && <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />}
+        </button>
+        {cloud.state === 'error' && (
+          <p className="text-[11px] font-bold text-red-600 dark:text-red-400">{cloud.message} Você pode seguir baixando o backup completo abaixo.</p>
+        )}
+        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+          O ano fica guardado sem prazo e pode ser consultado depois em Ajustes → Anos anteriores.
+        </p>
+        <p className="text-[9px] font-black uppercase text-slate-400 pt-1">Cópias extras para guardar com você (opcional)</p>
+        {fileButton(`Backup completo (${backupFileName})`, downloaded.json, downloadBackup)}
         {fileButton(`Planilha de diários ${currentYear} (.csv)`, downloaded.logs, downloadLogs)}
         {fileButton(`Planilha de avaliações ${currentYear} (.csv)`, downloaded.events, downloadEvents)}
-        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
-          O backup pode ser restaurado em Ajustes → Restaurar dados (isso substitui os dados do momento).
-          As planilhas servem para consulta. Guarde tudo num lugar seguro, como o Google Drive.
-        </p>
-        <label className="flex items-start gap-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer">
-          <input type="checkbox" checked={archiveConfirmed} onChange={e => setArchiveConfirmed(e.target.checked)} className="mt-0.5 accent-current" disabled={!downloaded.json} />
-          Guardei os arquivos de {currentYear} em um local seguro.
-        </label>
+        {cloud.state !== 'saved' && downloaded.json && (
+          <label className="flex items-start gap-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer">
+            <input type="checkbox" checked={archiveConfirmed} onChange={e => setArchiveConfirmed(e.target.checked)} className="mt-0.5 accent-current" />
+            Não guardei na nuvem, mas salvei o backup completo de {currentYear} em um local seguro.
+          </label>
+        )}
       </div>
     );
 
     if (step === 1) return (
       <div className="space-y-3">
         <div className="flex items-end gap-2">
-          <div className="w-28">
+          <div className="w-28 shrink-0">
             <label className={labelCls}>Novo ano letivo</label>
             <input type="number" value={plan.year} onChange={e => { const y = parseInt(e.target.value); if (y > 2000 && y < 2100) setPlan(p => withYear(data, p, y)); }} className={inputCls} />
           </div>
@@ -169,10 +211,23 @@ const NewSchoolYearWizard: React.FC<NewSchoolYearWizardProps> = ({ data, onClose
           Copiar a grade horária atual como rascunho de {plan.year} (você ajusta em Ajustes → Horários).
         </label>
 
-        <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-[10px] text-slate-600 dark:text-slate-300 leading-relaxed">
-          <strong className="block text-[9px] uppercase text-slate-400 mb-1">Começam do zero em {plan.year}</strong>
-          Aulas registradas, avaliações e eventos, notas, listas de alunos e lembretes anteriores a {plan.year}.
-          Perfil, configurações{data.students.length ? ' e alunos particulares' : ''} continuam.
+        {hasRosters && (
+          <label className="flex items-start gap-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer">
+            <input type="checkbox" checked={!!plan.keepRosters} onChange={e => setPlan(p => ({ ...p, keepRosters: e.target.checked }))} className="mt-0.5" />
+            Manter as listas de alunos das turmas que continuam (deixe desmarcado se os alunos mudam de turma).
+          </label>
+        )}
+
+        <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-[10px] text-slate-600 dark:text-slate-300 leading-relaxed space-y-2">
+          <p>
+            <strong className="block text-[9px] uppercase text-slate-400 mb-1">Continuam em {plan.year}</strong>
+            Perfil, configurações, a fórmula de notas de cada turma{data.students.length ? ', alunos particulares' : ''} e
+            tudo o que já tem data em {plan.year}{carriedCount ? ` (${carried.events.length} avaliações e eventos, ${carried.logs.length} aulas já lançadas)` : ''}.
+          </p>
+          <p>
+            <strong className="block text-[9px] uppercase text-slate-400 mb-1">Começam do zero</strong>
+            Aulas, avaliações, eventos e lembretes de {currentYear}, notas{plan.keepRosters ? '' : ' e listas de alunos'}.
+          </p>
         </div>
       </div>
     );
@@ -241,12 +296,26 @@ const NewSchoolYearWizard: React.FC<NewSchoolYearWizardProps> = ({ data, onClose
             <CheckCircle2 size={14} className="text-emerald-600 mt-0.5 shrink-0" />
             <span>{plan.keepSchedule ? `Grade horária copiada como rascunho de ${plan.year}` : 'Grade horária em branco'}</span>
           </li>
+          {hasRosters && (
+            <li className="flex items-start gap-2">
+              <CheckCircle2 size={14} className="text-emerald-600 mt-0.5 shrink-0" />
+              <span>{plan.keepRosters ? 'Listas de alunos mantidas nas turmas que continuam' : 'Listas de alunos em branco'}</span>
+            </li>
+          )}
+          {carriedCount > 0 && (
+            <li className="flex items-start gap-2">
+              <CheckCircle2 size={14} className="text-emerald-600 mt-0.5 shrink-0" />
+              <span>Já lançado para {plan.year} e mantido: {carried.events.length} avaliações e eventos, {carried.logs.length} aulas</span>
+            </li>
+          )}
         </ul>
         <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 text-[11px] text-red-700 dark:text-red-300 leading-relaxed flex gap-2">
           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
           <span>
-            Os registros de {currentYear} ({counts.logs} aulas e {counts.events} avaliações e eventos) serão removidos do app em todos os seus aparelhos.
-            Eles ficam guardados no arquivo <strong>{backupFileName}</strong>.
+            Os registros de {currentYear} serão removidos do app em todos os seus aparelhos.{' '}
+            {cloud.state === 'saved'
+              ? <>Eles ficam guardados na nuvem do Leciona, em <strong>Ajustes → Anos anteriores</strong>.</>
+              : <>Eles ficam guardados só no arquivo <strong>{backupFileName}</strong>, que você baixou.</>}
           </span>
         </div>
         <label className="flex items-start gap-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer">

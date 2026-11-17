@@ -112,6 +112,30 @@ var removeUndefined = (obj) => {
 var estimateDocBytes = (data) => new Blob([JSON.stringify(data)]).size;
 var FIRESTORE_DOC_LIMIT = 1048576;
 
+// connector/producao.ts
+import webpush from "web-push";
+
+// connector/avisosPush.ts
+import { createECDH, createHash } from "node:crypto";
+
+// utils/schedule.ts
+var getScheduleVersion = (data, dateStr) => {
+  if (!data.scheduleVersions || data.scheduleVersions.length === 0) {
+    return null;
+  }
+  const sortedVersions = [...data.scheduleVersions].sort((a, b) => b.activeFrom.localeCompare(a.activeFrom));
+  const activeVersion = sortedVersions.find((v) => v.activeFrom <= dateStr);
+  if (activeVersion) return activeVersion;
+  return sortedVersions[sortedVersions.length - 1];
+};
+var getSchedulesForDate = (data, dateStr) => {
+  const version = getScheduleVersion(data, dateStr);
+  if (version) {
+    return version.schedules;
+  }
+  return data.schedules || [];
+};
+
 // utils/classRefs.ts
 var idOf = (c) => typeof c === "string" ? c : c.id;
 var nameOf = (c) => typeof c === "string" ? c : c.name;
@@ -159,24 +183,6 @@ var getClassName = (data, schoolId, classRef, fallback = "Geral") => {
   const ref = String(classRef).trim();
   if (ref === "window") return "Janela";
   return looksLikeClassCode(ref) ? `Turma n\xE3o encontrada (${ref.slice(0, 4)})` : ref;
-};
-
-// utils/schedule.ts
-var getScheduleVersion = (data, dateStr) => {
-  if (!data.scheduleVersions || data.scheduleVersions.length === 0) {
-    return null;
-  }
-  const sortedVersions = [...data.scheduleVersions].sort((a, b) => b.activeFrom.localeCompare(a.activeFrom));
-  const activeVersion = sortedVersions.find((v) => v.activeFrom <= dateStr);
-  if (activeVersion) return activeVersion;
-  return sortedVersions[sortedVersions.length - 1];
-};
-var getSchedulesForDate = (data, dateStr) => {
-  const version = getScheduleVersion(data, dateStr);
-  if (version) {
-    return version.schedules;
-  }
-  return data.schedules || [];
 };
 
 // utils/lessonStats.ts
@@ -361,6 +367,197 @@ var getLessonDisplayItems = (data, filters) => {
     cursor.setDate(cursor.getDate() + 1);
   }
   return items;
+};
+
+// utils/avisos.ts
+var JANELA_MINUTOS = 120;
+var RESUMO_PADRAO = "18:00";
+var dois = (n) => String(n).padStart(2, "0");
+var hhmm = (minutos) => `${dois(Math.floor(minutos / 60))}:${dois(minutos % 60)}`;
+var momentoEmBrasilia = (agora = /* @__PURE__ */ new Date()) => {
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(agora);
+  const p = (tipo) => partes.find((x) => x.type === tipo)?.value || "00";
+  return { hoje: `${p("year")}-${p("month")}-${p("day")}`, minutos: Number(p("hour")) * 60 + Number(p("minute")) };
+};
+var diaSeguinte = (dia2) => {
+  const d = /* @__PURE__ */ new Date(`${dia2}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
+var minutosEntre = (a, b) => Math.round((Date.parse(`${b.slice(0, 16)}:00Z`) - Date.parse(`${a.slice(0, 16)}:00Z`)) / 6e4);
+var plural = (n) => n === 1 ? "1 aula sem registro" : `${n} aulas sem registro`;
+var calcularAvisos = (data, momento) => {
+  const { hoje, minutos } = momento;
+  const agoraLocal = `${hoje}T${hhmm(minutos)}`;
+  const settings = data.settings || {};
+  const avisos = [];
+  let proximo = `${diaSeguinte(hoje)}T00:00`;
+  const lembrar = (quando2) => {
+    if (quando2 > agoraLocal && quando2 < proximo) proximo = quando2;
+  };
+  const naJanela = (gatilho) => minutos >= gatilho && minutos < gatilho + JANELA_MINUTOS;
+  const querTurno = settings.alertAfterShift !== false;
+  const querResumo = !!settings.alertDailySummary;
+  if (querTurno || querResumo) {
+    const aulas = getLessonDisplayItems(data, {
+      start: hoje,
+      end: hoje,
+      schoolId: "all",
+      classId: "all",
+      showWithContent: true,
+      showWithoutContent: true
+    }).filter((a) => a.date === hoje && !a.isExtra && !a.isSubstitution).map((a) => {
+      const particular = a.schedule.shiftId === "private";
+      return {
+        fim: parseTimeToMinutes(a.slot.endTime),
+        semRegistro: !a.hasContent,
+        grupo: particular ? "particulares" : `${a.schedule.schoolId}|${a.schedule.shiftId || ""}`,
+        local: particular ? "Aulas particulares" : a.institution.name,
+        turma: particular ? a.institution.name : getClassName(data, a.schedule.schoolId, a.schedule.classId, "")
+      };
+    });
+    if (querTurno) {
+      const atraso = Number(settings.alertAfterShiftDelay) || 0;
+      const grupos = /* @__PURE__ */ new Map();
+      aulas.forEach((a) => grupos.set(a.grupo, [...grupos.get(a.grupo) || [], a]));
+      grupos.forEach((lista, grupo) => {
+        const gatilho = Math.max(...lista.map((a) => a.fim)) + atraso;
+        lembrar(`${hoje}T${hhmm(Math.min(gatilho, 1439))}`);
+        if (!naJanela(gatilho)) return;
+        const pendentes = lista.filter((a) => a.semRegistro);
+        if (!pendentes.length) return;
+        const turmas = [...new Set(pendentes.map((a) => a.turma).filter(Boolean))];
+        avisos.push({
+          chave: `turno|${hoje}|${grupo}`,
+          titulo: `${lista[0].local}: ${plural(pendentes.length)}`,
+          texto: `O turno terminou.${turmas.length ? ` Falta registrar: ${turmas.join(", ")}.` : ""} Toque para abrir as pend\xEAncias.`,
+          destino: "pendencias"
+        });
+      });
+    }
+    if (querResumo) {
+      const hora = /^\d{2}:\d{2}$/.test(settings.alertDailySummaryTime || "") ? settings.alertDailySummaryTime : RESUMO_PADRAO;
+      const gatilho = parseTimeToMinutes(hora);
+      lembrar(`${hoje}T${hora}`);
+      if (naJanela(gatilho)) {
+        const pendentes = aulas.filter((a) => a.semRegistro && a.fim <= minutos);
+        if (pendentes.length) {
+          const porLocal = /* @__PURE__ */ new Map();
+          pendentes.forEach((a) => porLocal.set(a.local, (porLocal.get(a.local) || 0) + 1));
+          avisos.push({
+            chave: `resumo|${hoje}`,
+            titulo: `Hoje: ${plural(pendentes.length)}`,
+            texto: `${[...porLocal].map(([local, n]) => `${local}: ${n}`).join(" \xB7 ")}. Toque para abrir as pend\xEAncias.`,
+            destino: "pendencias"
+          });
+        }
+      }
+    }
+  }
+  (data.reminders || []).forEach((r) => {
+    if (!r.alarmTime || r.alarmTime.length < 16) return;
+    const quando2 = r.alarmTime.slice(0, 16);
+    lembrar(quando2);
+    const atraso = minutosEntre(quando2, agoraLocal);
+    if (atraso < 0 || atraso >= JANELA_MINUTOS) return;
+    avisos.push({
+      chave: `lembrete|${r.id}|${quando2}`,
+      titulo: `Lembrete: ${r.title || "sem t\xEDtulo"}`,
+      texto: r.content || "Toque para abrir os lembretes.",
+      destino: "lembretes"
+    });
+  });
+  return { avisos, proximo };
+};
+
+// connector/avisosPush.ts
+var MAX_APARELHOS = 8;
+var DIAS_DE_MEMORIA = 3;
+var b64url = (b) => b.toString("base64url");
+var derivarChavesPush = (segredo) => {
+  const privada = createHash("sha256").update(`leciona-avisos-v1:${segredo}`).digest();
+  const ecdh = createECDH("prime256v1");
+  ecdh.setPrivateKey(privada);
+  return { publica: b64url(ecdh.getPublicKey()), privada: b64url(privada) };
+};
+var nomeDoAparelho = (userAgent) => {
+  const sistema = /Android/i.test(userAgent) ? "Celular Android" : /iPhone|iPad/i.test(userAgent) ? "iPhone/iPad" : /Windows/i.test(userAgent) ? "Computador Windows" : /Macintosh/i.test(userAgent) ? "Mac" : /Linux|CrOS/i.test(userAgent) ? "Computador" : "Aparelho";
+  const navegador = /Edg\//.test(userAgent) ? "Edge" : /Firefox\//.test(userAgent) ? "Firefox" : /Chrome\//.test(userAgent) ? "Chrome" : /Safari\//.test(userAgent) ? "Safari" : "";
+  return navegador ? `${sistema} (${navegador})` : sistema;
+};
+var lerInscricao = (corpo) => {
+  const s = corpo?.inscricao;
+  const texto2 = (v, max) => typeof v === "string" && v.length > 0 && v.length <= max;
+  if (!s || !texto2(s.endpoint, 1e3) || !texto2(s.keys?.p256dh, 200) || !texto2(s.keys?.auth, 100)) return null;
+  try {
+    if (new URL(s.endpoint).protocol !== "https:") return null;
+  } catch {
+    return null;
+  }
+  return { endpoint: s.endpoint, keys: { p256dh: s.keys.p256dh, auth: s.keys.auth } };
+};
+var inscrever = async (a, uid, inscricao, userAgent, agora) => {
+  const lista = await a.lerAparelhos(uid);
+  const antigo = lista.find((x) => x.endpoint === inscricao.endpoint);
+  const novo = { ...inscricao, nome: nomeDoAparelho(userAgent), desde: antigo?.desde || agora.toISOString() };
+  const resto = lista.filter((x) => x.endpoint !== inscricao.endpoint);
+  await a.gravarAparelhos(uid, [...resto, novo].slice(-MAX_APARELHOS));
+};
+var remover = async (a, uid, endpoint) => {
+  const lista = await a.lerAparelhos(uid);
+  if (lista.some((x) => x.endpoint === endpoint)) await a.gravarAparelhos(uid, lista.filter((x) => x.endpoint !== endpoint));
+};
+var enviarParaTodos = async (a, uid, mensagem, aparelhos) => {
+  const lista = aparelhos || await a.lerAparelhos(uid);
+  const resultados = await Promise.all(lista.map((ap) => a.enviar(ap, mensagem).catch(() => "erro")));
+  const vivos = lista.filter((_, i) => resultados[i] !== "expirado");
+  if (vivos.length !== lista.length) await a.gravarAparelhos(uid, vivos);
+  return { entregues: resultados.filter((r) => r === "ok").length, aparelhos: vivos };
+};
+var conferir = async (a, uid, carregarDados, agora) => {
+  const momento = momentoEmBrasilia(agora);
+  const agoraLocal = `${momento.hoje}T${String(Math.floor(momento.minutos / 60)).padStart(2, "0")}:${String(momento.minutos % 60).padStart(2, "0")}`;
+  const [estado, carimbo] = await Promise.all([a.lerEstado(uid), a.carimboDosDados(uid)]);
+  const base = { ...estado, enviados: estado.enviados || {}, ultimaConferencia: agora.toISOString() };
+  if (estado.carimbo === carimbo && estado.proximo && agoraLocal < estado.proximo) {
+    await a.gravarEstado(uid, base);
+    return { ok: true, conferido: false, enviados: 0 };
+  }
+  let aparelhos = await a.lerAparelhos(uid);
+  if (!aparelhos.length) {
+    await a.gravarEstado(uid, { ...base, carimbo: void 0, proximo: void 0 });
+    return { ok: true, conferido: false, enviados: 0, semAparelhos: true };
+  }
+  const { avisos, proximo } = calcularAvisos(await carregarDados(uid), momento);
+  const enviados = { ...base.enviados };
+  const limite = new Date(agora.getTime() - DIAS_DE_MEMORIA * 864e5).toISOString();
+  Object.keys(enviados).forEach((k) => {
+    if (enviados[k] < limite) delete enviados[k];
+  });
+  let quantos = 0;
+  let ultimoEnvio = base.ultimoEnvio;
+  let falhou = false;
+  for (const aviso of avisos.filter((x) => !enviados[x.chave])) {
+    const r = await enviarParaTodos(a, uid, { titulo: aviso.titulo, texto: aviso.texto, marca: aviso.chave, destino: aviso.destino }, aparelhos);
+    aparelhos = r.aparelhos;
+    if (r.entregues > 0) {
+      enviados[aviso.chave] = agora.toISOString();
+      ultimoEnvio = { quando: agora.toISOString(), titulo: aviso.titulo, entregues: r.entregues };
+      quantos++;
+    } else {
+      falhou = true;
+    }
+  }
+  await a.gravarEstado(uid, { ...base, enviados, ultimoEnvio, carimbo: falhou ? void 0 : carimbo, proximo: falhou ? void 0 : proximo });
+  return { ok: true, conferido: true, enviados: quantos };
 };
 
 // utils/dashboardWeb.ts
@@ -840,7 +1037,7 @@ var documentoRestaurado = (atual, copia, agora = Date.now()) => {
 var listarParaOClaude = (copias) => [...copias].sort((a, b) => b.criadaEm.localeCompare(a.criadaEm)).map((c) => ({ id: c.id, descricao: descreverCopia(c), resumo: c.resumo }));
 
 // connector/oauth.ts
-import { createHash } from "node:crypto";
+import { createHash as createHash2 } from "node:crypto";
 import { SignJWT, jwtVerify, base64url } from "jose";
 var ESCOPO = "leciona";
 var DURACAO_CODIGO = 5 * 60;
@@ -861,7 +1058,7 @@ var redirecionamentoPermitido = (uri) => {
   if (url.protocol === "https:" && url.hostname === "oauth-redirect.googleusercontent.com") {
     if (url.username || url.password || url.port) return false;
     const exato = `https://${url.hostname}${url.pathname}`;
-    return RETORNOS_DO_GEMINI.has(createHash("sha256").update(exato).digest("hex"));
+    return RETORNOS_DO_GEMINI.has(createHash2("sha256").update(exato).digest("hex"));
   }
   if (url.protocol === "https:" && ["claude.ai", "claude.com"].includes(url.hostname)) {
     return url.pathname === "/api/mcp/auth_callback";
@@ -1971,7 +2168,7 @@ var desfazerLote = (raw, lote, agora = Date.now()) => {
   let logs = [...raw.logs || []];
   let mudouEventos = false;
   let mudouLogs = false;
-  const remover = (lista, ids, nome) => {
+  const remover2 = (lista, ids, nome) => {
     const alvo = new Set(ids);
     return lista.filter((i) => {
       if (!i || !alvo.has(i.id)) return true;
@@ -1984,10 +2181,10 @@ var desfazerLote = (raw, lote, agora = Date.now()) => {
     });
   };
   const antesE = events.length;
-  events = remover(events, lote.criados.events, "item de avalia\xE7\xE3o");
+  events = remover2(events, lote.criados.events, "item de avalia\xE7\xE3o");
   mudouEventos = events.length !== antesE;
   const antesL = logs.length;
-  logs = remover(logs, lote.criados.logs, "registro do di\xE1rio");
+  logs = remover2(logs, lote.criados.logs, "registro do di\xE1rio");
   mudouLogs = logs.length !== antesL;
   for (const s of lote.situacoesAnteriores) {
     const idx = events.findIndex((e) => e?.id === s.id);
@@ -2546,6 +2743,75 @@ var criarRotas = (deps) => {
       if (vencidas.length) await deps.copias.apagar(uid, vencidas);
       return json({ ok: true, copia: id, feita, apagadas: vencidas.length });
     },
+    /**
+     * Avisos no celular (api/avisos.ts):
+     * - GET: chave pública das notificações e se o agendador já foi configurado (público);
+     * - GET/POST com "Authorization: Bearer CRON_SECRET": a conferência do agendador (a cada 5 min);
+     * - POST com o login do app (Firebase): ativar, desativar, testar e ver a situação neste aparelho.
+     */
+    avisos: async (req) => {
+      const a = deps.avisos;
+      if (!a) return json({ error: "not_configured" }, 503);
+      const agora = deps.agora?.() ?? /* @__PURE__ */ new Date();
+      const autorizacao = req.headers.get("authorization") || "";
+      const url = new URL(req.url);
+      if (deps.segredoDoCron && autorizacao === `Bearer ${deps.segredoDoCron}`) {
+        return json(await conferir(a, await deps.uidDoProfessor(), deps.carregarDados, agora));
+      }
+      if (url.searchParams.get("acao") === "conferir") {
+        return deps.segredoDoCron ? json({ error: "unauthorized" }, 401) : json({ error: "not_configured", error_description: "Falta a vari\xE1vel CRON_SECRET na Vercel." }, 503);
+      }
+      if (req.method === "GET") {
+        return json({ chavePublica: a.chavePublica, agendadorConfigurado: !!deps.segredoDoCron });
+      }
+      if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405, { Allow: "GET, POST" });
+      let uid;
+      try {
+        const login = await deps.verificarLogin(autorizacao.replace(/^Bearer /, ""));
+        if (!login.email || !login.email_verified || login.email.toLowerCase() !== deps.emailPermitido.trim().toLowerCase()) {
+          return json({ error: "forbidden", error_description: "Esta conta Google n\xE3o tem acesso aos avisos." }, 403);
+        }
+        uid = login.uid;
+      } catch {
+        return json({ error: "unauthorized", error_description: "N\xE3o foi poss\xEDvel confirmar o login." }, 401);
+      }
+      const corpo = await req.json().catch(() => null);
+      const inscricao = lerInscricao(corpo);
+      const situacao = async () => {
+        const [aparelhos, estado] = await Promise.all([a.lerAparelhos(uid), a.lerEstado(uid)]);
+        return {
+          ok: true,
+          agendadorConfigurado: !!deps.segredoDoCron,
+          esteAparelho: !!inscricao && aparelhos.some((x) => x.endpoint === inscricao.endpoint),
+          aparelhos: aparelhos.map((x) => ({ nome: x.nome, desde: x.desde, este: x.endpoint === inscricao?.endpoint })),
+          ultimaConferencia: estado.ultimaConferencia || null,
+          ultimoEnvio: estado.ultimoEnvio || null
+        };
+      };
+      switch (corpo?.acao) {
+        case "situacao":
+          return json(await situacao());
+        case "inscrever":
+          if (!inscricao) return json({ error: "invalid_request" }, 400);
+          await inscrever(a, uid, inscricao, req.headers.get("user-agent") || "", agora);
+          return json(await situacao());
+        case "remover":
+          if (!inscricao) return json({ error: "invalid_request" }, 400);
+          await remover(a, uid, inscricao.endpoint);
+          return json(await situacao());
+        case "teste": {
+          const r = await enviarParaTodos(a, uid, {
+            titulo: "Leciona: aviso de teste",
+            texto: "Os avisos est\xE3o funcionando neste aparelho.",
+            marca: "teste",
+            destino: "ajustes"
+          });
+          return json({ ...await situacao(), entregues: r.entregues });
+        }
+        default:
+          return json({ error: "invalid_request" }, 400);
+      }
+    },
     mcp: async (req) => {
       const conta = await verificarAcesso(assinatura(req), deps.emailPermitido, req.headers.get("authorization"));
       if (!conta) return naoAutorizado(req);
@@ -2586,6 +2852,8 @@ var montar = async () => {
   const db = getFirestore(app);
   const usuario = (uid) => db.collection("users").doc(uid);
   const copias = (uid) => usuario(uid).collection("backups");
+  const avisos = (uid) => usuario(uid).collection("avisos");
+  const chavesPush = derivarChavesPush(credencial.private_key);
   let uidCache;
   return criarRotas({
     chave: await derivarChave(credencial.private_key),
@@ -2641,7 +2909,43 @@ var montar = async () => {
       }
     },
     uidDoProfessor: async () => uidCache ??= (await getAuth(app).getUserByEmail(emailPermitido)).uid,
-    segredoDoCron: process.env.CRON_SECRET || void 0
+    segredoDoCron: process.env.CRON_SECRET || void 0,
+    avisos: {
+      chavePublica: chavesPush.publica,
+      lerAparelhos: async (uid) => (await avisos(uid).doc("aparelhos").get()).get("lista") || [],
+      gravarAparelhos: async (uid, lista) => {
+        await avisos(uid).doc("aparelhos").set({ lista });
+      },
+      lerEstado: async (uid) => ({ enviados: {}, ...(await avisos(uid).doc("estado").get()).data() || {} }),
+      gravarEstado: async (uid, estado) => {
+        await avisos(uid).doc("estado").set(removeUndefined(estado));
+      },
+      // Lê só o campo updatedAt (o documento inteiro pode ter quase 1 MB)
+      carimboDosDados: async (uid) => {
+        const [doc] = await db.getAll(usuario(uid), { fieldMask: ["updatedAt"] });
+        const t = doc.get("updatedAt");
+        return t?.toMillis ? String(t.toMillis()) : String(t ?? "");
+      },
+      enviar: async (aparelho, mensagem) => {
+        try {
+          await webpush.sendNotification(
+            { endpoint: aparelho.endpoint, keys: aparelho.keys },
+            JSON.stringify(mensagem),
+            {
+              vapidDetails: { subject: `mailto:${emailPermitido}`, publicKey: chavesPush.publica, privateKey: chavesPush.privada },
+              TTL: 2 * 60 * 60,
+              urgency: "high"
+            }
+          );
+          return "ok";
+        } catch (e) {
+          const status = e.statusCode;
+          if (status === 404 || status === 410) return "expirado";
+          console.error("Falha ao enviar aviso:", status, e.message);
+          return "erro";
+        }
+      }
+    }
   });
 };
 var obterRotas = () => {

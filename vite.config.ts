@@ -41,6 +41,8 @@ export default defineConfig({
       },
 
       workbox: {
+        // Avisos no celular: recebe a notificação do servidor e abre o app ao tocar (public/sw-avisos.js)
+        importScripts: ['/sw-avisos.js'],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Login e servidor do conector do Claude não podem cair na página do app guardada offline
         navigateFallbackDenylist: [/^\/api\//, /^\/\.well-known\//],

@@ -8,7 +8,7 @@ import {
    ChevronDown, AlertTriangle, Lightbulb, Quote, School as SchoolIcon,
    CalendarClock, GraduationCap, Wand2, Palmtree, CalendarRange, Trash2,
    CheckCircle2, Edit3, Settings, LogIn, Plus, Users, LayoutList, ClipboardCheck,
-   Archive, RotateCcw, Clock, AlertCircle, Check, Bell, MessageSquare, Volume2, Smartphone, BellOff,
+   Archive, RotateCcw, Clock, AlertCircle, Check, 
    Sparkles, Scissors, FileText, Copy, UserMinus, LayoutGrid, Database, FileUp, FileDown, AlignLeft, Type
 } from 'lucide-react';
 import { TAMANHOS_LETRAS, TamanhoLetras, lerTamanhoLetras, salvarTamanhoLetras } from '../utils/tamanhoLetras';
@@ -25,6 +25,7 @@ import SchoolManagement from './SchoolManagement';
 import ScheduleManagement from './ScheduleManagement';
 import StudentManagement from './StudentManagement';
 import ClassRefRepair from './ClassRefRepair';
+import AvisosSettings from './AvisosSettings';
 import NewSchoolYearWizard from './NewSchoolYearWizard';
 import { trackChanges, SyncedData } from '../utils/sync';
 import { STORAGE_KEY, PENDING_KEY } from '../hooks/useSyncedData';
@@ -72,7 +73,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
 
    const [saveSuccess, setSaveSuccess] = useState(false);
    const [addStudentSuccess, setAddStudentSuccess] = useState(false); // Novo estado para sucesso de adição de aluno
-   const [showAlertInfo, setShowAlertInfo] = useState(false); // Estado para info de alertas
    const [acceptedNoLogin, setAcceptedNoLogin] = useState(false); // Estado para aceite de prosseguir sem Google
 
    // Estados para Gestão de Calendário 
@@ -1244,86 +1244,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ data, onUpdateData, onSyn
                   </section>
                )}
 
-               {/* ALERTAS - Oculto no Onboarding */}
+               {/* AVISOS - Oculto no Onboarding (components/AvisosSettings.tsx) */}
                {!isOnboarding && (
                   <section className="bg-white dark:bg-slate-900 p-4 md:p-5 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
-                     <div className="mb-4">
-                        <h3 className="text-[13px] font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2 mb-1"><AlertTriangle className="text-amber-500" size={18} /> Alertas de Registro</h3>
-                        <p className="text-xs font-medium text-slate-400 dark:text-slate-500 leading-relaxed max-w-lg">Crie alertas para aulas sem conteúdo registrado.</p>
-                     </div>
-
-                     <div className="mb-4 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-100 dark:border-slate-800 overflow-hidden">
-                        <div className="p-4">
-                           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-tight mb-3 ml-1">Estilo de Notificação</label>
-                           <div className="flex gap-2 mb-4">
-                              <button
-                                 onClick={() => onUpdateData({ settings: { ...data.settings, alertType: 'notification' } })}
-                                 className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1.5 ${data.settings.alertType !== 'popup' ? 'bg-amber-500 text-white shadow-lg shadow-amber-200' : 'bg-white dark:bg-slate-700 text-slate-400 hover:bg-slate-50'}`}
-                              >
-                                 <Bell size={12} /> Sistema / Push
-                              </button>
-                              <button
-                                 onClick={() => onUpdateData({ settings: { ...data.settings, alertType: 'popup' } })}
-                                 className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1.5 ${data.settings.alertType === 'popup' ? 'bg-amber-500 text-white shadow-lg shadow-amber-200' : 'bg-white dark:bg-slate-700 text-slate-400 hover:bg-slate-50'}`}
-                              >
-                                 <MessageSquare size={12} /> Popup no App
-                              </button>
-                           </div>
-
-                           {data.settings.alertType !== 'popup' && typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted' && (
-                              <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-[10px] font-bold text-amber-700 dark:text-amber-300">
-                                 {Notification.permission === 'denied'
-                                    ? 'As notificações estão bloqueadas neste aparelho. Enquanto isso, os avisos aparecem na tela do app. Para receber notificações, libere-as nas configurações do navegador.'
-                                    : 'Este aparelho ainda não permitiu notificações. Enquanto isso, os avisos aparecem na tela do app.'}
-                                 {Notification.permission === 'default' && (
-                                    <button onClick={() => Notification.requestPermission()} className="block mt-2 underline font-black uppercase text-[10px]">Permitir notificações</button>
-                                 )}
-                              </div>
-                           )}
-
-                           {data.settings.alertType !== 'popup' && (
-                              <div className="flex gap-2 mb-4 animate-in fade-in slide-in-from-top-1">
-                                 {[
-                                    { id: 'sound', label: 'Sonoro', icon: Volume2 },
-                                    { id: 'vibration', label: 'Vibração', icon: Smartphone },
-                                    { id: 'silent', label: 'Silencioso', icon: BellOff }
-                                 ].map(opt => (
-                                    <button
-                                       key={opt.id}
-                                       onClick={() => onUpdateData({ settings: { ...data.settings, alertNotificationStyle: opt.id as any } })}
-                                       className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 ${(data.settings.alertNotificationStyle || 'sound') === opt.id ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800' : 'bg-white dark:bg-slate-800 text-slate-400 border border-transparent'}`}
-                                    >
-                                       <opt.icon size={12} /> {opt.label}
-                                    </button>
-                                 ))}
-                              </div>
-                           )}
-
-                           <button onClick={() => setShowAlertInfo(!showAlertInfo)} className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400 hover:text-primary transition-colors mx-auto p-2">
-                              <Lightbulb size={14} className={showAlertInfo ? 'text-primary' : ''} />
-                              Entenda como funciona
-                              <ChevronDown size={14} className={`transition-transformDuration-300 ${showAlertInfo ? 'rotate-180' : ''}`} />
-                           </button>
-                        </div>
-
-                        {showAlertInfo && (
-                           <div className="bg-amber-50 dark:bg-amber-900/10 p-4 border-t border-amber-100 dark:border-amber-900/20 text-[10px] md:text-xs text-slate-600 dark:text-slate-300 leading-relaxed space-y-2 animate-in slide-in-from-top-2">
-                              <p><strong className="text-amber-600 dark:text-amber-400 uppercase">Sistema / Push:</strong> Envia uma notificação padrão do seu dispositivo. Útil para ver alertas mesmo com o app fechado ou em segundo plano. Requer permissão do navegador.</p>
-                              <p><strong className="text-amber-600 dark:text-amber-400 uppercase">Popup no App:</strong> Exibe uma janela (caixa de diálogo) dentro do próprio Leciona quando você está com ele aberto. Garante que você veja a mensagem antes de continuar usando o app. Se o app estiver fechado, você não verá ao ocorrer.</p>
-                           </div>
-                        )}
-                     </div>
-
-                     <div className="grid sm:grid-cols-2 gap-4">
-                        <label className={`flex flex-col gap-2 p-4 rounded-lg border transition-all cursor-pointer ${data.settings.alertAfterLesson ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/20' : 'bg-slate-50 dark:bg-slate-800/40 opacity-60'}`}>
-                           <div className="flex justify-between items-center"><span className="text-xs font-black uppercase dark:text-white">Ao final da aula vigente</span><Toggle checked={data.settings.alertAfterLesson} onChange={e => onUpdateData({ settings: { ...data.settings, alertAfterLesson: e.target.checked } })} /></div>
-                           <div className="flex items-center gap-2 mt-2"><span className="text-[10px] font-black text-slate-400">Avisar</span><select value={data.settings.alertBeforeMinutes} onChange={e => onUpdateData({ settings: { ...data.settings, alertBeforeMinutes: parseInt(e.target.value) } })} className="bg-white dark:bg-slate-700 border-none text-[10px] font-black text-amber-600 px-2 py-1 rounded-lg outline-none"><option value="0">Na hora</option><option value="5">5 min antes</option><option value="10">10 min antes</option></select></div>
-                        </label>
-                        <label className={`flex flex-col gap-2 p-4 rounded-lg border transition-all cursor-pointer ${data.settings.alertAfterShift ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/20' : 'bg-slate-50 dark:bg-slate-800/40 opacity-60'}`}>
-                           <div className="flex justify-between items-center"><span className="text-xs font-black uppercase dark:text-white">Resumo do Turno</span><Toggle checked={data.settings.alertAfterShift} onChange={e => onUpdateData({ settings: { ...data.settings, alertAfterShift: e.target.checked } })} /></div>
-                           <div className="flex items-center gap-2 mt-2"><span className="text-[10px] font-black text-slate-400">Avisar</span><select value={data.settings.alertAfterShiftDelay || 0} onChange={e => onUpdateData({ settings: { ...data.settings, alertAfterShiftDelay: parseInt(e.target.value) } })} className="bg-white dark:bg-slate-700 border-none text-[10px] font-black text-amber-600 px-2 py-1 rounded-lg outline-none"><option value="0">Ao terminar</option><option value="1">1 min depois</option><option value="5">5 min depois</option><option value="10">10 min depois</option></select></div>
-                        </label>
-                     </div>
+                     <AvisosSettings data={data} onUpdateData={onUpdateData} conectado={!!user} />
 
                      <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 grid sm:grid-cols-2 gap-4">
                         <label className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer bg-slate-50 dark:bg-slate-800/40 ${data.settings.hideUnregisteredClassesOnDashboard ? 'border-slate-200 dark:border-slate-600' : 'border-transparent'}`}>

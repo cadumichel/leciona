@@ -3,6 +3,8 @@ import { getAuth } from 'firebase-admin/auth';
 import { Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { AppData } from '../types';
 import { estimateDocBytes, FIRESTORE_DOC_LIMIT, removeUndefined } from '../utils/sync';
+import webpush from 'web-push';
+import { Aparelho, EstadoDosAvisos, derivarChavesPush } from './avisosPush';
 import { ConsultaError } from './consultas';
 import { CAMPO_COPIA, InfoDaCopia } from './copias';
 import { derivarChave } from './oauth';
@@ -29,6 +31,8 @@ const montar = async () => {
   const db = getFirestore(app);
   const usuario = (uid: string) => db.collection('users').doc(uid);
   const copias = (uid: string) => usuario(uid).collection('backups');
+  const avisos = (uid: string) => usuario(uid).collection('avisos');
+  const chavesPush = derivarChavesPush(credencial.private_key);
   let uidCache: string | undefined;
 
   return criarRotas({
@@ -86,7 +90,39 @@ const montar = async () => {
       }
     },
     uidDoProfessor: async () => (uidCache ??= (await getAuth(app).getUserByEmail(emailPermitido)).uid),
-    segredoDoCron: process.env.CRON_SECRET || undefined
+    segredoDoCron: process.env.CRON_SECRET || undefined,
+    avisos: {
+      chavePublica: chavesPush.publica,
+      lerAparelhos: async uid => ((await avisos(uid).doc('aparelhos').get()).get('lista') || []) as Aparelho[],
+      gravarAparelhos: async (uid, lista) => { await avisos(uid).doc('aparelhos').set({ lista }); },
+      lerEstado: async uid => ({ enviados: {}, ...((await avisos(uid).doc('estado').get()).data() || {}) }) as EstadoDosAvisos,
+      gravarEstado: async (uid, estado) => { await avisos(uid).doc('estado').set(removeUndefined(estado)); },
+      // Lê só o campo updatedAt (o documento inteiro pode ter quase 1 MB)
+      carimboDosDados: async uid => {
+        const [doc] = await db.getAll(usuario(uid), { fieldMask: ['updatedAt'] });
+        const t = doc.get('updatedAt');
+        return t?.toMillis ? String(t.toMillis()) : String(t ?? '');
+      },
+      enviar: async (aparelho, mensagem) => {
+        try {
+          await webpush.sendNotification(
+            { endpoint: aparelho.endpoint, keys: aparelho.keys },
+            JSON.stringify(mensagem),
+            {
+              vapidDetails: { subject: `mailto:${emailPermitido}`, publicKey: chavesPush.publica, privateKey: chavesPush.privada },
+              TTL: 2 * 60 * 60,
+              urgency: 'high'
+            }
+          );
+          return 'ok';
+        } catch (e) {
+          const status = (e as { statusCode?: number }).statusCode;
+          if (status === 404 || status === 410) return 'expirado';
+          console.error('Falha ao enviar aviso:', status, (e as Error).message);
+          return 'erro';
+        }
+      }
+    }
   });
 };
 

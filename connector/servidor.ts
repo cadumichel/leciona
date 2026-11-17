@@ -9,6 +9,7 @@ import {
   CAMPO_COPIA, InfoDaCopia, copiasVencidas, dadosDaCopia, documentoRestaurado, idAntesDeRestaurar, idDaCopiaDiaria,
   listarParaOClaude, previaDaRestauracao
 } from './copias';
+import { ArmazemDeAvisos, conferir, enviarParaTodos, inscrever, lerInscricao, remover } from './avisosPush';
 import { Alteracoes, Lote, Plano, SITUACOES, aplicarPlano, desfazerLote, prepararAlteracoes, prepararAvaliacoes, prepararCalendarios, prepararConteudos, prepararEventos, prepararRecessos, prepararSituacoes } from './escrita';
 import {
   Assinatura, Conta, ErroOAuth, assinarLote, assinarPlano, emitirCodigo, lerLote, lerPlano, metadadosDoRecurso, metadadosDoServidor, registrarCliente, trocarToken,
@@ -45,8 +46,10 @@ export interface Dependencias {
   };
   /** uid da conta em LECIONA_EMAIL (para a cópia diária, que roda sem login) */
   uidDoProfessor: () => Promise<string>;
-  /** CRON_SECRET da Vercel: se existir, a cópia diária só roda com ele */
+  /** CRON_SECRET da Vercel: se existir, a cópia diária só roda com ele; os avisos só rodam com ele */
   segredoDoCron?: string;
+  /** Avisos no celular (connector/avisosPush.ts) */
+  avisos?: ArmazemDeAvisos;
   agora?: () => Date;
 }
 
@@ -603,6 +606,81 @@ export const criarRotas = (deps: Dependencias) => {
       const vencidas = copiasVencidas(copias, hoje);
       if (vencidas.length) await deps.copias.apagar(uid, vencidas);
       return json({ ok: true, copia: id, feita, apagadas: vencidas.length });
+    },
+
+    /**
+     * Avisos no celular (api/avisos.ts):
+     * - GET: chave pública das notificações e se o agendador já foi configurado (público);
+     * - GET/POST com "Authorization: Bearer CRON_SECRET": a conferência do agendador (a cada 5 min);
+     * - POST com o login do app (Firebase): ativar, desativar, testar e ver a situação neste aparelho.
+     */
+    avisos: async (req: Request) => {
+      const a = deps.avisos;
+      if (!a) return json({ error: 'not_configured' }, 503);
+      const agora = deps.agora?.() ?? new Date();
+      const autorizacao = req.headers.get('authorization') || '';
+      const url = new URL(req.url);
+
+      if (deps.segredoDoCron && autorizacao === `Bearer ${deps.segredoDoCron}`) {
+        return json(await conferir(a, await deps.uidDoProfessor(), deps.carregarDados, agora));
+      }
+      if (url.searchParams.get('acao') === 'conferir') {
+        return deps.segredoDoCron
+          ? json({ error: 'unauthorized' }, 401)
+          : json({ error: 'not_configured', error_description: 'Falta a variável CRON_SECRET na Vercel.' }, 503);
+      }
+      if (req.method === 'GET') {
+        return json({ chavePublica: a.chavePublica, agendadorConfigurado: !!deps.segredoDoCron });
+      }
+      if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, { Allow: 'GET, POST' });
+
+      let uid: string;
+      try {
+        const login = await deps.verificarLogin(autorizacao.replace(/^Bearer /, ''));
+        if (!login.email || !login.email_verified || login.email.toLowerCase() !== deps.emailPermitido.trim().toLowerCase()) {
+          return json({ error: 'forbidden', error_description: 'Esta conta Google não tem acesso aos avisos.' }, 403);
+        }
+        uid = login.uid;
+      } catch {
+        return json({ error: 'unauthorized', error_description: 'Não foi possível confirmar o login.' }, 401);
+      }
+
+      const corpo = await req.json().catch(() => null);
+      const inscricao = lerInscricao(corpo);
+      const situacao = async () => {
+        const [aparelhos, estado] = await Promise.all([a.lerAparelhos(uid), a.lerEstado(uid)]);
+        return {
+          ok: true,
+          agendadorConfigurado: !!deps.segredoDoCron,
+          esteAparelho: !!inscricao && aparelhos.some(x => x.endpoint === inscricao.endpoint),
+          aparelhos: aparelhos.map(x => ({ nome: x.nome, desde: x.desde, este: x.endpoint === inscricao?.endpoint })),
+          ultimaConferencia: estado.ultimaConferencia || null,
+          ultimoEnvio: estado.ultimoEnvio || null
+        };
+      };
+
+      switch (corpo?.acao) {
+        case 'situacao':
+          return json(await situacao());
+        case 'inscrever':
+          if (!inscricao) return json({ error: 'invalid_request' }, 400);
+          await inscrever(a, uid, inscricao, req.headers.get('user-agent') || '', agora);
+          return json(await situacao());
+        case 'remover':
+          if (!inscricao) return json({ error: 'invalid_request' }, 400);
+          await remover(a, uid, inscricao.endpoint);
+          return json(await situacao());
+        case 'teste': {
+          const r = await enviarParaTodos(a, uid, {
+            titulo: 'Leciona: aviso de teste',
+            texto: 'Os avisos estão funcionando neste aparelho.',
+            marca: 'teste', destino: 'ajustes'
+          });
+          return json({ ...(await situacao()), entregues: r.entregues });
+        }
+        default:
+          return json({ error: 'invalid_request' }, 400);
+      }
     },
 
     mcp: async (req: Request) => {

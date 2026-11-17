@@ -327,6 +327,10 @@ export interface AppSettings {
   /** Esconde no Diário a linha do cronograma "Faltam N aulas…" (olho na própria linha ou Ajustes → Geral → Aparência) */
   hideCronograma?: boolean;
   termsAccepted?: boolean;
+  /** Aviso "Resumo do dia": em um horário fixo, se ainda houver aula de hoje sem registro (utils/avisos.ts) */
+  alertDailySummary?: boolean;
+  /** Horário do resumo do dia, "HH:MM" (padrão 18:00) */
+  alertDailySummaryTime?: string;
 }
 
 export interface AppData {

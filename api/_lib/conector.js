@@ -213,10 +213,24 @@ var getLessonDisplayItems = (data, filters) => {
   const now = /* @__PURE__ */ new Date();
   const todayStr = now.toLocaleDateString("en-CA");
   const currentMins = now.getHours() * 60 + now.getMinutes();
+  const logsByDay = /* @__PURE__ */ new Map();
+  for (const l of data.logs) {
+    const day5 = typeof l.date === "string" ? l.date.slice(0, 10) : "";
+    const list = logsByDay.get(day5);
+    if (list) list.push(l);
+    else logsByDay.set(day5, [l]);
+  }
+  const NO_LOGS = [];
+  const usedLogIds = /* @__PURE__ */ new Set();
+  const pushItem = (item) => {
+    items.push(item);
+    if (item.log) usedLogIds.add(item.log.id);
+  };
   const cursor = new Date(startDate);
   while (cursor <= endDate) {
     const dateStr = cursor.toLocaleDateString("en-CA");
     const dayOfWeek = cursor.getDay();
+    const dayLogs = logsByDay.get(dateStr) || NO_LOGS;
     if (!isHoliday(cursor)) {
       const dailySchedules = getSchedulesForDate(data, dateStr);
       dailySchedules.forEach((s) => {
@@ -243,10 +257,9 @@ var getLessonDisplayItems = (data, filters) => {
             if (term && (dateStr < term.start || dateStr > term.end)) return;
           }
         }
-        let log = data.logs.find((l) => l.date.startsWith(dateStr) && l.slotId === s.slotId && l.schoolId === s.schoolId);
+        let log = dayLogs.find((l) => l.slotId === s.slotId && l.schoolId === s.schoolId);
         if (!log) {
-          log = data.logs.find((l) => {
-            if (!l.date.startsWith(dateStr)) return false;
+          log = dayLogs.find((l) => {
             if (l.schoolId !== s.schoolId) return false;
             if (l.startTime !== slot.startTime) return false;
             if (l.classId === s.classId) return true;
@@ -271,7 +284,7 @@ var getLessonDisplayItems = (data, filters) => {
         let isPast = false;
         if (dateStr < todayStr) isPast = true;
         else if (dateStr === todayStr) isPast = currentMins >= parseTimeToMinutes(slot.endTime);
-        items.push({
+        pushItem({
           id: `${dateStr}-${s.schoolId}-${s.slotId}`,
           schedule: s,
           log,
@@ -291,7 +304,7 @@ var getLessonDisplayItems = (data, filters) => {
           if (dateStr < st.startDate) return;
           if (isLessonBlocked(data, dateStr, st.id)) return;
           st.schedules.filter((ps) => Number(ps.dayOfWeek) === dayOfWeek).forEach((ps) => {
-            const log = data.logs.find((l) => l.date.startsWith(dateStr) && l.slotId === ps.id && l.studentId === st.id);
+            const log = dayLogs.find((l) => l.slotId === ps.id && l.studentId === st.id);
             if (log && log.status === "removed") return;
             const hasContent = !!(log && (log.subject || log.homework || log.notes));
             if (showWithContent !== void 0 && showWithoutContent !== void 0) {
@@ -302,7 +315,7 @@ var getLessonDisplayItems = (data, filters) => {
             let isPast = false;
             if (dateStr < todayStr) isPast = true;
             else if (dateStr === todayStr) isPast = currentMins >= parseTimeToMinutes(ps.endTime);
-            items.push({
+            pushItem({
               id: `${dateStr}-${st.id}-${ps.id}`,
               schedule: { dayOfWeek, schoolId: st.id, shiftId: "private", slotId: ps.id, classId: st.name },
               log,
@@ -317,11 +330,11 @@ var getLessonDisplayItems = (data, filters) => {
         });
       }
     }
-    const manualLogs = data.logs.filter(
-      (l) => l.date.startsWith(dateStr) && (l.type === "extra" || l.type === "substitution" || l.type === "regular") && (filterInstId === "all" || l.schoolId === filterInstId) && (filterClassId === "all" || l.classId === filterClassId)
+    const manualLogs = dayLogs.filter(
+      (l) => (l.type === "extra" || l.type === "substitution" || l.type === "regular") && (filterInstId === "all" || l.schoolId === filterInstId) && (filterClassId === "all" || l.classId === filterClassId)
     );
     manualLogs.forEach((l) => {
-      const alreadyProcessed = items.some((i) => i.log?.id === l.id);
+      const alreadyProcessed = usedLogIds.has(l.id);
       if (alreadyProcessed) return;
       const school = data.schools.find((sc) => sc.id === l.schoolId);
       if (!school || school.deleted) return;
@@ -343,7 +356,7 @@ var getLessonDisplayItems = (data, filters) => {
         const found = school.shifts.flatMap((s) => s.slots).find((s) => s.id === l.slotId);
         if (found) slot = found;
       }
-      items.push({
+      pushItem({
         id: l.id,
         schedule: { dayOfWeek, schoolId: l.schoolId, shiftId: l.type || "extra", slotId: l.slotId, classId: l.classId },
         log: l,

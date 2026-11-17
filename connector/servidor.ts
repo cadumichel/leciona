@@ -99,6 +99,7 @@ main{background:#fff;border-radius:16px;padding:32px;max-width:420px;width:100%;
 h1{font-size:1.3rem;margin:0 0 12px}p{line-height:1.5;color:#334155}
 button{width:100%;padding:14px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-weight:700;font-size:1rem;cursor:pointer}
 button:disabled{opacity:.6}.erro{color:#b91c1c}
+.aviso{background:#fef3c7;border-radius:10px;padding:10px 12px;font-size:.9rem;color:#78350f}
 </style></head><body><main>${corpo}</main></body></html>`, {
     status,
     headers: {
@@ -109,14 +110,31 @@ button:disabled{opacity:.6}.erro{color:#b91c1c}
     }
   });
 
+/**
+ * Quem está pedindo o acesso, pelo endereço para onde o login volta (já validado). Aparece na página
+ * de autorização para o Cadu conferir: um link recebido de outra pessoa poderia pedir acesso para a
+ * conta dela no mesmo assistente.
+ */
+export const quemPede = (redirectUri: string): string => {
+  let host = '';
+  try { host = new URL(redirectUri).hostname; } catch { /* já validado antes */ }
+  if (host === 'claude.ai' || host === 'claude.com') return 'Claude';
+  if (host === 'oauth-redirect.googleusercontent.com') return 'Gemini';
+  if (host === 'chatgpt.com') return 'ChatGPT';
+  return 'um programa neste computador (por exemplo, o Claude Code)';
+};
+
 const paginaDeLogin = (pedido: Record<string, string>) => {
   const campos = Object.entries(pedido)
     .map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`).join('');
   return pagina('Conectar ao Leciona', `
 <h1>Conectar a IA ao Leciona</h1>
-<p>O assistente (Claude, Gemini ou ChatGPT) vai poder <b>ler</b> suas avaliações, o conteúdo do diário,
+<p>Quem está pedindo acesso: <b>${esc(quemPede(pedido.redirect_uri || ''))}</b>.</p>
+<p>O assistente vai poder <b>ler</b> suas avaliações, o conteúdo do diário,
 turmas, grade e calendário, e <b>gravar</b> mudanças depois que você aprovar a prévia.
 Nomes de alunos, notas e chamada não são compartilhados.</p>
+<p class="aviso">Só autorize se você acabou de clicar em “Conectar” nesse assistente.
+Se chegou aqui por um link que alguém enviou, feche esta página.</p>
 <form id="f" method="post">${campos}<input type="hidden" name="id_token" id="t">
 <button type="button" id="b">Entrar com Google e autorizar</button></form>
 <p class="erro" id="e"></p>

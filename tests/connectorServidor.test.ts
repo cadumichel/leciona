@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { base64url } from 'jose';
-import { criarRotas } from '../connector/servidor';
+import { criarRotas, quemPede } from '../connector/servidor';
 import { redirecionamentoPermitido } from '../connector/oauth';
 
 // Dados inventados (nenhum nome real)
@@ -159,6 +159,16 @@ describe('conector: login', () => {
     const html = await resp.text();
     expect(html).toContain('value="abc&quot;&lt;x&gt;"');
     expect(html).not.toContain('abc"<x>');
+    // Diz quem está pedindo o acesso e avisa para só autorizar se o pedido partiu do professor
+    expect(html).toContain('Quem está pedindo acesso: <b>Claude</b>');
+    expect(html).toContain('Só autorize se você acabou de clicar');
+  });
+
+  it('identifica o assistente pelo endereço de retorno', () => {
+    expect(quemPede('https://claude.ai/api/mcp/auth_callback')).toBe('Claude');
+    expect(quemPede('https://chatgpt.com/connector_platform_oauth_redirect')).toBe('ChatGPT');
+    expect(quemPede('https://oauth-redirect.googleusercontent.com/r/x')).toBe('Gemini');
+    expect(quemPede('http://localhost:1234/callback')).toContain('neste computador');
   });
 
   it('com endereço de retorno estranho, mostra erro e não redireciona', async () => {

@@ -2096,6 +2096,7 @@ main{background:#fff;border-radius:16px;padding:32px;max-width:420px;width:100%;
 h1{font-size:1.3rem;margin:0 0 12px}p{line-height:1.5;color:#334155}
 button{width:100%;padding:14px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-weight:700;font-size:1rem;cursor:pointer}
 button:disabled{opacity:.6}.erro{color:#b91c1c}
+.aviso{background:#fef3c7;border-radius:10px;padding:10px 12px;font-size:.9rem;color:#78350f}
 </style></head><body><main>${corpo}</main></body></html>`, {
   status,
   headers: {
@@ -2105,13 +2106,27 @@ button:disabled{opacity:.6}.erro{color:#b91c1c}
     "Referrer-Policy": "no-referrer"
   }
 });
+var quemPede = (redirectUri) => {
+  let host = "";
+  try {
+    host = new URL(redirectUri).hostname;
+  } catch {
+  }
+  if (host === "claude.ai" || host === "claude.com") return "Claude";
+  if (host === "oauth-redirect.googleusercontent.com") return "Gemini";
+  if (host === "chatgpt.com") return "ChatGPT";
+  return "um programa neste computador (por exemplo, o Claude Code)";
+};
 var paginaDeLogin = (pedido) => {
   const campos = Object.entries(pedido).map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`).join("");
   return pagina("Conectar ao Leciona", `
 <h1>Conectar a IA ao Leciona</h1>
-<p>O assistente (Claude, Gemini ou ChatGPT) vai poder <b>ler</b> suas avalia\xE7\xF5es, o conte\xFAdo do di\xE1rio,
+<p>Quem est\xE1 pedindo acesso: <b>${esc(quemPede(pedido.redirect_uri || ""))}</b>.</p>
+<p>O assistente vai poder <b>ler</b> suas avalia\xE7\xF5es, o conte\xFAdo do di\xE1rio,
 turmas, grade e calend\xE1rio, e <b>gravar</b> mudan\xE7as depois que voc\xEA aprovar a pr\xE9via.
 Nomes de alunos, notas e chamada n\xE3o s\xE3o compartilhados.</p>
+<p class="aviso">S\xF3 autorize se voc\xEA acabou de clicar em \u201CConectar\u201D nesse assistente.
+Se chegou aqui por um link que algu\xE9m enviou, feche esta p\xE1gina.</p>
 <form id="f" method="post">${campos}<input type="hidden" name="id_token" id="t">
 <button type="button" id="b">Entrar com Google e autorizar</button></form>
 <p class="erro" id="e"></p>

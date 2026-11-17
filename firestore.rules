@@ -9,11 +9,17 @@ service cloud.firestore {
 
       // O app sempre grava o documento inteiro, com estes campos (inclusive "Excluir todos os
       // dados", que grava o documento vazio). O Firestore já limita o documento a 1 MiB.
-      allow create, update: if request.auth != null && request.auth.uid == userId
+      allow update: if request.auth != null && request.auth.uid == userId
         && request.resource.data.keys().hasAll(['profile', 'schools', 'settings'])
         && request.resource.data.profile is map
         && request.resource.data.schools is list
         && request.resource.data.settings is map;
+
+      // O Leciona tem um único professor, e o documento dele já existe. Nenhuma outra conta Google
+      // consegue criar um documento (antes qualquer conta podia usar este banco como depósito).
+      // Para liberar outra conta: crie o documento users/{uid} dela pelo console do Firebase, com os
+      // campos profile (mapa), schools (lista) e settings (mapa).
+      allow create: if false;
 
       // O app nunca apaga o documento; impedir evita perder tudo por engano
       allow delete: if false;
